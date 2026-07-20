@@ -4,6 +4,7 @@ import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup } from '../
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', isVerticalTabsPanel: true },
+  { label: '留位', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'webview', isPlaceholder: true },
   { label: 'index.ts', path: 'src/index.ts', isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', manualGroupId: 'work' },
   { label: 'index.ts', path: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text' },
 ] }, { tabs: [
@@ -14,7 +15,7 @@ const source: SnapshotSourceGroup[] = [{ tabs: [
 test('builds a flat snapshot, hides the extension panel, and retains manual membership', () => {
   const snapshot = buildSnapshot(source, 7, [{ id: 'work', name: '工作', collapsed: false }]);
   assert.equal(snapshot.tabs.length, 4);
-  assert.equal(snapshot.tabs[0].target.tabIndex, 1);
+  assert.equal(snapshot.tabs[0].target.tabIndex, 2);
   assert.equal(snapshot.tabs[0].manualGroupId, 'work');
   assert.equal(snapshot.tabs[0].description, 'src/index.ts');
   assert.equal(snapshot.tabs[1].description, 'test/index.ts');
@@ -23,7 +24,10 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
 });
 
 test('keeps user tabs next to an extension panel and omits empty extension-only groups', () => {
-  const snapshot = buildSnapshot([{ tabs: [{ label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', isVerticalTabsPanel: true }] }, { tabs: [{ label: 'main.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text' }] }], 8, []);
+  const snapshot = buildSnapshot([{ tabs: [
+    { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', isVerticalTabsPanel: true },
+    { label: '留位', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'webview', isPlaceholder: true },
+  ] }, { tabs: [{ label: 'main.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text' }] }], 8, []);
   assert.equal(snapshot.tabs.length, 1);
   assert.equal(snapshot.tabs[0].label, 'main.ts');
 });

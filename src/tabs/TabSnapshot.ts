@@ -11,6 +11,7 @@ export interface SnapshotSourceTab {
   readonly inputKind: TabInputKind;
   readonly path?: string;
   readonly isVerticalTabsPanel?: boolean;
+  readonly isPlaceholder?: boolean;
   readonly manualGroupId?: string;
 }
 
@@ -26,12 +27,12 @@ export function buildSnapshot(
   revision: number,
   manualGroups: readonly ManualTabGroup[],
 ): VerticalTabsSnapshot {
-  const visibleTabs = groups.flatMap((group) => group.tabs.filter((tab) => !tab.isVerticalTabsPanel));
+  const visibleTabs = groups.flatMap((group) => group.tabs.filter((tab) => !tab.isVerticalTabsPanel && !tab.isPlaceholder));
   const labelCounts = new Map<string, number>();
   for (const tab of visibleTabs) labelCounts.set(tab.label, (labelCounts.get(tab.label) ?? 0) + 1);
 
   const tabs: VerticalTabItem[] = groups.flatMap((group, groupIndex) => group.tabs.flatMap((tab, tabIndex) => {
-    if (tab.isVerticalTabsPanel) return [];
+    if (tab.isVerticalTabsPanel || tab.isPlaceholder) return [];
     return [{
       target: { revision, groupIndex, tabIndex },
       label: tab.label,

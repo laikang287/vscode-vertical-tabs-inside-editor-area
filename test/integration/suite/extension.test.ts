@@ -32,11 +32,15 @@ suite('Vertical Tabs extension', () => {
     await vscode.commands.executeCommand('verticalTabs.open');
     await vscode.commands.executeCommand('verticalTabs.open');
     await waitFor(() => verticalTabs().length === 1);
+    await waitFor(() => placeholders().length === 1);
     await waitFor(() => verticalTabs()[0]?.group.tabs.length === 1);
 
     const [{ group }] = verticalTabs();
+    const [{ tab: placeholder, group: placeholderGroup }] = placeholders();
     assert.equal(group.viewColumn, vscode.ViewColumn.One, 'The vertical-tabs group should be the left-most group.');
     assert.equal(group.tabs.length, 1, 'The vertical-tabs panel should have an exclusive editor group.');
+    assert.notEqual(placeholderGroup, group, 'The placeholder should be in a non-rail editor group.');
+    assert.ok(placeholder.isPinned, 'The placeholder should be pinned so its editor group is retained.');
     assert.ok(vscode.window.tabGroups.all.filter((editorGroup) => editorGroup !== group).some((editorGroup) => editorGroup.tabs.some((tab) => (
       tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
     ))), 'An editor already open before rail creation should remain outside the new left rail group.');
@@ -50,6 +54,16 @@ suite('Vertical Tabs extension', () => {
     ));
     assert.ok(existingTab, 'The pre-existing editor tab should remain available for cleanup.');
     await vscode.window.tabGroups.close(existingTab, true);
+    await waitFor(() => placeholders().length === 1);
+    assert.equal(verticalTabs()[0]?.group.tabs.length, 1, 'Closing the final normal tab must not add an editor to the rail group.');
+    const layoutAfterClosingNormalTab = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+    const preservedRailRatios = rootGroupRatios(layoutAfterClosingNormalTab);
+    assert.ok(preservedRailRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail width should remain stable after normal tabs close; received ${JSON.stringify(layoutAfterClosingNormalTab)}.`);
+
+    await vscode.window.tabGroups.close(placeholder, true);
+    await waitFor(() => placeholders().length === 1
+      && placeholders()[0].tab !== placeholder
+      && placeholders()[0].tab.isPinned);
 
     await vscode.commands.executeCommand('verticalTabs.focus');
     const document = await vscode.workspace.openTextDocument({ content: 'locked rail verification' });
@@ -94,6 +108,19 @@ function verticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
     for (const tab of group.tabs) {
       if (tab.input instanceof vscode.TabInputWebview && (tab.input.viewType === 'verticalTabs.editorArea'
         || tab.input.viewType === 'mainThreadWebview-verticalTabs.editorArea')) {
+        result.push({ tab, group });
+      }
+    }
+  }
+  return result;
+}
+
+function placeholders(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
+  const result: Array<{ tab: vscode.Tab; group: vscode.TabGroup }> = [];
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (tab.input instanceof vscode.TabInputWebview && (tab.input.viewType === 'verticalTabs.editorAreaPlaceholder'
+        || tab.input.viewType === 'mainThreadWebview-verticalTabs.editorAreaPlaceholder')) {
         result.push({ tab, group });
       }
     }
