@@ -50,7 +50,7 @@ test('webview exposes grouping, sorting, bulk close, pinning, and drag messages'
   assert.match(source, /pinTab/);
   assert.match(source, /unpinTab/);
   assert.match(source, /moveTab/);
-  assert.match(source, /createGroupFromTabs/);
+  assert.doesNotMatch(source, /vscode\.postMessage\(\{ type: 'createGroupFromTabs'/);
 });
 
 test('manual group creation is disabled outside manual mode and accepted only in manual mode', () => {
@@ -102,6 +102,8 @@ test('activation updates webview selection immediately and refreshes after navig
 
   assert.match(source, /markActiveTab\(tab\.target\)/);
   assert.match(source, /function markActiveTab\(target: TabTarget\): void/);
+  assert.match(source, /parseTargetDataset\(candidate\.dataset\.target\)/);
+  assert.match(source, /sameTarget\(candidateTarget, target\)/);
   assert.match(source, /\.tab-row\.is-active/);
   assert.match(panelSource, /await this\.activateTab\(tab, message\.requestId\);\s*await this\.refresh\(\{ reason: 'navigate' \}\);/);
 });
@@ -232,20 +234,22 @@ test('webview enables best-effort activation with a distinct tooltip', () => {
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
 });
 
-test('webview logs activation clicks with request ids and uses a dedicated drag handle', () => {
+test('webview logs activation clicks with request ids and drags from the full tab row', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
   assert.match(source, /let activateRequestSequence = 0/);
   assert.match(source, /let dragRequestSequence = 0/);
-  assert.match(source, /row\.draggable = false/);
-  assert.match(source, /const dragHandle = document\.createElement\('button'\)/);
-  assert.match(source, /dragHandle\.className = 'tab-drag-handle'/);
-  assert.match(source, /dragHandle\.draggable = true/);
-  assert.match(source, /dragHandle\.addEventListener\('dragstart'/);
+  assert.match(source, /row\.draggable = true/);
+  assert.match(source, /row\.addEventListener\('dragstart'/);
+  assert.match(source, /row\.addEventListener\('dragend'/);
+  assert.match(source, /row\.dataset\.target = JSON\.stringify\(tab\.target\)/);
   assert.match(source, /标签拖拽开始/);
   assert.match(source, /application\/x-vertical-tab-drag-request/);
   assert.match(source, /标签拖拽排序请求/);
   assert.match(source, /标签拖拽结束/);
+  assert.doesNotMatch(source, /标签拖拽创建分组请求/);
+  assert.doesNotMatch(source, /const relativeY = /);
+  assert.doesNotMatch(source, /const dragHandle = document\.createElement/);
   assert.match(source, /activate\.addEventListener\('pointerdown'/);
   assert.match(source, /标签激活按钮 pointerdown/);
   assert.match(source, /activate\.addEventListener\('click'/);
@@ -256,13 +260,12 @@ test('webview logs activation clicks with request ids and uses a dedicated drag 
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
 });
 
-test('webview styles a stable drag handle column', () => {
+test('webview styles the full tab row as draggable', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(style, /\.tab-drag-handle \{/);
-  assert.match(style, /flex: 0 0 18px/);
-  assert.match(style, /cursor: grab/);
-  assert.match(style, /\.tab-drag-handle:active \{ cursor: grabbing; \}/);
+  assert.match(style, /\.tab-row \{ cursor: grab;/);
+  assert.match(style, /\.tab-row:active \{ cursor: grabbing; \}/);
+  assert.doesNotMatch(style, /\.tab-drag-handle/);
 });
 
 test('extension selects existing tabs via bounded workbench navigation commands', () => {

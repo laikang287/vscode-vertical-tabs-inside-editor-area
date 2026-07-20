@@ -161,31 +161,23 @@ function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], gr
 function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 0 | 1): HTMLElement {
   const row = document.createElement('article');
   row.className = ['tab-row', `tree-level-${level}`, tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
-  row.draggable = false;
+  row.draggable = true;
   row.dataset.groupId = group.id;
-  row.dataset.targetIdentity = JSON.stringify(tab.target.identity);
-  const dragHandle = document.createElement('button');
-  dragHandle.className = 'tab-drag-handle';
-  dragHandle.type = 'button';
-  dragHandle.draggable = true;
-  dragHandle.title = '拖拽标签';
-  dragHandle.setAttribute('aria-label', `拖拽标签 ${tab.label}`);
-  dragHandle.textContent = '≡';
-  dragHandle.addEventListener('click', (event) => event.preventDefault());
-  dragHandle.addEventListener('dragstart', (event) => {
+  row.dataset.target = JSON.stringify(tab.target);
+  row.addEventListener('dragstart', (event) => {
     draggedTarget = tab.target;
     const requestId = nextDragRequestId();
-    dragHandle.dataset.dragRequestId = requestId;
+    row.dataset.dragRequestId = requestId;
     logToExtension('debug', '标签拖拽开始', targetDetails(tab.target, tab.label, requestId));
     event.dataTransfer?.setData('application/x-vertical-tab-target', JSON.stringify(tab.target));
     event.dataTransfer?.setData('application/x-vertical-tab-drag-request', requestId);
     event.dataTransfer?.setData('text/plain', tab.label);
     event.dataTransfer?.setDragImage(row, 8, 8);
   });
-  dragHandle.addEventListener('dragend', (event) => {
-    logToExtension('debug', '标签拖拽结束', targetDetails(tab.target, tab.label, dragHandle.dataset.dragRequestId));
+  row.addEventListener('dragend', (event) => {
+    logToExtension('debug', '标签拖拽结束', targetDetails(tab.target, tab.label, row.dataset.dragRequestId));
     draggedTarget = undefined;
-    delete dragHandle.dataset.dragRequestId;
+    delete row.dataset.dragRequestId;
     event.preventDefault();
   });
   row.addEventListener('dragover', (event) => handleTabDragOver(event, group));
@@ -218,7 +210,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   const actions = document.createElement('div');
   actions.className = 'tab-actions';
   actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target));
-  row.append(dragHandle, activate, actions);
+  row.append(activate, actions);
   return row;
 }
 
@@ -302,13 +294,6 @@ function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTa
   if (!draggedTarget) return;
   event.preventDefault();
   if (sameTarget(draggedTarget, tab.target)) return;
-  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const relativeY = bounds.height > 0 ? (event.clientY - bounds.top) / bounds.height : 0;
-  if (latestSnapshot?.groupMode === 'manual' && relativeY > 0.25 && relativeY < 0.75) {
-    logToExtension('debug', '标签拖拽创建分组请求', dropDetails(event, draggedTarget, group.id, tab.target));
-    vscode.postMessage({ type: 'createGroupFromTabs', source: draggedTarget, target: tab.target });
-    return;
-  }
   const groupId = latestSnapshot?.groupMode === 'manual' && group.id !== '__ungrouped' ? group.id : undefined;
   logToExtension('debug', '标签拖拽排序请求', dropDetails(event, draggedTarget, group.id, tab.target));
   vscode.postMessage({ type: 'moveTab', target: draggedTarget, groupId, beforeTarget: tab.target });
@@ -504,9 +489,20 @@ function markActiveTab(target: TabTarget): void {
     row.classList.remove('is-active');
   }
   const row = Array.from(document.querySelectorAll<HTMLElement>('.tab-row')).find((candidate) => {
-    return candidate.dataset.targetIdentity === JSON.stringify(target.identity);
+    const candidateTarget = parseTargetDataset(candidate.dataset.target);
+    return candidateTarget !== undefined && sameTarget(candidateTarget, target);
   });
   row?.classList.add('is-active');
+}
+
+function parseTargetDataset(value: string | undefined): TabTarget | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as TabTarget;
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function dismissContextMenu(): void {

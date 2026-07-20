@@ -91,25 +91,11 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.tab-row { display: flex; align-items: stretch; min-width: 0; }
+.tab-row { cursor: grab; display: flex; align-items: stretch; min-width: 0; }
+.tab-row:active { cursor: grabbing; }
 .tab-row.tree-level-1 { padding-left: 18px; }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .tab-row.is-unavailable { opacity: .65; }
-
-.tab-drag-handle {
-  align-items: center;
-  background: transparent;
-  color: var(--vscode-descriptionForeground);
-  cursor: grab;
-  display: flex;
-  flex: 0 0 18px;
-  justify-content: center;
-  opacity: .75;
-  padding: 0;
-}
-.tab-drag-handle:active { cursor: grabbing; }
-.tab-row:hover .tab-drag-handle, .tab-row.is-active .tab-drag-handle { opacity: 1; }
-.is-active .tab-drag-handle { color: inherit; }
 
 .tab-main {
   background: transparent;
