@@ -28,7 +28,7 @@ suite('Vertical Tabs extension', () => {
 
     await vscode.commands.executeCommand('verticalTabs.open');
     await vscode.commands.executeCommand('verticalTabs.open');
-    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
     if (verticalTabs().length === 0) {
       this.skip();
     }

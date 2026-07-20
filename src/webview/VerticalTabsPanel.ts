@@ -8,6 +8,7 @@ import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type Vertic
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
 const WIDTH_STORAGE_KEY = 'verticalTabs.railWidthPx';
+const RAIL_SETTLE_DELAY_MS = 400;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -44,7 +45,7 @@ export class VerticalTabsPanel {
       context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
         deserializeWebviewPanel: async (panel) => {
           const instance = VerticalTabsPanel.attach(panel, context);
-          await VerticalTabsPanel.enqueue(() => instance.ensureRail());
+          await VerticalTabsPanel.enqueue(() => instance.settleAndEnsureRail());
         },
       }));
       VerticalTabsPanel.serializerRegistered = true;
@@ -68,7 +69,7 @@ export class VerticalTabsPanel {
     if (existing) {
       const previousEditor = vscode.window.activeTextEditor;
       existing.reveal(false);
-      await existing.ensureRail(undefined, previousEditor);
+      await existing.settleAndEnsureRail(undefined, previousEditor);
       return existing;
     }
 
@@ -80,7 +81,7 @@ export class VerticalTabsPanel {
       if (restored) {
         const previousEditor = vscode.window.activeTextEditor;
         restored.reveal(false);
-        await restored.ensureRail(undefined, previousEditor);
+        await restored.settleAndEnsureRail(undefined, previousEditor);
       }
       return restored;
     }
@@ -142,7 +143,7 @@ export class VerticalTabsPanel {
       (existing) => existing.reveal(false),
     );
     await VerticalTabsPanel.setVisibilityContext(true);
-    await instance.ensureRail(layoutBeforeRail, previouslyActiveEditor);
+    await instance.settleAndEnsureRail(layoutBeforeRail, previouslyActiveEditor);
     return instance;
   }
 
@@ -181,6 +182,14 @@ export class VerticalTabsPanel {
 
   private static async setVisibilityContext(visible: boolean): Promise<void> {
     await vscode.commands.executeCommand('setContext', 'verticalTabs.visible', visible);
+  }
+
+  private async settleAndEnsureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
+    if (VerticalTabsPanel.panels.current !== this) {
+      return;
+    }
+    await this.ensureRail(layoutBeforeRail, previousEditor);
   }
 
   private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
