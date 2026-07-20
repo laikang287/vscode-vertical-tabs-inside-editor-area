@@ -219,29 +219,27 @@ export class VerticalTabsPanel {
   }
 
   private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<boolean> {
-    let ownGroupIndex = await this.waitForOwnGroup();
-    if (ownGroupIndex < 0) {
+    if (await this.waitForOwnGroup() < 0) {
       return false;
     }
 
-    if (!await this.activateOwnGroup()) {
+    // WebviewPanel.reveal is the supported VS Code API for moving a Webview
+    // into a specific editor column. Move it to column one before creating its
+    // dedicated group so the rail does not depend on the active-group command.
+    if (!await this.revealInFirstGroup()) {
       return false;
     }
-    let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+
+    let ownGroup = vscode.window.tabGroups.all[0];
     if (ownGroup.tabs.length > 1) {
       await vscode.commands.executeCommand('workbench.action.newGroupLeft');
-      if (!await this.activateOwnGroup()) {
+      if (!await this.revealInFirstGroup()) {
         return false;
       }
-      await vscode.commands.executeCommand('workbench.action.moveEditorToLeftGroup');
-      ownGroupIndex = await this.waitForOwnGroup();
-      if (ownGroupIndex < 0) {
-        return false;
-      }
-      ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+      ownGroup = vscode.window.tabGroups.all[0];
     }
 
-    if (!await this.moveOwnGroupToFarLeft()) {
+    if (ownGroup.tabs.length !== 1 || !isVerticalTabsPanel(ownGroup.tabs[0])) {
       return false;
     }
 
@@ -250,17 +248,20 @@ export class VerticalTabsPanel {
       await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
     }
 
-    // setEditorLayout can remap existing groups while rebuilding a nested layout.
-    // Move the webview again afterwards so opening from the launcher always
-    // completes with the rail in the physical left-most editor group.
-    if (!await this.moveOwnGroupToFarLeft()) {
+    // setEditorLayout can remap groups while rebuilding a nested layout. Use
+    // the supported reveal API again to keep the Webview in the first column.
+    if (!await this.revealInFirstGroup()) {
       return false;
     }
     if (!await this.applyRailWidth(width)) {
       return false;
     }
 
-    if (!await this.activateOwnGroup()) {
+    if (!await this.revealInFirstGroup()) {
+      return false;
+    }
+    const finalGroup = vscode.window.tabGroups.all[0];
+    if (finalGroup.tabs.length !== 1 || !isVerticalTabsPanel(finalGroup.tabs[0])) {
       return false;
     }
     await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
@@ -316,38 +317,11 @@ export class VerticalTabsPanel {
     return -1;
   }
 
-  private async moveOwnGroupToFarLeft(): Promise<boolean> {
-    let ownGroupIndex = this.findOwnGroupIndex();
-    const maximumMoves = vscode.window.tabGroups.all.length;
-    for (let moves = 0; ownGroupIndex > 0 && moves < maximumMoves; moves += 1) {
-      if (!await this.activateOwnGroup()) {
-        return false;
-      }
-      const previousIndex = ownGroupIndex;
-      await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
-      ownGroupIndex = await this.waitForOwnGroupBefore(previousIndex);
-      if (ownGroupIndex < 0) {
-        return false;
-      }
-    }
-    return ownGroupIndex === 0;
-  }
-
-  private async waitForOwnGroupBefore(previousIndex: number): Promise<number> {
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const index = this.findOwnGroupIndex();
-      if (index >= 0 && index < previousIndex) {
-        return index;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
-    }
-    return -1;
-  }
-
-  private async activateOwnGroup(): Promise<boolean> {
-    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.One, false);
+  private async revealInFirstGroup(): Promise<boolean> {
+    this.panel.reveal(vscode.ViewColumn.One, false);
     for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
-      if (vscode.window.tabGroups.activeTabGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+      if (this.findOwnGroupIndex() === 0
+        && vscode.window.tabGroups.activeTabGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
         return true;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
