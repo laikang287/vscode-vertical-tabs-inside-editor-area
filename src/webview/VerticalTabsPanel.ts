@@ -7,9 +7,7 @@ import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
-const PLACEHOLDER_VIEW_TYPE = 'verticalTabs.editorAreaPlaceholder';
 const TITLE = 'Vertical Tabs';
-const PLACEHOLDER_TITLE = '留位';
 const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
 const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const RAIL_SETTLE_DELAY_MS = 60;
@@ -23,12 +21,8 @@ export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
   private static readonly visibilityEmitter = new vscode.EventEmitter<boolean>();
   private static serializerRegistered = false;
-  private static placeholderSerializerRegistered = false;
   private static operations: Promise<void> = Promise.resolve();
   private static visibilityOperations: Promise<void> = Promise.resolve();
-  private static placeholderPanel: vscode.WebviewPanel | undefined;
-  private static placeholderCheckTimer: ReturnType<typeof setTimeout> | undefined;
-  private static isClosing = false;
 
   static readonly onDidChangeVisibility = VerticalTabsPanel.visibilityEmitter.event;
 
@@ -60,8 +54,6 @@ export class VerticalTabsPanel {
       }),
       vscode.window.tabGroups.onDidChangeTabs(() => this.scheduleRefresh()),
       vscode.window.tabGroups.onDidChangeTabGroups(() => this.scheduleRefresh()),
-      vscode.window.tabGroups.onDidChangeTabs(() => VerticalTabsPanel.schedulePlaceholderCheck()),
-      vscode.window.tabGroups.onDidChangeTabGroups(() => VerticalTabsPanel.schedulePlaceholderCheck()),
     );
   }
 
@@ -79,31 +71,10 @@ export class VerticalTabsPanel {
       VerticalTabsPanel.serializerRegistered = true;
       logDebug('WebviewPanelSerializer 注册完成', { viewType: VIEW_TYPE });
     }
-    if (!VerticalTabsPanel.placeholderSerializerRegistered) {
-      context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(PLACEHOLDER_VIEW_TYPE, {
-        deserializeWebviewPanel: async (panel) => {
-          if (VerticalTabsPanel.isClosing || VerticalTabsPanel.placeholderPanel) {
-            panel.dispose();
-            return;
-          }
-          VerticalTabsPanel.attachPlaceholder(panel);
-          VerticalTabsPanel.schedulePlaceholderCheck();
-        },
-      }));
-      VerticalTabsPanel.placeholderSerializerRegistered = true;
-      logDebug('留位页 WebviewPanelSerializer 注册完成', { viewType: PLACEHOLDER_VIEW_TYPE });
-    }
-
     context.subscriptions.push(
       vscode.window.onDidChangeActiveTextEditor(() => VerticalTabsPanel.panels.current?.scheduleRefresh()),
-      vscode.window.tabGroups.onDidChangeTabs(() => {
-        VerticalTabsPanel.syncVisibilityContext();
-        VerticalTabsPanel.schedulePlaceholderCheck();
-      }),
-      vscode.window.tabGroups.onDidChangeTabGroups(() => {
-        VerticalTabsPanel.syncVisibilityContext();
-        VerticalTabsPanel.schedulePlaceholderCheck();
-      }),
+      vscode.window.tabGroups.onDidChangeTabs(() => VerticalTabsPanel.syncVisibilityContext()),
+      vscode.window.tabGroups.onDidChangeTabGroups(() => VerticalTabsPanel.syncVisibilityContext()),
     );
     VerticalTabsPanel.syncVisibilityContext();
     logDebug('计划在启动后自动打开垂直标签面板');
@@ -163,23 +134,17 @@ export class VerticalTabsPanel {
   static async close(): Promise<void> {
     logDebug('请求关闭垂直标签面板');
     await VerticalTabsPanel.enqueue(async () => {
-      VerticalTabsPanel.isClosing = true;
-      try {
-        await VerticalTabsPanel.disposePlaceholder();
-        const instance = VerticalTabsPanel.panels.current;
-        if (instance) {
-          await instance.close();
+      const instance = VerticalTabsPanel.panels.current;
+      if (instance) {
+        await instance.close();
+      } else {
+        const tab = findVerticalTabsTab();
+        if (tab) {
+          logDebug('关闭尚未附加实例的垂直标签 Webview');
+          await vscode.window.tabGroups.close(tab, true);
         } else {
-          const tab = findVerticalTabsTab();
-          if (tab) {
-            logDebug('关闭尚未附加实例的垂直标签 Webview');
-            await vscode.window.tabGroups.close(tab, true);
-          } else {
-            logDebug('关闭请求无需处理：面板不存在');
-          }
+          logDebug('关闭请求无需处理：面板不存在');
         }
-      } finally {
-        VerticalTabsPanel.isClosing = false;
       }
       VerticalTabsPanel.syncVisibilityContext();
     });
@@ -187,9 +152,6 @@ export class VerticalTabsPanel {
 
   static dispose(): void {
     logDebug('释放垂直标签面板服务');
-    VerticalTabsPanel.isClosing = true;
-    VerticalTabsPanel.placeholderPanel?.dispose();
-    VerticalTabsPanel.placeholderPanel = undefined;
     VerticalTabsPanel.panels.current?.panel.dispose();
   }
 
@@ -235,50 +197,6 @@ export class VerticalTabsPanel {
       () => new VerticalTabsPanel(panel, context),
       () => undefined,
     );
-  }
-
-  private static attachPlaceholder(panel: vscode.WebviewPanel): void {
-    VerticalTabsPanel.placeholderPanel = panel;
-    panel.title = PLACEHOLDER_TITLE;
-    panel.webview.options = { enableScripts: false };
-    panel.webview.html = createPlaceholderHtml(panel.webview.cspSource);
-    panel.onDidDispose(() => {
-      if (VerticalTabsPanel.placeholderPanel === panel) {
-        VerticalTabsPanel.placeholderPanel = undefined;
-      }
-      if (!VerticalTabsPanel.isClosing) {
-        VerticalTabsPanel.schedulePlaceholderCheck();
-      }
-    });
-  }
-
-  private static schedulePlaceholderCheck(): void {
-    if (VerticalTabsPanel.isClosing || VerticalTabsPanel.placeholderCheckTimer) {
-      return;
-    }
-    VerticalTabsPanel.placeholderCheckTimer = setTimeout(() => {
-      VerticalTabsPanel.placeholderCheckTimer = undefined;
-      void VerticalTabsPanel.enqueue(async () => {
-        const instance = VerticalTabsPanel.panels.current;
-        if (instance?.hasSettledRail()) {
-          await instance.ensureRightPlaceholder();
-        }
-      }).catch((error) => logError('检查留位页失败', error));
-    }, 0);
-  }
-
-  private static async disposePlaceholder(): Promise<void> {
-    const panel = VerticalTabsPanel.placeholderPanel;
-    VerticalTabsPanel.placeholderPanel = undefined;
-    panel?.dispose();
-    const tab = findPlaceholderTab();
-    if (tab) {
-      try {
-        await vscode.window.tabGroups.close(tab, true);
-      } catch (error) {
-        logWarn('关闭留位页失败', error);
-      }
-    }
   }
 
   private static enqueue<T>(operation: () => Promise<T>): Promise<T> {
@@ -327,7 +245,6 @@ export class VerticalTabsPanel {
 
     try {
       if (await this.ensureRail(previousEditor, preparedRatio)) {
-        await this.ensureRightPlaceholder();
         this.arrangingRail = false;
         logInfo('左侧标签栏安排完成');
         return;
@@ -396,63 +313,6 @@ export class VerticalTabsPanel {
     return true;
   }
 
-  private async ensureRightPlaceholder(): Promise<void> {
-    const railGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
-    if (VerticalTabsPanel.isClosing || VerticalTabsPanel.panels.current !== this
-      || railGroup?.viewColumn !== vscode.ViewColumn.One
-      || railGroup.tabs.length !== 1
-      || !isVerticalTabsPanel(railGroup.tabs[0])) {
-      return;
-    }
-    if (findPlaceholderTab()) {
-      return;
-    }
-
-    const previousEditor = vscode.window.activeTextEditor;
-    let targetGroup = vscode.window.tabGroups.all.find((group) => group !== railGroup);
-    if (!targetGroup) {
-      this.panel.reveal(vscode.ViewColumn.One, false);
-      await vscode.commands.executeCommand('workbench.action.newGroupRight');
-      targetGroup = vscode.window.tabGroups.activeTabGroup;
-      logDebug('为留位页创建右侧编辑器组', { editorGroups: vscode.window.tabGroups.all.length });
-    }
-    if (!targetGroup || targetGroup === railGroup) {
-      logWarn('无法找到留位页的非垂直标签编辑器组');
-      return;
-    }
-
-    const panel = vscode.window.createWebviewPanel(
-      PLACEHOLDER_VIEW_TYPE,
-      PLACEHOLDER_TITLE,
-      { viewColumn: targetGroup.viewColumn, preserveFocus: false },
-      { enableScripts: false, retainContextWhenHidden: true },
-    );
-    VerticalTabsPanel.attachPlaceholder(panel);
-    try {
-      panel.reveal(targetGroup.viewColumn, false);
-      await vscode.commands.executeCommand('workbench.action.pinEditor');
-      await applyLeadingRailRatio(this.getPreferredRailRatio());
-      logInfo('已创建并固定右侧留位页', { viewColumn: targetGroup.viewColumn });
-    } catch (error) {
-      logWarn('固定留位页失败', error);
-    } finally {
-      if (previousEditor) {
-        try {
-          const restoredViewColumn = findTextDocumentViewColumn(previousEditor.document.uri) ?? previousEditor.viewColumn;
-          await vscode.window.showTextDocument(previousEditor.document, {
-            viewColumn: restoredViewColumn,
-            preserveFocus: false,
-            selection: previousEditor.selection,
-          });
-        } catch (error) {
-          logWarn('恢复留位页创建前的活动编辑器失败', error);
-        }
-      } else {
-        this.panel.reveal(vscode.ViewColumn.One, false);
-      }
-    }
-  }
-
   private async saveEditorWidthRatio(): Promise<void> {
     const layout = await getEditorLayout();
     const ratio = getObservedRailRatio(layout, this.lastObservedRailWidth) ?? (layout ? getRailGroupRatio(layout) : undefined);
@@ -463,12 +323,6 @@ export class VerticalTabsPanel {
     } else {
       logWarn('无法从当前编辑器布局读取垂直标签栏宽度比例', { layout });
     }
-  }
-
-  private getPreferredRailRatio(): number {
-    const savedRatio = this.context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
-    const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
-    return normalizeRailRatio(typeof savedRatio === 'number' ? savedRatio : configuredRatio);
   }
 
   private hasSettledRail(): boolean {
@@ -500,9 +354,6 @@ export class VerticalTabsPanel {
   private dispose(): void {
     logInfo('垂直标签面板实例已释放');
     VerticalTabsPanel.panels.clear(this);
-    if (!VerticalTabsPanel.isClosing) {
-      void VerticalTabsPanel.disposePlaceholder();
-    }
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
     }
@@ -571,7 +422,6 @@ export class VerticalTabsPanel {
       inputKind: inputKind(tab.input),
       path: inputPath(tab.input),
       isVerticalTabsPanel: isVerticalTabsPanel(tab),
-      isPlaceholder: isPlaceholderPanel(tab),
       manualGroupId: this.manualGroupByTab.get(tab),
     };
   }
@@ -694,7 +544,7 @@ export class VerticalTabsPanel {
       return undefined;
     }
     const tab = vscode.window.tabGroups.all[target.groupIndex]?.tabs[target.tabIndex];
-    return tab && !isVerticalTabsPanel(tab) && !isPlaceholderPanel(tab) ? tab : undefined;
+    return tab && !isVerticalTabsPanel(tab) ? tab : undefined;
   }
 
   private async navigate(direction: 1 | -1): Promise<void> {
@@ -778,16 +628,6 @@ export class VerticalTabsPanel {
 function findVerticalTabsTab(): vscode.Tab | undefined {
   for (const group of vscode.window.tabGroups.all) {
     const tab = group.tabs.find((candidate) => isVerticalTabsPanel(candidate));
-    if (tab) {
-      return tab;
-    }
-  }
-  return undefined;
-}
-
-function findPlaceholderTab(): vscode.Tab | undefined {
-  for (const group of vscode.window.tabGroups.all) {
-    const tab = group.tabs.find((candidate) => isPlaceholderPanel(candidate));
     if (tab) {
       return tab;
     }
@@ -928,28 +768,6 @@ function isVerticalTabsPanel(tab: vscode.Tab): boolean {
   }
   return tab.input.viewType === VIEW_TYPE
     || tab.input.viewType === `${MAIN_THREAD_WEBVIEW_PREFIX}${VIEW_TYPE}`;
-}
-
-function isPlaceholderPanel(tab: vscode.Tab): boolean {
-  if (!(tab.input instanceof vscode.TabInputWebview)) {
-    return false;
-  }
-  return tab.input.viewType === PLACEHOLDER_VIEW_TYPE
-    || tab.input.viewType === `${MAIN_THREAD_WEBVIEW_PREFIX}${PLACEHOLDER_VIEW_TYPE}`;
-}
-
-function createPlaceholderHtml(cspSource: string): string {
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline';">
-  <title>${PLACEHOLDER_TITLE}</title>
-  <style>body{margin:0;padding:24px;font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background)}main{max-width:34rem;line-height:1.6}h1{font-size:1.1rem;font-weight:600}p{color:var(--vscode-descriptionForeground)}</style>
-</head>
-<body><main><h1>留位</h1><p>此页由 Vertical Tabs 用于保持右侧编辑器区域，避免左侧垂直标签栏占满编辑器区域。</p></main></body>
-</html>`;
 }
 
 function inputKind(input: vscode.Tab['input']): TabInputKind {
