@@ -21,7 +21,7 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
   assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
   assert.match(webviewSource, /if \(tab\) \{\s*menu\.append\(\s*actionButton\('关闭其他标签'/);
-  assert.match(webviewSource, /createGroupButton\(\)/);
+  assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
   assert.match(webviewSource, /globalActionButton\('关闭已保存'/);
   assert.match(webviewSource, /globalActionButton\('关闭全部'/);
 });
@@ -51,6 +51,32 @@ test('webview exposes grouping, sorting, bulk close, pinning, and drag messages'
   assert.match(source, /unpinTab/);
   assert.match(source, /moveTab/);
   assert.match(source, /createGroupFromTabs/);
+});
+
+test('manual group creation is disabled outside manual mode and accepted only in manual mode', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(webviewSource, /function createGroupButton\(enabled: boolean\): HTMLButtonElement/);
+  assert.match(webviewSource, /result\.disabled = !enabled/);
+  assert.match(webviewSource, /if \(!enabled\) return/);
+  assert.match(panelSource, /创建手动标签分组失败：当前不是手动分组模式/);
+  assert.doesNotMatch(panelSource, /this\.groupMode = 'manual';\s*await this\.context\.workspaceState\.update\(GROUP_MODE_STORAGE_KEY, this\.groupMode\);\s*\}\s*logInfo\('创建手动标签分组'/);
+  assert.match(style, /\.tab-context-action:disabled/);
+});
+
+test('manual move group actions are grouped under a hover submenu', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /const trigger = button\('移动分组', '移动到手动分组'\)/);
+  assert.match(source, /trigger\.className = 'tab-context-submenu-trigger'/);
+  assert.match(source, /submenu\.className = 'tab-context-submenu-list'/);
+  assert.match(source, /const item = button\(group\.name, `移至 \$\{group\.name\}`\)/);
+  assert.doesNotMatch(source, /button\(`移至：\$\{group\.name\}`/);
+  assert.match(style, /\.tab-context-submenu:hover \.tab-context-submenu-list/);
+  assert.match(style, /\.tab-context-submenu-trigger::after/);
 });
 
 test('webview retries the initial snapshot request while it is still loading', () => {
@@ -99,6 +125,19 @@ test('extension avoids persisting and restoring transient empty-rail widths', ()
   assert.match(source, /if \(!this\.hasVisibleUserTabs\(\)\)/);
   assert.match(source, /MAX_EMPTY_RAIL_RESTORE_RATIO = 0\.4/);
   assert.match(source, /getEmptyRailRestoreRatio\(this\.context\)/);
+  assert.match(source, /准备保存垂直标签栏宽度比例/);
+  assert.match(source, /lastObservedRailWidth/);
+  assert.match(source, /canPersistObservedRatio/);
+});
+
+test('extension logs and skips width application when a rail-sized root group already exists', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /function findExistingRailLikeRootGroup\(layout: EditorLayout, ratio: number\)/);
+  assert.match(source, /准备调整左侧标签栏宽度/);
+  assert.match(source, /existingRailLikeGroup/);
+  assert.match(source, /跳过调整左侧标签栏宽度：当前布局中已有匹配目标比例的小宽度编辑器组/);
+  assert.match(source, /应用左侧标签栏宽度布局/);
 });
 
 test('extension retries undelivered render messages', () => {
@@ -129,6 +168,21 @@ test('extension inlines the webview script to avoid local resource load failures
   assert.doesNotMatch(source, /src="\$\{scriptUri\}"/);
 });
 
+test('extension inlines the webview stylesheet and keeps nonce-only CSP', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /private readWebviewStyle\(\): string/);
+  assert.match(source, /media', 'vertical-tabs\.css'/);
+  assert.match(source, /fs\.readFileSync\(stylePath, 'utf8'\)/);
+  assert.match(source, /已内联读取 Webview 样式/);
+  assert.match(source, /读取 Webview 样式失败，将使用最小降级样式/);
+  assert.match(source, /Webview 样式加载失败，请查看 Vertical Tabs 输出日志。/);
+  assert.match(source, new RegExp(String.raw`style-src 'nonce-\$\{nonce\}'; script-src 'nonce-\$\{nonce\}'`));
+  assert.match(source, new RegExp(String.raw`<style nonce="\$\{nonce\}">\$\{styleContent\}<\/style>`));
+  assert.doesNotMatch(source, /<link rel="stylesheet"/);
+  assert.doesNotMatch(source, /style-src \$\{cspSource\}/);
+});
+
 test('extension marks built-in welcome and settings webviews as activatable', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
@@ -148,21 +202,37 @@ test('webview enables best-effort activation with a distinct tooltip', () => {
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
 });
 
-test('webview logs activation clicks with request ids and suppresses drag while pressing activation buttons', () => {
+test('webview logs activation clicks with request ids and uses a dedicated drag handle', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
   assert.match(source, /let activateRequestSequence = 0/);
+  assert.match(source, /let dragRequestSequence = 0/);
+  assert.match(source, /row\.draggable = false/);
+  assert.match(source, /const dragHandle = document\.createElement\('button'\)/);
+  assert.match(source, /dragHandle\.className = 'tab-drag-handle'/);
+  assert.match(source, /dragHandle\.draggable = true/);
+  assert.match(source, /dragHandle\.addEventListener\('dragstart'/);
+  assert.match(source, /标签拖拽开始/);
+  assert.match(source, /application\/x-vertical-tab-drag-request/);
+  assert.match(source, /标签拖拽排序请求/);
+  assert.match(source, /标签拖拽结束/);
   assert.match(source, /activate\.addEventListener\('pointerdown'/);
   assert.match(source, /标签激活按钮 pointerdown/);
-  assert.match(source, /suspendRowDrag\(row\)/);
   assert.match(source, /activate\.addEventListener\('click'/);
   assert.match(source, /const requestId = nextActivateRequestId\(\)/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
-  assert.match(source, /function suspendRowDrag\(row: HTMLElement\): void/);
-  assert.match(source, /row\.draggable = false/);
-  assert.match(source, /row\.draggable = previous/);
-  assert.match(source, /标签行开始拖拽/);
+  assert.doesNotMatch(source, /function suspendRowDrag/);
+  assert.doesNotMatch(source, /suspendRowDrag\(row\)/);
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
+});
+
+test('webview styles a stable drag handle column', () => {
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(style, /\.tab-drag-handle \{/);
+  assert.match(style, /flex: 0 0 18px/);
+  assert.match(style, /cursor: grab/);
+  assert.match(style, /\.tab-drag-handle:active \{ cursor: grabbing; \}/);
 });
 
 test('extension selects existing tabs via bounded workbench navigation commands', () => {
@@ -175,6 +245,18 @@ test('extension selects existing tabs via bounded workbench navigation commands'
   assert.match(source, /function activeTabMatches\(target: TabPosition, tab: vscode\.Tab\): boolean/);
   assert.match(source, /group\.tabs\.indexOf\(activeTab\) === target\.tabIndex/);
   assert.match(source, /sameIdentity\(targetIdentity\(activeTab\), targetIdentity\(tab\)\)/);
+});
+
+test('extension restores the active tab after syncing sorted VS Code tab order', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /const activeIdentity = this\.currentSnapshot\.tabs\.find\(\(tab\) => tab\.isActive\)\?\.target\.identity \?\? activeUserTabIdentity\(\)/);
+  assert.match(source, /finally \{\s*await this\.restoreActiveTabAfterOrderSync\(activeIdentity\);/);
+  assert.match(source, /private async restoreActiveTabAfterOrderSync\(identity: TabTargetIdentity \| undefined\): Promise<void>/);
+  assert.match(source, /sameIdentity\(activeIdentity, identity\)/);
+  assert.match(source, /await this\.activateTab\(tab, 'restore-active-after-sort'\)/);
+  assert.match(source, /function activeUserTabIdentity\(\): TabTargetIdentity \| undefined/);
+  assert.match(source, /function findTabByIdentity\(identity: TabTargetIdentity\): vscode\.Tab \| undefined/);
 });
 
 test('extension logs activation request diagnostics and validates the final active tab', () => {
@@ -190,4 +272,18 @@ test('extension logs activation request diagnostics and validates the final acti
   assert.match(source, /标签激活后校验失败：当前活动标签与目标不一致/);
   assert.match(source, /function describeActiveTab\(\): Record<string, unknown> \| undefined/);
   assert.match(source, /function describeTabGroups\(\): readonly Record<string, unknown>\[\]/);
+});
+
+test('extension moves VS Code tabs repeatedly until the dropped position is reached', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /private async moveActiveEditorBeforeTarget\(sourceIdentity: TabTargetIdentity, beforeIdentity: TabTargetIdentity\): Promise<void>/);
+  assert.match(source, /for \(let attempt = 0; attempt < 100; attempt \+= 1\)/);
+  assert.match(source, /source\.tabIndex === before\.tabIndex - 1/);
+  assert.match(source, /workbench\.action\.moveEditorLeftInGroup/);
+  assert.match(source, /workbench\.action\.moveEditorRightInGroup/);
+  assert.match(source, /移动命令未改变源标签位置/);
+  assert.match(source, /private async moveActiveEditorToEndOfGroup\(sourceIdentity: TabTargetIdentity\): Promise<void>/);
+  assert.match(source, /跟随 VS Code 模式移动到末尾完成/);
+  assert.match(source, /function describeTabPosition\(position: TabPosition \| undefined\): Record<string, unknown> \| undefined/);
 });

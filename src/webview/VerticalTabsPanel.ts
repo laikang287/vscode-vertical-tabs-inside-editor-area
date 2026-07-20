@@ -45,6 +45,7 @@ export class VerticalTabsPanel {
   private static readonly visibilityEmitter = new vscode.EventEmitter<boolean>();
   private static serializerRegistered = false;
   private static operations: Promise<void> = Promise.resolve();
+  private static layoutOperations: Promise<void> = Promise.resolve();
   private static visibilityOperations: Promise<void> = Promise.resolve();
 
   static readonly onDidChangeVisibility = VerticalTabsPanel.visibilityEmitter.event;
@@ -270,27 +271,29 @@ export class VerticalTabsPanel {
   }
 
   private async settleAndEnsureRail(previousEditor?: vscode.TextEditor, preparedRatio?: number): Promise<void> {
-    this.arrangingRail = true;
-    logDebug('等待编辑器状态稳定后安排左侧标签栏', {
-      delayMs: RAIL_SETTLE_DELAY_MS,
-      previousEditor: previousEditor?.document.uri.toString(),
-    });
-    await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
-    if (VerticalTabsPanel.panels.current !== this) {
-      logWarn('安排左侧标签栏时面板实例已变化，终止本次操作');
-      return;
-    }
-
-    try {
-      if (await this.ensureRail(previousEditor, preparedRatio)) {
-        this.arrangingRail = false;
-        logInfo('左侧标签栏安排完成');
+    await VerticalTabsPanel.enqueueLayout(async () => {
+      this.arrangingRail = true;
+      logDebug('等待编辑器状态稳定后安排左侧标签栏', {
+        delayMs: RAIL_SETTLE_DELAY_MS,
+        previousEditor: previousEditor?.document.uri.toString(),
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
+      if (VerticalTabsPanel.panels.current !== this) {
+        logWarn('安排左侧标签栏时面板实例已变化，终止本次操作');
         return;
       }
-    } catch (error) {
-      logError('安排左侧标签栏时发生异常', error);
-    }
-    logError('左侧标签栏安排失败');
+
+      try {
+        if (await this.ensureRail(previousEditor, preparedRatio)) {
+          this.arrangingRail = false;
+          logInfo('左侧标签栏安排完成');
+          return;
+        }
+      } catch (error) {
+        logError('安排左侧标签栏时发生异常', error);
+      }
+      logError('左侧标签栏安排失败');
+    });
   }
 
   private async ensureRail(previousEditor?: vscode.TextEditor, preparedRatio?: number): Promise<boolean> {
@@ -359,11 +362,22 @@ export class VerticalTabsPanel {
     }
     const layout = await getEditorLayout();
     let ratio: number | undefined;
+    const railGroupRatio = layout ? getRailGroupRatio(layout) : undefined;
+    const observedRatio = getObservedRailRatio(layout, this.lastObservedRailWidth);
+    logDebug('准备保存垂直标签栏宽度比例', {
+      layout,
+      tabGroups: describeTabGroups(),
+      lastObservedRailWidth: this.lastObservedRailWidth,
+      railGroupRatio,
+      observedRatio,
+      canPersistRailGroupRatio: layout ? shouldPersistRailGroupRatio(layout) : false,
+      canPersistObservedRatio: shouldPersistObservedRailWidth(layout, this.lastObservedRailWidth),
+    });
     if (layout && shouldPersistRailGroupRatio(layout)) {
-      ratio = getRailGroupRatio(layout);
+      ratio = railGroupRatio;
     } else if (this.lastObservedRailWidth !== undefined) {
       ratio = shouldPersistObservedRailWidth(layout, this.lastObservedRailWidth)
-        ? getObservedRailRatio(layout, this.lastObservedRailWidth)
+        ? observedRatio
         : undefined;
     }
     if (typeof ratio === 'number') {
@@ -679,8 +693,8 @@ export class VerticalTabsPanel {
 
     if (message.type === 'createGroup') {
       if (this.groupMode !== 'manual') {
-        this.groupMode = 'manual';
-        await this.context.workspaceState.update(GROUP_MODE_STORAGE_KEY, this.groupMode);
+        logWarn('创建手动标签分组失败：当前不是手动分组模式', { groupMode: this.groupMode, name: message.name.trim() });
+        return;
       }
       logInfo('创建手动标签分组', { name: message.name.trim() });
       this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: message.name.trim(), collapsed: false });
@@ -897,27 +911,115 @@ export class VerticalTabsPanel {
       return;
     }
     const beforeTab = beforeTarget ? this.resolveTab(beforeTarget) : undefined;
+    logInfo('跟随 VS Code 模式移动标签', {
+      source: describeTab(tab),
+      before: beforeTab ? describeTab(beforeTab) : undefined,
+      target,
+      beforeTarget,
+    });
     await this.activateTab(tab);
-    if (beforeTab && beforeTab.group === tab.group) {
-      const targetIndex = tab.group.tabs.indexOf(tab);
-      const beforeIndex = tab.group.tabs.indexOf(beforeTab);
-      if (targetIndex > beforeIndex) await vscode.commands.executeCommand('workbench.action.moveEditorLeftInGroup');
-      else if (targetIndex < beforeIndex) await vscode.commands.executeCommand('workbench.action.moveEditorRightInGroup');
+    if (!beforeTab) {
+      await this.moveActiveEditorToEndOfGroup(targetIdentity(tab));
+      return;
+    }
+    if (beforeTab.group === tab.group) {
+      await this.moveActiveEditorBeforeTarget(targetIdentity(tab), targetIdentity(beforeTab));
+    } else {
+      logWarn('跟随 VS Code 模式移动失败：暂不支持拖拽到其它编辑器组，请使用右键菜单移动到其它组', {
+        source: describeTab(tab),
+        before: describeTab(beforeTab),
+      });
     }
   }
 
-  private async syncVsCodeTabOrder(): Promise<void> {
-    const snapshot = await this.createSnapshot();
-    for (const displayGroup of snapshot.displayGroups) {
-      if (displayGroup.mode !== 'vscode' || displayGroup.tabs.length <= 1) {
-        continue;
+  private async moveActiveEditorBeforeTarget(sourceIdentity: TabTargetIdentity, beforeIdentity: TabTargetIdentity): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const source = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+      const before = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), beforeIdentity));
+      if (!source || !before || source.group !== before.group) {
+        logWarn('跟随 VS Code 模式移动停止：源标签或目标标签位置已失效', { attempt, source: describeTabPosition(source), before: describeTabPosition(before) });
+        return;
       }
-      const group = vscode.window.tabGroups.all[displayGroup.tabs[0]?.target.groupIndex ?? -1];
-      if (!group || group.tabs.some((tab) => isVerticalTabsPanel(tab))) {
-        continue;
+      if (source.tabIndex === before.tabIndex - 1) {
+        logDebug('跟随 VS Code 模式移动完成', { attempt, sourceIndex: source.tabIndex, beforeIndex: before.tabIndex });
+        return;
       }
-      await this.syncVsCodeGroupOrder(group, displayGroup.tabs.map((tab) => tab.target.identity));
+      const command = source.tabIndex > before.tabIndex
+        ? 'workbench.action.moveEditorLeftInGroup'
+        : 'workbench.action.moveEditorRightInGroup';
+      const previousIndex = source.tabIndex;
+      await vscode.commands.executeCommand(command);
+      const next = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+      if (!next || next.group !== source.group || next.tabIndex === previousIndex) {
+        logWarn('跟随 VS Code 模式移动停止：移动命令未改变源标签位置', { command, previousIndex, next: describeTabPosition(next) });
+        return;
+      }
+      logDebug('跟随 VS Code 模式移动一步', { command, previousIndex, nextIndex: next.tabIndex, attempt });
     }
+    logWarn('跟随 VS Code 模式移动停止：超过最大移动步数', { sourceIdentity, beforeIdentity });
+  }
+
+  private async moveActiveEditorToEndOfGroup(sourceIdentity: TabTargetIdentity): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const source = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+      if (!source) {
+        logWarn('跟随 VS Code 模式移动到末尾停止：源标签位置已失效', { attempt, sourceIdentity });
+        return;
+      }
+      if (source.tabIndex === source.group.tabs.length - 1) {
+        logDebug('跟随 VS Code 模式移动到末尾完成', { attempt, sourceIndex: source.tabIndex });
+        return;
+      }
+      const previousIndex = source.tabIndex;
+      await vscode.commands.executeCommand('workbench.action.moveEditorRightInGroup');
+      const next = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+      if (!next || next.group !== source.group || next.tabIndex === previousIndex) {
+        logWarn('跟随 VS Code 模式移动到末尾停止：右移命令未改变源标签位置', { previousIndex, next: describeTabPosition(next) });
+        return;
+      }
+      logDebug('跟随 VS Code 模式向末尾移动一步', { previousIndex, nextIndex: next.tabIndex, attempt });
+    }
+    logWarn('跟随 VS Code 模式移动到末尾停止：超过最大移动步数', { sourceIdentity });
+  }
+
+  private async syncVsCodeTabOrder(): Promise<void> {
+    const activeIdentity = this.currentSnapshot.tabs.find((tab) => tab.isActive)?.target.identity ?? activeUserTabIdentity();
+    const snapshot = await this.createSnapshot();
+    try {
+      for (const displayGroup of snapshot.displayGroups) {
+        if (displayGroup.mode !== 'vscode' || displayGroup.tabs.length <= 1) {
+          continue;
+        }
+        const group = vscode.window.tabGroups.all[displayGroup.tabs[0]?.target.groupIndex ?? -1];
+        if (!group || group.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+          continue;
+        }
+        await this.syncVsCodeGroupOrder(group, displayGroup.tabs.map((tab) => tab.target.identity));
+      }
+    } finally {
+      await this.restoreActiveTabAfterOrderSync(activeIdentity);
+    }
+  }
+
+  private async restoreActiveTabAfterOrderSync(identity: TabTargetIdentity | undefined): Promise<void> {
+    if (!identity) {
+      return;
+    }
+    const activeIdentity = activeUserTabIdentity();
+    if (activeIdentity && sameIdentity(activeIdentity, identity)) {
+      return;
+    }
+    const tab = findTabByIdentity(identity);
+    if (!tab) {
+      logDebug('排序同步后无需恢复活动标签：原标签不存在', { identity });
+      return;
+    }
+    if (!isActivatableTabForCommands(tab)) {
+      logDebug('排序同步后无法恢复活动标签：标签不可可靠激活', { target: describeTab(tab) });
+      return;
+    }
+    logDebug('排序同步后恢复原活动标签', { target: describeTab(tab) });
+    await this.activateTab(tab, 'restore-active-after-sort');
   }
 
   private async syncVsCodeGroupOrder(group: vscode.TabGroup, identities: readonly TabTargetIdentity[]): Promise<void> {
@@ -1155,9 +1257,8 @@ export class VerticalTabsPanel {
   }
 
   private createHtml(): string {
-    const styleUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vertical-tabs.css'));
     const nonce = crypto.randomBytes(16).toString('base64');
-    const cspSource = this.panel.webview.cspSource;
+    const styleContent = this.readWebviewStyle();
     const scriptContent = this.readWebviewScript();
 
     return `<!DOCTYPE html>
@@ -1165,8 +1266,8 @@ export class VerticalTabsPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';">
-  <link rel="stylesheet" href="${styleUri}">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <style nonce="${nonce}">${styleContent}</style>
   <title>${TITLE}</title>
 </head>
 <body>
@@ -1200,6 +1301,26 @@ export class VerticalTabsPanel {
   <script nonce="${nonce}">${scriptContent}</script>
 </body>
 </html>`;
+  }
+
+  private readWebviewStyle(): string {
+    const stylePath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vertical-tabs.css').fsPath;
+    try {
+      const source = fs.readFileSync(stylePath, 'utf8').replace(/<\/style/gi, '<\\/style');
+      logDebug('已内联读取 Webview 样式', { stylePath, bytes: source.length });
+      return source;
+    } catch (error) {
+      logError('读取 Webview 样式失败，将使用最小降级样式', { stylePath, error });
+      return [
+        ':root { color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }',
+        'body { margin: 0; }',
+        '.vertical-tabs { box-sizing: border-box; min-width: 180px; min-height: 100vh; padding: 6px; }',
+        '#description { color: var(--vscode-errorForeground, var(--vscode-descriptionForeground)); font-size: 12px; line-height: 1.5; margin: 4px 6px; }',
+        '#description::after { content: " Webview 样式加载失败，请查看 Vertical Tabs 输出日志。"; }',
+        '.tab-row, .group-header, .toolbar-actions { display: flex; min-width: 0; }',
+        '.tab-main { flex: 1; min-width: 0; text-align: left; }',
+      ].join('\n');
+    }
   }
 
   private readWebviewScript(): string {
@@ -1252,29 +1373,39 @@ export class VerticalTabsPanel {
   }
 
   private async restoreUsableEmptyRailLayout(reusableViewColumn?: vscode.ViewColumn): Promise<boolean> {
-    const ratio = getEmptyRailRestoreRatio(this.context);
-    logInfo('检测到垂直标签栏没有可显示标签，准备恢复右侧编辑器区域', { ratio, reusableViewColumn });
-    this.arrangingRail = true;
-    try {
-      if (reusableViewColumn === undefined) {
-        await vscode.commands.executeCommand('workbench.action.newGroupRight');
-      } else {
-        await focusEditorGroup(reusableViewColumn);
+    return VerticalTabsPanel.enqueueLayout(async () => {
+      const ratio = getEmptyRailRestoreRatio(this.context);
+      logInfo('检测到垂直标签栏没有可显示标签，准备恢复右侧编辑器区域', { ratio, reusableViewColumn });
+      this.arrangingRail = true;
+      try {
+        const currentReusable = reusableViewColumn ?? findReusableEmptyUserGroupColumn(this.findOwnGroupIndex());
+        if (currentReusable === undefined) {
+          await vscode.commands.executeCommand('workbench.action.newGroupRight');
+        } else {
+          await focusEditorGroup(currentReusable);
+        }
+        await openWelcomeEditor();
+        await closeExtraEmptyUserGroups(this.findOwnGroupIndex());
+        await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+        if (!await applyLeadingRailRatio(ratio)) {
+          logWarn('恢复空垂直标签栏宽度失败');
+          return false;
+        }
+        if (!await this.focusAndLockOwnGroup()) {
+          return false;
+        }
+        logInfo('已恢复空垂直标签栏的右侧编辑器区域和宽度', { ratio });
+        return true;
+      } finally {
+        this.arrangingRail = false;
       }
-      await openWelcomeEditor();
-      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-      if (!await applyLeadingRailRatio(ratio)) {
-        logWarn('恢复空垂直标签栏宽度失败');
-        return false;
-      }
-      if (!await this.focusAndLockOwnGroup()) {
-        return false;
-      }
-      logInfo('已恢复空垂直标签栏的右侧编辑器区域和宽度', { ratio });
-      return true;
-    } finally {
-      this.arrangingRail = false;
-    }
+    });
+  }
+
+  private static enqueueLayout<T>(operation: () => Promise<T>): Promise<T> {
+    const result = VerticalTabsPanel.layoutOperations.then(operation, operation);
+    VerticalTabsPanel.layoutOperations = result.then(() => undefined, () => undefined);
+    return result;
   }
 }
 
@@ -1294,6 +1425,26 @@ async function openWelcomeEditor(): Promise<void> {
     }
   }
   logWarn('打开 VS Code 欢迎页失败，将保留空的右侧编辑器组');
+}
+
+function findReusableEmptyUserGroupColumn(ownGroupIndex: number): vscode.ViewColumn | undefined {
+  return vscode.window.tabGroups.all.find((group, index) => (
+    index !== ownGroupIndex && group.tabs.length === 0
+  ))?.viewColumn;
+}
+
+async function closeExtraEmptyUserGroups(ownGroupIndex: number): Promise<void> {
+  const emptyGroups = vscode.window.tabGroups.all.filter((group, index) => (
+    index !== ownGroupIndex && group.tabs.length === 0
+  ));
+  for (const group of emptyGroups) {
+    try {
+      await vscode.window.tabGroups.close(group, true);
+      logDebug('已关闭多余空编辑器组', { viewColumn: group.viewColumn });
+    } catch (error) {
+      logDebug('关闭多余空编辑器组失败，将继续保留', { viewColumn: group.viewColumn, error });
+    }
+  }
 }
 
 function withTimeout<T>(promise: Thenable<T>, timeoutMs: number): Promise<T> {
@@ -1341,6 +1492,20 @@ function findTabPosition(tab: vscode.Tab): TabPosition | undefined {
   }
   const identity = targetIdentity(tab);
   return findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), identity));
+}
+
+function findTabByIdentity(identity: TabTargetIdentity): vscode.Tab | undefined {
+  const position = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), identity));
+  return position?.group.tabs[position.tabIndex];
+}
+
+function activeUserTabIdentity(): TabTargetIdentity | undefined {
+  const group = vscode.window.tabGroups.all.find((candidate) => candidate.isActive);
+  const tab = group?.activeTab;
+  if (!tab || isVerticalTabsPanel(tab)) {
+    return undefined;
+  }
+  return targetIdentity(tab);
 }
 
 function findTabPositionBy(predicate: (tab: vscode.Tab) => boolean): TabPosition | undefined {
@@ -1393,6 +1558,18 @@ function describeActiveTab(): Record<string, unknown> | undefined {
     viewColumn: group.viewColumn,
     tabIndex: group.tabs.indexOf(tab),
     ...describeTab(tab),
+  };
+}
+
+function describeTabPosition(position: TabPosition | undefined): Record<string, unknown> | undefined {
+  if (!position) {
+    return undefined;
+  }
+  return {
+    groupIndex: position.groupIndex,
+    viewColumn: position.group.viewColumn,
+    tabIndex: position.tabIndex,
+    tabCount: position.group.tabs.length,
   };
 }
 
@@ -1485,12 +1662,31 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
     return false;
   }
   const totalWidth = getEditorAreaWidth(layout);
-  const railWidth = Math.max(1, Math.ceil(totalWidth * normalizeRailRatio(ratio)));
-  logDebug('创建 Webview 后调整左侧标签栏宽度', { ratio, totalWidth, railWidth });
+  const normalizedRatio = normalizeRailRatio(ratio);
+  const railWidth = Math.max(1, Math.ceil(totalWidth * normalizedRatio));
+  const existingRailLikeGroup = findExistingRailLikeRootGroup(layout, normalizedRatio);
+  logDebug('准备调整左侧标签栏宽度', {
+    requestedRatio: ratio,
+    normalizedRatio,
+    totalWidth,
+    railWidth,
+    existingRailLikeGroup,
+    layout,
+    tabGroups: describeTabGroups(),
+  });
+  if (existingRailLikeGroup !== undefined) {
+    logDebug('跳过调整左侧标签栏宽度：当前布局中已有匹配目标比例的小宽度编辑器组', {
+      requestedRatio: ratio,
+      normalizedRatio,
+      existingRailLikeGroup,
+      layout,
+    });
+    return true;
+  }
   const siblingWidths = layout.groups.slice(1).map((group) => typeof group.size === 'number' && group.size > 0 ? group.size : 1);
   const siblingTotal = siblingWidths.reduce((sum, size) => sum + size, 0);
   const availableWidth = Math.max(1, totalWidth - railWidth);
-  return applyEditorLayout({
+  const nextLayout = {
     ...layout,
     groups: [
       { ...layout.groups[0], size: railWidth },
@@ -1499,7 +1695,32 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
         size: Math.max(1, Math.round(availableWidth * siblingWidths[index] / siblingTotal)),
       })),
     ],
-  });
+  };
+  logDebug('应用左侧标签栏宽度布局', { requestedRatio: ratio, normalizedRatio, previousLayout: layout, nextLayout });
+  return applyEditorLayout(nextLayout);
+}
+
+function findExistingRailLikeRootGroup(layout: EditorLayout, ratio: number): { readonly index: number; readonly size: number; readonly ratio: number } | undefined {
+  const totalWidth = getEditorAreaWidth(layout);
+  if (totalWidth <= 0) {
+    return undefined;
+  }
+  const rootGroups = layout.groups.map((group, index) => ({
+    index,
+    size: typeof group.size === 'number' && Number.isFinite(group.size) && group.size > 0 ? group.size : undefined,
+  }));
+  const sizedGroups = rootGroups.filter((group): group is { readonly index: number; readonly size: number } => group.size !== undefined);
+  if (sizedGroups.length < 2) {
+    return undefined;
+  }
+  const candidates = sizedGroups.map((group) => ({ ...group, ratio: group.size / totalWidth }));
+  const hasUsableSibling = (index: number) => candidates.some((candidate) => candidate.index !== index && candidate.ratio >= 0.6);
+  const match = candidates.find((candidate) => (
+    candidate.ratio <= MAX_EMPTY_RAIL_RESTORE_RATIO
+    && hasUsableSibling(candidate.index)
+    && (Math.abs(candidate.ratio - ratio) <= 0.06 || (ratio <= 0.3 && candidate.ratio <= 0.3))
+  ));
+  return match ? { index: match.index, size: match.size, ratio: match.ratio } : undefined;
 }
 
 function isVerticalTabsPanel(tab: vscode.Tab): boolean {

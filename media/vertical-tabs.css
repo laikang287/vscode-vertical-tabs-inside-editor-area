@@ -95,8 +95,21 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-row.tree-level-1 { padding-left: 18px; }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .tab-row.is-unavailable { opacity: .65; }
-.tab-row[draggable="true"] { cursor: grab; }
-.tab-row[draggable="true"]:active { cursor: grabbing; }
+
+.tab-drag-handle {
+  align-items: center;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: grab;
+  display: flex;
+  flex: 0 0 18px;
+  justify-content: center;
+  opacity: .75;
+  padding: 0;
+}
+.tab-drag-handle:active { cursor: grabbing; }
+.tab-row:hover .tab-drag-handle, .tab-row.is-active .tab-drag-handle { opacity: 1; }
+.is-active .tab-drag-handle { color: inherit; }
 
 .tab-main {
   background: transparent;
@@ -135,4 +148,36 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   padding: 5px 8px;
   text-align: left;
   white-space: nowrap;
+}
+
+.tab-context-action:disabled {
+  color: var(--vscode-disabledForeground);
+  cursor: default;
+}
+
+.tab-context-submenu {
+  position: relative;
+}
+
+.tab-context-submenu-trigger::after {
+  content: "›";
+  float: right;
+  padding-left: 16px;
+}
+
+.tab-context-submenu-list {
+  background: var(--vscode-menu-background);
+  border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+  display: none;
+  left: 100%;
+  min-width: 150px;
+  padding: 3px;
+  position: absolute;
+  top: -4px;
+}
+
+.tab-context-submenu:hover .tab-context-submenu-list,
+.tab-context-submenu:focus-within .tab-context-submenu-list {
+  display: grid;
 }
