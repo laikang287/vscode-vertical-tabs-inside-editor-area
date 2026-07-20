@@ -31,6 +31,8 @@ const RAIL_SETTLE_DELAY_MS = 150;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_WAIT_INTERVAL_MS = 10;
 const INPUT_MTIME_TIMEOUT_MS = 250;
+const INITIAL_HOST_REFRESH_DELAY_MS = 800;
+const MAX_EMPTY_RAIL_RESTORE_RATIO = 0.4;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -44,6 +46,7 @@ export class VerticalTabsPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   // Ignore the Webview's initial ResizeObserver report until VS Code has
   // finished creating and sizing the dedicated editor group.
   private arrangingRail = true;
@@ -66,11 +69,6 @@ export class VerticalTabsPanel {
     this.manualGroupByIdentity = readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY);
     this.manualOrderByGroup = readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY);
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn });
-    this.configureWebview();
-    // The panel can exist before VS Code publishes its tab through tabGroups.
-    // Mark it visible from the instance itself so the launcher switches to its
-    // close action immediately after the user clicks Open.
-    void VerticalTabsPanel.setVisibilityContext(true);
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: unknown) => {
@@ -79,6 +77,12 @@ export class VerticalTabsPanel {
       vscode.window.tabGroups.onDidChangeTabs(() => this.scheduleRefresh()),
       vscode.window.tabGroups.onDidChangeTabGroups(() => this.scheduleRefresh()),
     );
+    this.configureWebview();
+    this.scheduleInitialHostRefresh();
+    // The panel can exist before VS Code publishes its tab through tabGroups.
+    // Mark it visible from the instance itself so the launcher switches to its
+    // close action immediately after the user clicks Open.
+    void VerticalTabsPanel.setVisibilityContext(true);
   }
 
   static initialize(context: vscode.ExtensionContext): void {
@@ -334,11 +338,15 @@ export class VerticalTabsPanel {
         viewColumn: restoredViewColumn,
       });
     }
-    await this.refresh();
+    await this.refresh({ reason: 'ensureRail' });
     return true;
   }
 
   private async saveEditorWidthRatio(): Promise<void> {
+    if (!this.hasVisibleUserTabs()) {
+      logDebug('跳过保存垂直标签栏宽度比例：当前没有可显示的用户标签');
+      return;
+    }
     const layout = await getEditorLayout();
     let ratio: number | undefined;
     if (layout && shouldPersistRailGroupRatio(layout)) {
@@ -368,6 +376,10 @@ export class VerticalTabsPanel {
 
   private findOwnGroupIndex(): number {
     return vscode.window.tabGroups.all.findIndex((group) => group.tabs.some((tab) => isVerticalTabsPanel(tab)));
+  }
+
+  private hasVisibleUserTabs(): boolean {
+    return vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => !isVerticalTabsPanel(tab)));
   }
 
   private async waitForOwnGroup(): Promise<number> {
@@ -429,41 +441,70 @@ export class VerticalTabsPanel {
     return true;
   }
 
+  private scheduleInitialHostRefresh(): void {
+    if (this.initialHostRefreshTimer) {
+      clearTimeout(this.initialHostRefreshTimer);
+    }
+    this.initialHostRefreshTimer = setTimeout(() => {
+      this.initialHostRefreshTimer = undefined;
+      void this.refresh({ reason: 'hostInitialFallback', ensureEmptyLayout: false }).catch((error) => logError('初始兜底刷新垂直标签快照失败', error));
+    }, INITIAL_HOST_REFRESH_DELAY_MS);
+  }
+
   private scheduleRefresh(): void {
     if (this.refreshTimer) {
+      logTrace('跳过计划刷新：已有刷新定时器');
       return;
     }
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = undefined;
-      void this.refresh().catch((error) => logError('刷新垂直标签快照失败', error));
+      void this.refresh({ reason: 'scheduled' }).catch((error) => logError('刷新垂直标签快照失败', error));
     }, 0);
   }
 
-  private async refresh(): Promise<void> {
+  private async refresh(options: { readonly reason: string; readonly ensureEmptyLayout?: boolean }): Promise<void> {
+    const started = Date.now();
+    logDebug('开始刷新垂直标签快照', {
+      reason: options.reason,
+      arrangingRail: this.arrangingRail,
+      groupCount: vscode.window.tabGroups.all.length,
+    });
     this.currentSnapshot = await this.createSnapshot();
-    logTrace('刷新垂直标签快照', {
+    logDebug('完成刷新垂直标签快照', {
+      reason: options.reason,
       revision: this.currentSnapshot.revision,
       tabCount: this.currentSnapshot.tabs.length,
+      displayGroupCount: this.currentSnapshot.displayGroups.length,
       manualGroupCount: this.currentSnapshot.manualGroups.length,
       groupMode: this.currentSnapshot.groupMode,
       sortMode: this.currentSnapshot.sortMode,
+      durationMs: Date.now() - started,
     });
     this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
-    void this.ensureUsableEmptyRailLayout().catch((error) => logError('恢复空垂直标签栏布局失败', error));
+    if (options.ensureEmptyLayout !== false) {
+      void this.ensureUsableEmptyRailLayout().catch((error) => logError('恢复空垂直标签栏布局失败', error));
+    }
   }
 
   private async createSnapshot(): Promise<VerticalTabsSnapshot> {
     this.revision += 1;
+    const revision = this.revision;
+    logDebug('开始创建标签快照', {
+      revision,
+      sourceGroups: vscode.window.tabGroups.all.map((group, index) => ({ index, viewColumn: group.viewColumn, tabCount: group.tabs.length })),
+    });
     const groups: SnapshotSourceGroup[] = await Promise.all(vscode.window.tabGroups.all.map(async (group, index) => ({
       label: `编辑器组 ${index + 1}`,
       viewColumn: group.viewColumn,
       tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTab(tab))),
     })));
-    return buildSnapshot(groups, this.revision, this.manualGroups, {
+    const snapshot = buildSnapshot(groups, revision, this.manualGroups, {
       groupMode: this.groupMode,
       sortMode: this.sortMode,
       manualOrderByGroup: this.manualOrderByGroup,
     });
+    logDebug('标签快照创建完成', { revision, visibleTabs: snapshot.tabs.length, displayGroups: snapshot.displayGroups.length });
+    return snapshot;
   }
 
   private async toSnapshotTab(tab: vscode.Tab): Promise<SnapshotSourceTab> {
@@ -493,6 +534,14 @@ export class VerticalTabsPanel {
     }
     logDebug('收到 Webview 消息', { type: message.type });
 
+    if (message.type === 'webviewLog') {
+      const details = message.details ? { details: message.details } : undefined;
+      if (message.level === 'error') logError(`Webview: ${message.message}`, details);
+      else if (message.level === 'warn') logWarn(`Webview: ${message.message}`, details);
+      else logDebug(`Webview: ${message.message}`, details);
+      return;
+    }
+
     if (message.type === 'railWidth') {
       this.lastObservedRailWidth = message.width;
       logDebug('观察到垂直标签 Webview 宽度', { width: message.width, arrangingRail: this.arrangingRail });
@@ -507,8 +556,12 @@ export class VerticalTabsPanel {
     }
 
     if (message.type === 'ready' || message.type === 'requestRefresh') {
+      if (message.type === 'ready' && this.initialHostRefreshTimer) {
+        clearTimeout(this.initialHostRefreshTimer);
+        this.initialHostRefreshTimer = undefined;
+      }
       logDebug('Webview 请求刷新标签快照', { type: message.type });
-      await this.refresh();
+      await this.refresh({ reason: message.type });
       return;
     }
 
@@ -516,7 +569,7 @@ export class VerticalTabsPanel {
       this.groupMode = message.groupMode;
       await this.context.workspaceState.update(GROUP_MODE_STORAGE_KEY, message.groupMode);
       logInfo('切换垂直标签分组模式', { groupMode: message.groupMode });
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
 
@@ -524,7 +577,7 @@ export class VerticalTabsPanel {
       this.sortMode = message.sortMode;
       await this.context.workspaceState.update(SORT_MODE_STORAGE_KEY, message.sortMode);
       logInfo('切换垂直标签排序模式', { sortMode: message.sortMode });
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
 
@@ -536,7 +589,7 @@ export class VerticalTabsPanel {
       logInfo('创建手动标签分组', { name: message.name.trim() });
       this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: message.name.trim(), collapsed: false });
       await this.persistManualGroups();
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
     if (message.type === 'renameGroup') {
@@ -545,7 +598,7 @@ export class VerticalTabsPanel {
         const index = this.manualGroups.indexOf(group);
         this.manualGroups[index] = { ...group, name: message.name.trim() };
         await this.persistManualGroups();
-        await this.refresh();
+        await this.refresh({ reason: 'operation' });
         logInfo('重命名手动标签分组', { groupId: message.groupId, name: message.name.trim() });
       } else {
         logWarn('重命名手动标签分组失败：分组不存在', { groupId: message.groupId });
@@ -558,7 +611,7 @@ export class VerticalTabsPanel {
         const index = this.manualGroups.indexOf(group);
         this.manualGroups[index] = { ...group, collapsed: !group.collapsed };
         await this.persistManualGroups();
-        await this.refresh();
+        await this.refresh({ reason: 'operation' });
         logDebug('切换手动标签分组折叠状态', { groupId: message.groupId, collapsed: !group.collapsed });
       } else {
         logWarn('切换手动标签分组失败：分组不存在', { groupId: message.groupId });
@@ -574,7 +627,7 @@ export class VerticalTabsPanel {
         }
         this.manualOrderByGroup.delete(message.groupId);
         await this.persistManualState();
-        await this.refresh();
+        await this.refresh({ reason: 'operation' });
         logInfo('删除手动标签分组', { groupId: message.groupId });
       } else {
         logWarn('删除手动标签分组失败：分组不存在', { groupId: message.groupId });
@@ -590,7 +643,7 @@ export class VerticalTabsPanel {
       if (tab) {
         this.setManualGroup(targetIdentity(tab), message.groupId);
         await this.persistManualState();
-        await this.refresh();
+        await this.refresh({ reason: 'operation' });
         logInfo('更新标签的手动分组', { label: tab.label, groupId: message.groupId });
       } else {
         logWarn('更新标签手动分组失败：标签目标已失效', { target: message.target });
@@ -608,13 +661,13 @@ export class VerticalTabsPanel {
         await this.context.workspaceState.update(GROUP_MODE_STORAGE_KEY, this.groupMode);
         await this.moveManualTab(message.target, message.groupId, message.beforeTarget);
       }
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
 
     if (message.type === 'createGroupFromTabs') {
       await this.createManualGroupFromTabs(message.source, message.target);
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
 
@@ -626,7 +679,7 @@ export class VerticalTabsPanel {
       } else {
         logWarn('固定状态切换失败：标签不可可靠激活', { target: message.target });
       }
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
 
@@ -641,7 +694,7 @@ export class VerticalTabsPanel {
             : 'workbench.action.moveEditorToNewGroup';
         await vscode.commands.executeCommand(command);
       }
-      await this.refresh();
+      await this.refresh({ reason: 'operation' });
       return;
     }
 
@@ -671,7 +724,7 @@ export class VerticalTabsPanel {
     if (tabs.length > 0) {
       await vscode.window.tabGroups.close(tabs, true);
     }
-    await this.refresh();
+    await this.refresh({ reason: 'navigate' });
   }
 
   private setManualGroup(identity: TabTargetIdentity, groupId: string | undefined): void {
@@ -789,7 +842,7 @@ export class VerticalTabsPanel {
   }
 
   private async navigate(direction: 1 | -1): Promise<void> {
-    await this.refresh();
+    await this.refresh({ reason: 'operation' });
     const tabs = this.currentSnapshot.tabs.filter((tab) => tab.isActivatable);
     if (tabs.length === 0) {
       logDebug('相邻标签导航无需处理：没有可激活标签');
@@ -926,7 +979,7 @@ export class VerticalTabsPanel {
   }
 
   private async restoreUsableEmptyRailLayout(reusableViewColumn?: vscode.ViewColumn): Promise<boolean> {
-    const ratio = getConfiguredRailRatio(this.context);
+    const ratio = getEmptyRailRestoreRatio(this.context);
     logInfo('检测到垂直标签栏没有可显示标签，准备恢复右侧编辑器区域', { ratio, reusableViewColumn });
     this.arrangingRail = true;
     try {
@@ -1058,6 +1111,19 @@ function getConfiguredRailRatio(context: vscode.ExtensionContext): number {
   const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
   const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
   return resolveRailRatio(savedRatio, configuredRatio);
+}
+
+function getDefaultRailRatio(): number {
+  const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
+  return normalizeRailRatio(configuredRatio);
+}
+
+function getEmptyRailRestoreRatio(context: vscode.ExtensionContext): number {
+  const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
+  if (typeof savedRatio === 'number' && Number.isFinite(savedRatio) && savedRatio > 0 && savedRatio <= MAX_EMPTY_RAIL_RESTORE_RATIO) {
+    return normalizeRailRatio(savedRatio);
+  }
+  return getDefaultRailRatio();
 }
 
 async function applyLeadingRailRatio(ratio: number): Promise<boolean> {

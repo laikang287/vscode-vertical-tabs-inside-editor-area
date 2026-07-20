@@ -46,9 +46,35 @@ test('webview retries the initial snapshot request while it is still loading', (
   assert.match(source, /refreshAttempts < 5/);
 });
 
+test('webview reports startup, render, and script failures to the extension log', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /logToExtension\('debug', 'Webview 脚本已启动'\)/);
+  assert.match(source, /window\.addEventListener\('error'/);
+  assert.match(source, /window\.addEventListener\('unhandledrejection'/);
+  assert.match(source, /收到标签渲染消息/);
+  assert.match(source, /等待标签快照超时/);
+});
+
 test('extension snapshot mtime lookup has a timeout', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /INPUT_MTIME_TIMEOUT_MS = 250/);
   assert.match(source, /withTimeout\(vscode\.workspace\.fs\.stat\(uri\), INPUT_MTIME_TIMEOUT_MS\)/);
+});
+
+test('extension registers the webview message listener before setting html and keeps an initial host refresh fallback', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /onDidReceiveMessage[\s\S]+this\.configureWebview\(\)/);
+  assert.match(source, /INITIAL_HOST_REFRESH_DELAY_MS = 800/);
+  assert.match(source, /reason: 'hostInitialFallback', ensureEmptyLayout: false/);
+});
+
+test('extension avoids persisting and restoring transient empty-rail widths', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /if \(!this\.hasVisibleUserTabs\(\)\)/);
+  assert.match(source, /MAX_EMPTY_RAIL_RESTORE_RATIO = 0\.4/);
+  assert.match(source, /getEmptyRailRestoreRatio\(this\.context\)/);
 });

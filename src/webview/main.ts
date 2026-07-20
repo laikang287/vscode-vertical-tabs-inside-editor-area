@@ -13,7 +13,14 @@ let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'
 let draggedTarget: TabTarget | undefined;
 let refreshAttempts = 0;
 
-window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => { if (event.data.type === 'renderTabs') render(event.data); });
+window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
+window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
+window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
+  if (event.data.type === 'renderTabs') {
+    logToExtension('debug', '收到标签渲染消息', `revision=${event.data.snapshot.revision}, tabs=${event.data.snapshot.tabs.length}`);
+    render(event.data);
+  }
+});
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
 groupModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setGroupMode', groupMode: groupModeSelect.value }));
 sortModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value }));
@@ -21,10 +28,14 @@ document.addEventListener('click', () => dismissContextMenu());
 window.addEventListener('blur', () => dismissContextMenu());
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(); });
 new ResizeObserver(([entry]) => { const width = Math.round(entry.contentRect.width); if (width >= 180) vscode.postMessage({ type: 'railWidth', width }); }).observe(document.documentElement);
+logToExtension('debug', 'Webview 脚本已启动');
 requestInitialSnapshot('ready');
 
 function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): void {
-  if (!groups || !description) return;
+  if (!groups || !description) {
+    logToExtension('error', '渲染标签失败：缺少必要 DOM 节点', `groups=${Boolean(groups)}, description=${Boolean(description)}`);
+    return;
+  }
   latestSnapshot = message.snapshot;
   groups.replaceChildren();
   const { tabs, displayGroups, groupMode, sortMode } = message.snapshot;
@@ -35,13 +46,29 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
 }
 
 function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
+  logToExtension('debug', '请求标签快照', `type=${type}, attempt=${refreshAttempts + 1}`);
   vscode.postMessage({ type });
   refreshAttempts += 1;
   window.setTimeout(() => {
     if (!latestSnapshot && refreshAttempts < 5) {
       requestInitialSnapshot('requestRefresh');
+    } else if (!latestSnapshot) {
+      logToExtension('warn', '等待标签快照超时', `attempts=${refreshAttempts}`);
     }
   }, 500);
+}
+
+function logToExtension(level: 'debug' | 'warn' | 'error', message: string, details?: string): void {
+  vscode.postMessage({ type: 'webviewLog', level, message, ...(details ? { details } : {}) });
+}
+
+function stringifyDetails(value: unknown): string {
+  if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup): void {

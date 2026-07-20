@@ -22,6 +22,7 @@ export interface VerticalTabsSnapshot {
 }
 export type WebviewMessage =
   | { readonly type: 'ready' } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
+  | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
   | { readonly type: 'closeAll' } | { readonly type: 'setGroupMode'; readonly groupMode: GroupMode }
   | { readonly type: 'setSortMode'; readonly sortMode: SortMode }
   | { readonly type: 'railWidth'; readonly width: number } | { readonly type: 'createGroup'; readonly name: string }
@@ -38,6 +39,9 @@ export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: st
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
   if (value.type === 'ready' || value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll') return { type: value.type };
+  if (value.type === 'webviewLog' && isWebviewLogLevel(value.level) && isLogMessage(value.message) && (value.details === undefined || isLogDetails(value.details))) {
+    return { type: 'webviewLog', level: value.level, message: value.message, ...(value.details === undefined ? {} : { details: value.details }) };
+  }
   if (value.type === 'setGroupMode' && isGroupMode(value.groupMode)) return { type: 'setGroupMode', groupMode: value.groupMode };
   if (value.type === 'setSortMode' && isSortMode(value.sortMode)) return { type: 'setSortMode', sortMode: value.sortMode };
   if (value.type === 'railWidth' && isRailWidth(value.width)) return { type: 'railWidth', width: value.width };
@@ -57,9 +61,12 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
 function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
+function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }
+function isLogMessage(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
+function isLogDetails(value: unknown): value is string { return typeof value === 'string' && value.length <= 2000; }
 function isTabTarget(value: unknown): value is TabTarget {
   return isRecord(value)
     && isNonNegativeInteger(value.revision)

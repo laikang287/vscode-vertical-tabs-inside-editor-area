@@ -13,6 +13,11 @@ test('accepts refresh requests', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'requestRefresh' }), { type: 'requestRefresh' });
 });
 
+test('accepts bounded webview log messages', () => {
+  assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'debug', message: 'started' }), { type: 'webviewLog', level: 'debug', message: 'started' });
+  assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' }), { type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' });
+});
+
 test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
@@ -42,6 +47,9 @@ test('rejects malformed and unknown messages', () => {
     {},
     { type: 'unknown' },
     { type: 42 },
+    { type: 'webviewLog', level: 'info', message: 'bad' },
+    { type: 'webviewLog', level: 'debug', message: '' },
+    { type: 'webviewLog', level: 'debug', message: 'x', details: 42 },
     { type: 'activateTab' },
     { type: 'activateTab', target: { revision: -1, groupIndex: 0, tabIndex: 0 } },
     { type: 'activateTab', target: { revision: 1.5, groupIndex: 0, tabIndex: 0 } },
