@@ -98,14 +98,46 @@ test('webview enables best-effort activation with a distinct tooltip', () => {
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
 });
 
+test('webview logs activation clicks with request ids and suppresses drag while pressing activation buttons', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /let activateRequestSequence = 0/);
+  assert.match(source, /activate\.addEventListener\('pointerdown'/);
+  assert.match(source, /标签激活按钮 pointerdown/);
+  assert.match(source, /suspendRowDrag\(row\)/);
+  assert.match(source, /activate\.addEventListener\('click'/);
+  assert.match(source, /const requestId = nextActivateRequestId\(\)/);
+  assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
+  assert.match(source, /function suspendRowDrag\(row: HTMLElement\): void/);
+  assert.match(source, /row\.draggable = false/);
+  assert.match(source, /row\.draggable = previous/);
+  assert.match(source, /标签行开始拖拽/);
+  assert.match(source, /kind=\$\{target\.identity\.kind\}/);
+});
+
 test('extension selects existing tabs via bounded workbench navigation commands', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab\): Promise<boolean>/);
+  assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab, requestId\?: string\): Promise<boolean>/);
   assert.match(source, /workbench\.action\.openEditorAtIndex\$\{target\.tabIndex \+ 1\}/);
   assert.match(source, /workbench\.action\.nextEditorInGroup/);
   assert.match(source, /step < target\.group\.tabs\.length/);
   assert.match(source, /function activeTabMatches\(target: TabPosition, tab: vscode\.Tab\): boolean/);
   assert.match(source, /group\.tabs\.indexOf\(activeTab\) === target\.tabIndex/);
   assert.match(source, /sameIdentity\(targetIdentity\(activeTab\), targetIdentity\(tab\)\)/);
+});
+
+test('extension logs activation request diagnostics and validates the final active tab', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /收到标签激活请求/);
+  assert.match(source, /requestId: message\.requestId/);
+  assert.match(source, /targetRevision: message\.target\.revision/);
+  assert.match(source, /private async activateTab\(tab: vscode\.Tab, requestId\?: string\): Promise<void>/);
+  assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab, requestId\?: string\): Promise<boolean>/);
+  assert.match(source, /private logActivationOutcome\(tab: vscode\.Tab, method: string, requestId\?: string\): void/);
+  assert.match(source, /标签激活完成并通过校验/);
+  assert.match(source, /标签激活后校验失败：当前活动标签与目标不一致/);
+  assert.match(source, /function describeActiveTab\(\): Record<string, unknown> \| undefined/);
+  assert.match(source, /function describeTabGroups\(\): readonly Record<string, unknown>\[\]/);
 });

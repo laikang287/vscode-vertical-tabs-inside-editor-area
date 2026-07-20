@@ -12,6 +12,7 @@ let contextMenu: HTMLElement | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let draggedTarget: TabTarget | undefined;
 let refreshAttempts = 0;
+let activateRequestSequence = 0;
 
 window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
@@ -122,6 +123,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLEl
   row.dataset.groupId = group.id;
   row.addEventListener('dragstart', (event) => {
     draggedTarget = tab.target;
+    logToExtension('debug', '标签行开始拖拽', targetDetails(tab.target, tab.label));
     event.dataTransfer?.setData('application/x-vertical-tab-target', JSON.stringify(tab.target));
     event.dataTransfer?.setData('text/plain', tab.label);
     event.dataTransfer?.setDragImage(row, 8, 8);
@@ -134,7 +136,15 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLEl
   activate.type = 'button';
   activate.disabled = !tab.isActivatable;
   activate.title = activationTitle(tab);
-  activate.addEventListener('click', () => postTarget('activateTab', tab.target));
+  activate.addEventListener('pointerdown', () => {
+    logToExtension('debug', '标签激活按钮 pointerdown', targetDetails(tab.target, tab.label));
+    suspendRowDrag(row);
+  });
+  activate.addEventListener('click', () => {
+    const requestId = nextActivateRequestId();
+    logToExtension('debug', '标签激活按钮 click，发送激活请求', targetDetails(tab.target, tab.label, requestId));
+    vscode.postMessage({ type: 'activateTab', target: tab.target, requestId });
+  });
   const label = document.createElement('span');
   label.className = 'tab-label';
   label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? ' (预览)' : ''}`;
@@ -209,6 +219,41 @@ function actionButton(label: string, title: string, type: 'closeTab' | 'closeOth
 }
 
 function postTarget(type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): void { vscode.postMessage({ type, target }); }
+
+function nextActivateRequestId(): string {
+  activateRequestSequence = (activateRequestSequence % Number.MAX_SAFE_INTEGER) + 1;
+  return `activate-${activateRequestSequence}`;
+}
+
+function targetDetails(target: TabTarget, label: string, requestId?: string): string {
+  return [
+    requestId ? `requestId=${requestId}` : undefined,
+    `label=${label}`,
+    `revision=${target.revision}`,
+    `groupIndex=${target.groupIndex}`,
+    `tabIndex=${target.tabIndex}`,
+    `kind=${target.identity.kind}`,
+  ].filter(Boolean).join(', ');
+}
+
+function suspendRowDrag(row: HTMLElement): void {
+  const previous = row.draggable;
+  row.draggable = false;
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    row.draggable = previous;
+    window.removeEventListener('pointerup', restore);
+    window.removeEventListener('pointercancel', restore);
+    row.removeEventListener('pointerleave', restore);
+    window.removeEventListener('blur', restore);
+  };
+  window.addEventListener('pointerup', restore, { once: true });
+  window.addEventListener('pointercancel', restore, { once: true });
+  row.addEventListener('pointerleave', restore, { once: true });
+  window.addEventListener('blur', restore, { once: true });
+}
 
 function showContextMenu(x: number, y: number, tab?: VerticalTabItem): void {
   dismissContextMenu();

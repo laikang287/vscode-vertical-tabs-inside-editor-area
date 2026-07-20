@@ -34,7 +34,8 @@ export type WebviewMessage =
   | { readonly type: 'reorderManualTab'; readonly target: TabTarget; readonly groupId?: string; readonly beforeTarget?: TabTarget }
   | { readonly type: 'createGroupFromTabs'; readonly source: TabTarget; readonly target: TabTarget }
   | { readonly type: 'moveToPreviousGroup' | 'moveToNextGroup' | 'moveToNewGroup'; readonly target: TabTarget }
-  | { readonly type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
+  | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
+  | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
 export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot };
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
@@ -56,7 +57,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   }
   if (value.type === 'createGroupFromTabs' && isTabTarget(value.source) && isTabTarget(value.target)) return { type: 'createGroupFromTabs', source: value.source, target: value.target };
   if ((value.type === 'moveToPreviousGroup' || value.type === 'moveToNextGroup' || value.type === 'moveToNewGroup') && isTabTarget(value.target)) return { type: value.type, target: value.target };
-  if ((value.type === 'activateTab' || value.type === 'closeTab' || value.type === 'closeOthers' || value.type === 'closeBelow') && isTabTarget(value.target)) return { type: value.type, target: value.target };
+  if (value.type === 'activateTab' && isTabTarget(value.target) && (value.requestId === undefined || isRequestId(value.requestId))) {
+    return { type: 'activateTab', target: value.target, ...(value.requestId === undefined ? {} : { requestId: value.requestId }) };
+  }
+  if ((value.type === 'closeTab' || value.type === 'closeOthers' || value.type === 'closeBelow') && isTabTarget(value.target)) return { type: value.type, target: value.target };
   return undefined;
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
@@ -68,6 +72,7 @@ function isName(value: unknown): value is string { return typeof value === 'stri
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }
 function isLogMessage(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
 function isLogDetails(value: unknown): value is string { return typeof value === 'string' && value.length <= 2000; }
+function isRequestId(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 80; }
 function isTabTarget(value: unknown): value is TabTarget {
   return isRecord(value)
     && isNonNegativeInteger(value.revision)
