@@ -5,9 +5,7 @@ declare const acquireVsCodeApi: () => { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
 const groups = document.querySelector<HTMLElement>('#groups');
-const closeSaved = document.querySelector<HTMLButtonElement>('#close-saved');
-const closeAll = document.querySelector<HTMLButtonElement>('#close-all');
-const addGroup = document.querySelector<HTMLButtonElement>('#add-group');
+const verticalTabs = document.querySelector<HTMLElement>('.vertical-tabs');
 const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
 const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 let contextMenu: HTMLElement | undefined;
@@ -16,12 +14,7 @@ let draggedTarget: TabTarget | undefined;
 let refreshAttempts = 0;
 
 window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => { if (event.data.type === 'renderTabs') render(event.data); });
-closeSaved?.addEventListener('click', () => vscode.postMessage({ type: 'closeSaved' }));
-closeAll?.addEventListener('click', () => vscode.postMessage({ type: 'closeAll' }));
-addGroup?.addEventListener('click', () => {
-  const name = window.prompt('分组名称');
-  if (name?.trim()) vscode.postMessage({ type: 'createGroup', name: name.trim() });
-});
+verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
 groupModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setGroupMode', groupMode: groupModeSelect.value }));
 sortModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value }));
 document.addEventListener('click', () => dismissContextMenu());
@@ -37,7 +30,6 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   const { tabs, displayGroups, groupMode, sortMode } = message.snapshot;
   if (groupModeSelect) groupModeSelect.value = groupMode;
   if (sortModeSelect) sortModeSelect.value = sortMode;
-  if (addGroup) addGroup.hidden = groupMode !== 'manual';
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
 }
@@ -185,21 +177,26 @@ function actionButton(label: string, title: string, type: 'closeTab' | 'closeOth
 
 function postTarget(type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): void { vscode.postMessage({ type, target }); }
 
-function showContextMenu(x: number, y: number, tab: VerticalTabItem): void {
+function showContextMenu(x: number, y: number, tab?: VerticalTabItem): void {
   dismissContextMenu();
   const menu = document.createElement('div');
   menu.className = 'tab-context-menu';
   menu.setAttribute('role', 'menu');
   menu.addEventListener('click', (event) => event.stopPropagation());
+  if (tab) {
+    menu.append(
+      actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target, true),
+      actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab.target, true),
+      messageButton(tab.isPinned ? '取消固定标签' : '固定标签', tab.isPinned ? '取消固定标签' : '固定标签', { type: tab.isPinned ? 'unpinTab' : 'pinTab', target: tab.target }),
+    );
+  }
   menu.append(
-    actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target, true),
-    actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab.target, true),
+    createGroupButton(),
     globalActionButton('关闭已保存', '关闭已保存的标签', 'closeSaved'),
-    globalActionButton('全部关闭', '关闭所有未固定标签', 'closeAll'),
-    messageButton(tab.isPinned ? '取消固定标签' : '固定标签', tab.isPinned ? '取消固定标签' : '固定标签', { type: tab.isPinned ? 'unpinTab' : 'pinTab', target: tab.target }),
+    globalActionButton('关闭全部', '关闭所有未固定标签', 'closeAll'),
   );
   const snapshot = latestSnapshot;
-  if (snapshot) {
+  if (tab && snapshot) {
     if (snapshot.groupMode === 'manual') appendManualGroupActions(menu, tab, snapshot.manualGroups);
     if (snapshot.groupMode === 'vscode') {
       menu.append(
@@ -238,6 +235,16 @@ function appendManualGroupActions(menu: HTMLElement, tab: VerticalTabItem, manua
 
 function globalActionButton(label: string, title: string, type: 'closeSaved' | 'closeAll'): HTMLButtonElement {
   return messageButton(label, title, { type });
+}
+
+function createGroupButton(): HTMLButtonElement {
+  const result = button('新建分组', '新建分组');
+  result.addEventListener('click', () => {
+    const name = window.prompt('分组名称');
+    if (name?.trim()) vscode.postMessage({ type: 'createGroup', name: name.trim() });
+    dismissContextMenu();
+  });
+  return result;
 }
 
 function messageButton(label: string, title: string, message: unknown): HTMLButtonElement {

@@ -11,6 +11,21 @@ test('context menu close actions dismiss the menu after posting', () => {
   assert.match(source, /if \(dismissAfterClick\) dismissContextMenu\(\)/);
 });
 
+test('bulk close and create group actions are only exposed from context menus', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.doesNotMatch(panelSource, /id="add-group"/);
+  assert.doesNotMatch(panelSource, /id="close-saved"/);
+  assert.doesNotMatch(panelSource, /id="close-all"/);
+  assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
+  assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem\)/);
+  assert.match(webviewSource, /if \(tab\) \{\s*menu\.append\(\s*actionButton\('关闭其他标签'/);
+  assert.match(webviewSource, /createGroupButton\(\)/);
+  assert.match(webviewSource, /globalActionButton\('关闭已保存'/);
+  assert.match(webviewSource, /globalActionButton\('关闭全部'/);
+});
+
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 

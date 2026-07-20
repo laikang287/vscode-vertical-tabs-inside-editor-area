@@ -529,6 +529,10 @@ export class VerticalTabsPanel {
     }
 
     if (message.type === 'createGroup') {
+      if (this.groupMode !== 'manual') {
+        this.groupMode = 'manual';
+        await this.context.workspaceState.update(GROUP_MODE_STORAGE_KEY, this.groupMode);
+      }
       logInfo('创建手动标签分组', { name: message.name.trim() });
       this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: message.name.trim(), collapsed: false });
       await this.persistManualGroups();
@@ -877,9 +881,6 @@ export class VerticalTabsPanel {
             <option value="nameDesc">文件名逆序</option>
           </select>
         </label>
-        <button id="add-group" type="button" title="新建分组">新建分组</button>
-        <button id="close-saved" type="button" title="关闭已保存的标签">关闭已保存</button>
-        <button id="close-all" type="button" title="关闭所有未固定标签">全部关闭</button>
       </div>
     </header>
     <p id="description">正在同步打开的标签…</p>
