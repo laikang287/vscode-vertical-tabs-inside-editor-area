@@ -34,7 +34,8 @@ export type WebviewMessage =
   | { readonly type: 'closeTab'; readonly target: TabTarget }
   | { readonly type: 'closeOthers'; readonly target: TabTarget }
   | { readonly type: 'closeBelow'; readonly target: TabTarget }
-  | { readonly type: 'closeSaved' };
+  | { readonly type: 'closeSaved' }
+  | { readonly type: 'railWidth'; readonly width: number };
 
 export type ExtensionMessage =
   | { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot };
@@ -49,6 +50,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     return { type: candidate.type };
   }
 
+  if (candidate.type === 'railWidth' && isRailWidth((candidate as { width?: unknown }).width)) {
+    return { type: 'railWidth', width: (candidate as { width: number }).width };
+  }
+
   if (
     (candidate.type === 'activateTab'
       || candidate.type === 'closeTab'
@@ -60,6 +65,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   }
 
   return undefined;
+}
+
+function isRailWidth(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000;
 }
 
 function isTabTarget(value: unknown): value is TabTarget {

@@ -16,19 +16,23 @@ export interface SnapshotSourceTab {
 export interface SnapshotSourceGroup {
   readonly isActive: boolean;
   readonly viewColumn: number;
+  readonly isVerticalTabsGroup?: boolean;
   readonly tabs: readonly SnapshotSourceTab[];
 }
 
 export type CloseAction = 'close' | 'closeOthers' | 'closeBelow' | 'closeSaved';
 
 export function buildSnapshot(groups: readonly SnapshotSourceGroup[], revision: number): VerticalTabsSnapshot {
-  const visibleTabs = groups.flatMap((group) => group.tabs.filter((tab) => !tab.isVerticalTabsPanel));
+  const visibleTabs = groups.flatMap((group) => group.isVerticalTabsGroup ? [] : group.tabs.filter((tab) => !tab.isVerticalTabsPanel));
   const labelCounts = new Map<string, number>();
   for (const tab of visibleTabs) {
     labelCounts.set(tab.label, (labelCounts.get(tab.label) ?? 0) + 1);
   }
 
   const snapshotGroups: VerticalTabGroup[] = groups.flatMap((group, groupIndex) => {
+    if (group.isVerticalTabsGroup) {
+      return [];
+    }
     const tabs: VerticalTabItem[] = group.tabs.flatMap((tab, tabIndex) => {
       if (tab.isVerticalTabsPanel) {
         return [];

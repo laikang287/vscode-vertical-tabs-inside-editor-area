@@ -1,15 +1,18 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
+import { countLayoutLeaves, isEditorLayout, normalizeRailWidth, prependRailToLayout, setLeadingRailWidth, type EditorLayout } from '../layout/RailLayout';
 import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
+const WIDTH_STORAGE_KEY = 'verticalTabs.railWidthPx';
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
   private static serializerRegistered = false;
+  private static opening: Promise<VerticalTabsPanel> | undefined;
 
   private readonly disposables: vscode.Disposable[] = [];
   private revision = 0;
@@ -18,9 +21,10 @@ export class VerticalTabsPanel {
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
-    private readonly extensionUri: vscode.Uri,
+    private readonly context: vscode.ExtensionContext,
   ) {
     this.configureWebview();
+    this.setVisibilityContext(true);
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: unknown) => void this.handleMessage(message)),
@@ -33,8 +37,8 @@ export class VerticalTabsPanel {
     if (!VerticalTabsPanel.serializerRegistered) {
       context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
         deserializeWebviewPanel: async (panel) => {
-          VerticalTabsPanel.attach(panel, context.extensionUri);
-          await VerticalTabsPanel.panels.current?.ensureRail();
+          const instance = VerticalTabsPanel.attach(panel, context);
+          await instance.ensureRail();
         },
       }));
       VerticalTabsPanel.serializerRegistered = true;
@@ -43,63 +47,90 @@ export class VerticalTabsPanel {
     context.subscriptions.push(
       vscode.window.onDidChangeActiveTextEditor(() => VerticalTabsPanel.panels.current?.scheduleRefresh()),
     );
-    VerticalTabsPanel.ensure(context.extensionUri);
+    void VerticalTabsPanel.open(context).catch(() => undefined);
   }
 
-  static ensure(extensionUri: vscode.Uri): VerticalTabsPanel {
-    return VerticalTabsPanel.panels.show(
-      () => {
-        const panel = vscode.window.createWebviewPanel(
-          VIEW_TYPE,
-          TITLE,
-          vscode.ViewColumn.Beside,
-          {
-            enableScripts: true,
-            localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'out'), vscode.Uri.joinPath(extensionUri, 'media')],
-            retainContextWhenHidden: true,
-          },
-        );
-        const result = new VerticalTabsPanel(panel, extensionUri);
-        void result.ensureRail();
-        return result;
-      },
-      (existingPanel) => existingPanel.reveal(true),
-    );
+  static async open(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
+    const existing = VerticalTabsPanel.panels.current;
+    if (existing) {
+      existing.reveal(false);
+      await existing.ensureRail();
+      return existing;
+    }
+
+    if (!VerticalTabsPanel.opening) {
+      VerticalTabsPanel.opening = VerticalTabsPanel.create(context).finally(() => {
+        VerticalTabsPanel.opening = undefined;
+      });
+    }
+    return VerticalTabsPanel.opening;
   }
 
-  static focus(extensionUri: vscode.Uri): void {
-    VerticalTabsPanel.ensure(extensionUri).reveal(false);
+  static isOpen(): boolean {
+    return VerticalTabsPanel.panels.current !== undefined;
+  }
+
+  static async focus(context: vscode.ExtensionContext): Promise<void> {
+    const instance = await VerticalTabsPanel.open(context);
+    instance.reveal(false);
+  }
+
+  static async close(): Promise<void> {
+    await VerticalTabsPanel.panels.current?.close();
   }
 
   static dispose(): void {
-    VerticalTabsPanel.panels.current?.close();
+    VerticalTabsPanel.panels.current?.panel.dispose();
   }
 
-  static navigate(extensionUri: vscode.Uri, direction: 1 | -1): void {
-    const instance = VerticalTabsPanel.ensure(extensionUri);
-    void instance.navigate(direction);
+  static async navigate(context: vscode.ExtensionContext, direction: 1 | -1): Promise<void> {
+    const instance = await VerticalTabsPanel.open(context);
+    await instance.navigate(direction);
   }
 
-  private static attach(panel: vscode.WebviewPanel, extensionUri: vscode.Uri): void {
+  private static async create(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
+    if (!hasUserTabs()) {
+      await openWelcomePage();
+    }
+    const layoutBeforeRail = await getEditorLayout();
+    const previouslyActiveEditor = vscode.window.activeTextEditor;
+    const panel = vscode.window.createWebviewPanel(
+      VIEW_TYPE,
+      TITLE,
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      {
+        enableScripts: true,
+        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out'), vscode.Uri.joinPath(context.extensionUri, 'media')],
+        retainContextWhenHidden: true,
+      },
+    );
+    const instance = VerticalTabsPanel.panels.show(
+      () => new VerticalTabsPanel(panel, context),
+      (existing) => existing.reveal(false),
+    );
+    await instance.ensureRail(layoutBeforeRail, previouslyActiveEditor);
+    return instance;
+  }
+
+  private static attach(panel: vscode.WebviewPanel, context: vscode.ExtensionContext): VerticalTabsPanel {
     const existing = VerticalTabsPanel.panels.current;
     if (existing) {
-      existing.close();
+      existing.panel.dispose();
     }
-    VerticalTabsPanel.panels.show(
-      () => new VerticalTabsPanel(panel, extensionUri),
+    return VerticalTabsPanel.panels.show(
+      () => new VerticalTabsPanel(panel, context),
       () => undefined,
     );
   }
 
-  private async ensureRail(): Promise<void> {
-    const previousEditor = vscode.window.activeTextEditor;
+  private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
     let ownGroupIndex = await this.waitForOwnGroup();
     if (ownGroupIndex < 0) {
       return;
     }
-    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
 
-    const ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
+    let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
     if (ownGroup.tabs.length > 1) {
       await vscode.commands.executeCommand('workbench.action.newGroupLeft');
       this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
@@ -108,15 +139,30 @@ export class VerticalTabsPanel {
       if (ownGroupIndex < 0) {
         return;
       }
+      ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
     }
 
-    for (let moves = 0, index = ownGroupIndex; index > 0 && moves < vscode.window.tabGroups.all.length; moves += 1, index = this.findOwnGroupIndex()) {
+    for (let moves = 0; ownGroupIndex > 0 && moves < vscode.window.tabGroups.all.length; moves += 1) {
+      this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
       await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
+      ownGroupIndex = await this.waitForOwnGroup();
+      if (ownGroupIndex < 0) {
+        return;
+      }
     }
 
     if (this.findOwnGroupIndex() !== 0) {
       return;
     }
+
+    const width = this.preferredWidth();
+    if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
+      await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
+    } else {
+      await this.applyRailWidth(width);
+    }
+
+    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
     await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
     if (previousEditor) {
       await vscode.window.showTextDocument(previousEditor.document, {
@@ -126,6 +172,23 @@ export class VerticalTabsPanel {
       });
     }
     this.refresh();
+  }
+
+  private preferredWidth(): number {
+    const remembered = this.context.globalState.get<number>(WIDTH_STORAGE_KEY);
+    if (typeof remembered === 'number') {
+      return normalizeRailWidth(remembered);
+    }
+    const configured = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidth', 280);
+    return normalizeRailWidth(configured);
+  }
+
+  private async applyRailWidth(width: number): Promise<void> {
+    const layout = await getEditorLayout();
+    if (!layout || countLayoutLeaves(layout) !== vscode.window.tabGroups.all.length) {
+      return;
+    }
+    await applyEditorLayout(setLeadingRailWidth(layout, width));
   }
 
   private findOwnGroupIndex(): number {
@@ -148,6 +211,7 @@ export class VerticalTabsPanel {
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
     }
+    this.setVisibilityContext(false);
     while (this.disposables.length > 0) {
       this.disposables.pop()?.dispose();
     }
@@ -157,7 +221,16 @@ export class VerticalTabsPanel {
     this.panel.reveal(this.panel.viewColumn, preserveFocus);
   }
 
-  private close(): void {
+  private async close(): Promise<void> {
+    const group = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+    if (group && group.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0])) {
+      try {
+        await vscode.window.tabGroups.close(group, true);
+        return;
+      } catch {
+        // Falling back to panel disposal still removes the extension view.
+      }
+    }
     this.panel.dispose();
   }
 
@@ -181,6 +254,7 @@ export class VerticalTabsPanel {
     const groups: SnapshotSourceGroup[] = vscode.window.tabGroups.all.map((group) => ({
       isActive: group.isActive,
       viewColumn: group.viewColumn,
+      isVerticalTabsGroup: group.tabs.some((tab) => isVerticalTabsPanel(tab)),
       tabs: group.tabs.map((tab) => this.toSnapshotTab(tab)),
     }));
     return buildSnapshot(groups, this.revision);
@@ -202,6 +276,11 @@ export class VerticalTabsPanel {
   private async handleMessage(value: unknown): Promise<void> {
     const message = parseWebviewMessage(value);
     if (!message) {
+      return;
+    }
+
+    if (message.type === 'railWidth') {
+      await this.context.globalState.update(WIDTH_STORAGE_KEY, normalizeRailWidth(message.width));
       return;
     }
 
@@ -279,13 +358,17 @@ export class VerticalTabsPanel {
     void this.panel.webview.postMessage(message);
   }
 
+  private setVisibilityContext(value: boolean): void {
+    void vscode.commands.executeCommand('setContext', 'verticalTabs.visible', value);
+  }
+
   private configureWebview(): void {
     this.panel.webview.html = this.createHtml();
   }
 
   private createHtml(): string {
-    const scriptUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'webview.js'));
-    const styleUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'vertical-tabs.css'));
+    const scriptUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview.js'));
+    const styleUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vertical-tabs.css'));
     const nonce = crypto.randomBytes(16).toString('base64');
     const cspSource = this.panel.webview.cspSource;
 
@@ -307,6 +390,39 @@ export class VerticalTabsPanel {
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+  }
+}
+
+function hasUserTabs(): boolean {
+  return vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => !isVerticalTabsPanel(tab)));
+}
+
+async function openWelcomePage(): Promise<void> {
+  const commands = await vscode.commands.getCommands(true);
+  if (commands.includes('workbench.action.openWelcomePage')) {
+    await vscode.commands.executeCommand('workbench.action.openWelcomePage');
+  } else if (commands.includes('workbench.action.openWalkthrough')) {
+    await vscode.commands.executeCommand('workbench.action.openWalkthrough', 'vscode.gettingStarted');
+  } else if (commands.includes('workbench.action.openAgentSessionsWelcome')) {
+    await vscode.commands.executeCommand('workbench.action.openAgentSessionsWelcome');
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+async function getEditorLayout(): Promise<EditorLayout | undefined> {
+  try {
+    const layout = await vscode.commands.executeCommand<unknown>('vscode.getEditorLayout');
+    return isEditorLayout(layout) ? layout : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function applyEditorLayout(layout: EditorLayout): Promise<void> {
+  try {
+    await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
+  } catch {
+    // The rail remains usable at VS Code's native split size when unavailable.
   }
 }
 

@@ -28,6 +28,14 @@
         "title": "Vertical Tabs: Open"
       },
       {
+        "command": "verticalTabs.toggle",
+        "title": "Vertical Tabs: Toggle"
+      },
+      {
+        "command": "verticalTabs.close",
+        "title": "Vertical Tabs: Close"
+      },
+      {
         "command": "verticalTabs.focus",
         "title": "Vertical Tabs: Focus"
       },
@@ -45,6 +53,48 @@
         "command": "verticalTabs.focus",
         "key": "ctrl+alt+v",
         "mac": "cmd+alt+v"
+      }
+    ],
+    "configuration": {
+      "title": "Vertical Tabs",
+      "properties": {
+        "verticalTabs.defaultRailWidth": {
+          "type": "number",
+          "default": 280,
+          "minimum": 180,
+          "scope": "window",
+          "markdownDescription": "首次显示垂直标签栏时使用的宽度（像素）。之后优先恢复用户上次拖动后的宽度。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vertical-tabs-activitybar",
+          "title": "Vertical Tabs",
+          "icon": "media/vertical-tabs.svg"
+        }
+      ]
+    },
+    "views": {
+      "vertical-tabs-activitybar": [
+        {
+          "id": "verticalTabs.launcher",
+          "name": "Vertical Tabs",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "verticalTabs.launcher",
+        "when": "!verticalTabs.visible",
+        "contents": "在编辑器区域左侧显示固定的垂直标签栏。\n\n[显示垂直标签页](command:verticalTabs.open)"
+      },
+      {
+        "view": "verticalTabs.launcher",
+        "when": "verticalTabs.visible",
+        "contents": "垂直标签栏当前已显示。\n\n[关闭垂直标签页](command:verticalTabs.close)"
       }
     ]
   },

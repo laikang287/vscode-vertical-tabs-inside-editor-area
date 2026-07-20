@@ -6,6 +6,7 @@ const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
 const groups = document.querySelector<HTMLElement>('#groups');
 const closeSaved = document.querySelector<HTMLButtonElement>('#close-saved');
+let contextMenu: HTMLElement | undefined;
 
 window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   if (event.data.type === 'renderTabs') {
@@ -14,6 +15,21 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
 });
 
 closeSaved?.addEventListener('click', () => vscode.postMessage({ type: 'closeSaved' }));
+document.addEventListener('click', () => dismissContextMenu());
+window.addEventListener('blur', () => dismissContextMenu());
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    dismissContextMenu();
+  }
+});
+
+const resizeObserver = new ResizeObserver(([entry]) => {
+  const width = Math.round(entry.contentRect.width);
+  if (width >= 180) {
+    vscode.postMessage({ type: 'railWidth', width });
+  }
+});
+resizeObserver.observe(document.documentElement);
 vscode.postMessage({ type: 'ready' });
 
 function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): void {
@@ -64,13 +80,15 @@ function createTab(tab: VerticalTabItem): HTMLElement {
     activate.append(detail);
   }
 
+  row.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    showContextMenu(event.clientX, event.clientY, tab.target);
+  });
+
   const actions = document.createElement('div');
   actions.className = 'tab-actions';
-  actions.append(
-    actionButton('×', '关闭标签', 'closeTab', tab.target),
-    actionButton('其', '关闭其他标签', 'closeOthers', tab.target),
-    actionButton('下', '关闭下侧标签', 'closeBelow', tab.target),
-  );
+  actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target));
   row.append(activate, actions);
   return row;
 }
@@ -88,4 +106,30 @@ function actionButton(label: string, title: string, type: 'closeTab' | 'closeOth
 
 function postTarget(type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): void {
   vscode.postMessage({ type, target });
+}
+
+function showContextMenu(x: number, y: number, target: TabTarget): void {
+  dismissContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'tab-context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.addEventListener('click', (event) => event.stopPropagation());
+  menu.append(
+    actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', target),
+    actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', target),
+  );
+  menu.querySelectorAll('button').forEach((button) => {
+    button.classList.add('tab-context-action');
+    button.addEventListener('click', dismissContextMenu, { once: true });
+  });
+  document.body.append(menu);
+  const bounds = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+  contextMenu = menu;
+}
+
+function dismissContextMenu(): void {
+  contextMenu?.remove();
+  contextMenu = undefined;
 }

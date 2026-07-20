@@ -16,6 +16,7 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeSaved' }), { type: 'closeSaved' });
+  assert.deepEqual(parseWebviewMessage({ type: 'railWidth', width: 280 }), { type: 'railWidth', width: 280 });
 });
 
 test('rejects malformed and unknown messages', () => {
@@ -30,6 +31,9 @@ test('rejects malformed and unknown messages', () => {
     { type: 'activateTab' },
     { type: 'activateTab', target: { revision: -1, groupIndex: 0, tabIndex: 0 } },
     { type: 'activateTab', target: { revision: 1.5, groupIndex: 0, tabIndex: 0 } },
+    { type: 'railWidth', width: 179 },
+    { type: 'railWidth', width: 280.5 },
+    { type: 'railWidth', width: '280' },
   ]) {
     assert.equal(parseWebviewMessage(value), undefined);
   }
