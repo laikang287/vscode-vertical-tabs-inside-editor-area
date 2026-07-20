@@ -35,7 +35,9 @@ test('manual group rename is exposed from the group context menu and group delet
   assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
   assert.match(source, /const remove = button\('×', '删除分组'\)/);
   assert.match(source, /remove\.className = 'group-action tab-action'/);
-  assert.match(style, /\.group-actions \{ align-items: center; display: flex; padding-right: 3px; \}/);
+  assert.match(source, /const main = document\.createElement\('div'\)/);
+  assert.match(source, /main\.className = 'group-main'/);
+  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; flex: 0 0 23px; justify-content: center; padding-right: 3px; \}/);
   assert.match(style, /\.group-header \.tab-action \{ line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 

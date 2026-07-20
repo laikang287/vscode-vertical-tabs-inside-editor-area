@@ -114,6 +114,8 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
       event.preventDefault();
       toggleDisplayGroup(group);
     });
+    const main = document.createElement('div');
+    main.className = 'group-main';
     const toggle = button(collapsed ? '▶' : '▼', `${collapsed ? '展开' : '折叠'}分组`);
     toggle.className = 'group-toggle';
     toggle.tabIndex = -1;
@@ -121,17 +123,18 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
       event.stopPropagation();
       toggleDisplayGroup(group);
     });
-    header.append(toggle);
+    main.append(toggle);
     const name = document.createElement('span');
     name.className = 'group-name';
     name.textContent = group.title;
-    header.append(name);
+    main.append(name);
     if (group.description) {
       const detail = document.createElement('span');
       detail.className = 'group-description';
       detail.textContent = group.description;
-      header.append(detail);
+      main.append(detail);
     }
+    header.append(main);
     if (group.isManual && group.id !== '__ungrouped') {
       const actions = document.createElement('div');
       actions.className = 'group-actions';
