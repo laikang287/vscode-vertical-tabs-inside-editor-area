@@ -3,6 +3,8 @@ import test from 'node:test';
 import { SingletonPanel } from '../../src/webview/SingletonPanel';
 import { parseWebviewMessage } from '../../src/webview/messages';
 
+const target = { revision: 4, groupIndex: 1, tabIndex: 2, identity: { kind: 'text', uri: 'file:///workspace/index.ts' } } as const;
+
 test('accepts ready messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
 });
@@ -12,7 +14,6 @@ test('accepts refresh requests', () => {
 });
 
 test('accepts tab actions with a valid snapshot target', () => {
-  const target = { revision: 4, groupIndex: 1, tabIndex: 2, identity: { kind: 'text', uri: 'file:///workspace/index.ts' } };
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeSaved' }), { type: 'closeSaved' });
@@ -21,6 +22,15 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'renameGroup', groupId: 'work_1', name: '新名称' }), { type: 'renameGroup', groupId: 'work_1', name: '新名称' });
   assert.deepEqual(parseWebviewMessage({ type: 'assignGroup', target, groupId: 'work_1' }), { type: 'assignGroup', target, groupId: 'work_1' });
   assert.deepEqual(parseWebviewMessage({ type: 'assignGroup', target }), { type: 'assignGroup', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'closeAll' }), { type: 'closeAll' });
+  assert.deepEqual(parseWebviewMessage({ type: 'setGroupMode', groupMode: 'parentDir' }), { type: 'setGroupMode', groupMode: 'parentDir' });
+  assert.deepEqual(parseWebviewMessage({ type: 'setSortMode', sortMode: 'nameDesc' }), { type: 'setSortMode', sortMode: 'nameDesc' });
+  assert.deepEqual(parseWebviewMessage({ type: 'pinTab', target }), { type: 'pinTab', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'unpinTab', target }), { type: 'unpinTab', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'moveTab', target, groupId: 'work_1', beforeTarget: target }), { type: 'moveTab', target, groupId: 'work_1', beforeTarget: target });
+  assert.deepEqual(parseWebviewMessage({ type: 'reorderManualTab', target }), { type: 'reorderManualTab', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'createGroupFromTabs', source: target, target }), { type: 'createGroupFromTabs', source: target, target });
+  assert.deepEqual(parseWebviewMessage({ type: 'moveToPreviousGroup', target }), { type: 'moveToPreviousGroup', target });
 });
 
 test('rejects malformed and unknown messages', () => {
@@ -43,6 +53,11 @@ test('rejects malformed and unknown messages', () => {
     { type: 'createGroup', name: '' },
     { type: 'deleteGroup', groupId: '../bad' },
     { type: 'assignGroup', target: { revision: 1, groupIndex: 0, tabIndex: 0 }, groupId: 42 },
+    { type: 'setGroupMode', groupMode: 'bad' },
+    { type: 'setSortMode', sortMode: 'bad' },
+    { type: 'moveTab', target, groupId: '../bad' },
+    { type: 'moveTab', target, beforeTarget: { revision: 1, groupIndex: 0, tabIndex: 0 } },
+    { type: 'createGroupFromTabs', source: target },
   ]) {
     assert.equal(parseWebviewMessage(value), undefined);
   }

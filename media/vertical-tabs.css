@@ -15,11 +15,25 @@ body { margin: 0; }
 }
 
 .toolbar {
-  display: flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 6px 8px;
+}
+
+.toolbar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.toolbar label {
+  align-items: center;
+  color: var(--vscode-descriptionForeground);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 3px;
 }
 
 h1, h2 { margin: 0; font-weight: 600; }
@@ -36,26 +50,34 @@ button {
   font: inherit;
 }
 
-.toolbar button, .tab-action {
+.toolbar button, .toolbar select, .tab-action {
   background: transparent;
   border-radius: 3px;
   cursor: pointer;
 }
 
-.toolbar button { color: var(--vscode-textLink-foreground); font-size: 11px; padding: 3px 5px; }
+.toolbar button, .toolbar select { color: var(--vscode-textLink-foreground); font-size: 11px; padding: 3px 5px; }
+.toolbar select {
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-editorWidget-border));
+  max-width: 116px;
+}
 button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
 button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 
 #description { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.5; margin: 4px 6px; }
 
-.manual-group { border-top: 1px solid var(--vscode-editorWidget-border); margin-top: 6px; }
+.tab-group { border-top: 1px solid var(--vscode-editorWidget-border); margin-top: 6px; }
+.tab-group.without-header { border-top: 0; margin-top: 0; }
 .group-header { align-items: center; display: flex; gap: 4px; padding: 6px; }
 .group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 4px; }
 .group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .tab-row { display: flex; align-items: stretch; min-width: 0; }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .tab-row.is-unavailable { opacity: .65; }
+.tab-row[draggable="true"] { cursor: grab; }
+.tab-row[draggable="true"]:active { cursor: grabbing; }
 
 .tab-main {
   background: transparent;

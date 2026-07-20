@@ -1,17 +1,28 @@
-import type { ExtensionMessage, ManualTabGroup, TabTarget, VerticalTabItem } from './messages';
+import type { ExtensionMessage, GroupMode, ManualTabGroup, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+
 declare const acquireVsCodeApi: () => { postMessage(message: unknown): void };
+
 const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
 const groups = document.querySelector<HTMLElement>('#groups');
 const closeSaved = document.querySelector<HTMLButtonElement>('#close-saved');
+const closeAll = document.querySelector<HTMLButtonElement>('#close-all');
 const addGroup = document.querySelector<HTMLButtonElement>('#add-group');
+const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
+const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 let contextMenu: HTMLElement | undefined;
+let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
+let draggedTarget: TabTarget | undefined;
+
 window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => { if (event.data.type === 'renderTabs') render(event.data); });
 closeSaved?.addEventListener('click', () => vscode.postMessage({ type: 'closeSaved' }));
+closeAll?.addEventListener('click', () => vscode.postMessage({ type: 'closeAll' }));
 addGroup?.addEventListener('click', () => {
   const name = window.prompt('分组名称');
   if (name?.trim()) vscode.postMessage({ type: 'createGroup', name: name.trim() });
 });
+groupModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setGroupMode', groupMode: groupModeSelect.value }));
+sortModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value }));
 document.addEventListener('click', () => dismissContextMenu());
 window.addEventListener('blur', () => dismissContextMenu());
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(); });
@@ -22,49 +33,220 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   if (!groups || !description) return;
   latestSnapshot = message.snapshot;
   groups.replaceChildren();
-  const { tabs, manualGroups } = message.snapshot;
+  const { tabs, displayGroups, groupMode, sortMode } = message.snapshot;
+  if (groupModeSelect) groupModeSelect.value = groupMode;
+  if (sortModeSelect) sortModeSelect.value = sortMode;
+  if (addGroup) addGroup.hidden = groupMode !== 'manual';
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
-  const assigned = new Set(manualGroups.map((group) => group.id));
-  appendTabList(groups, tabs.filter((tab) => !tab.manualGroupId || !assigned.has(tab.manualGroupId)));
-  for (const group of manualGroups) appendGroup(groups, group, tabs.filter((tab) => tab.manualGroupId === group.id));
+  for (const group of displayGroups) appendDisplayGroup(groups, group);
 }
-function appendGroup(parent: HTMLElement, group: ManualTabGroup, tabs: readonly VerticalTabItem[]): void {
-  const section = document.createElement('section'); section.className = 'manual-group';
-  const header = document.createElement('header'); header.className = 'group-header';
-  const toggle = button(group.collapsed ? '▶' : '▼', `${group.collapsed ? '展开' : '折叠'}分组`);
-  toggle.addEventListener('click', () => vscode.postMessage({ type: 'toggleGroup', groupId: group.id }));
-  const name = document.createElement('span'); name.className = 'group-name'; name.textContent = group.name;
-  const rename = button('重命名', '重命名分组'); rename.addEventListener('click', () => { const value = window.prompt('分组名称', group.name); if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() }); });
-  const remove = button('删除', '删除分组'); remove.addEventListener('click', () => vscode.postMessage({ type: 'deleteGroup', groupId: group.id }));
-  header.append(toggle, name, rename, remove); section.append(header);
-  if (!group.collapsed) appendTabList(section, tabs);
+
+function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup): void {
+  const section = document.createElement('section');
+  section.className = ['tab-group', group.isManual ? 'is-manual' : '', group.showHeader ? '' : 'without-header'].filter(Boolean).join(' ');
+  section.dataset.groupId = group.id;
+  section.addEventListener('dragover', (event) => handleGroupDragOver(event, group));
+  section.addEventListener('drop', (event) => handleGroupDrop(event, group));
+  if (group.showHeader) {
+    const header = document.createElement('header');
+    header.className = 'group-header';
+    if (group.isManual) {
+      const toggle = button(group.collapsed ? '▶' : '▼', `${group.collapsed ? '展开' : '折叠'}分组`);
+      toggle.addEventListener('click', () => vscode.postMessage({ type: 'toggleGroup', groupId: group.id }));
+      header.append(toggle);
+    }
+    const name = document.createElement('span');
+    name.className = 'group-name';
+    name.textContent = group.title;
+    header.append(name);
+    if (group.description) {
+      const detail = document.createElement('span');
+      detail.className = 'group-description';
+      detail.textContent = group.description;
+      header.append(detail);
+    }
+    if (group.isManual && group.id !== '__ungrouped') {
+      const rename = button('重命名', '重命名分组');
+      rename.addEventListener('click', () => {
+        const value = window.prompt('分组名称', group.title);
+        if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() });
+      });
+      const remove = button('删除', '删除分组');
+      remove.addEventListener('click', () => vscode.postMessage({ type: 'deleteGroup', groupId: group.id }));
+      header.append(rename, remove);
+    }
+    section.append(header);
+  }
+  appendTabList(section, group.tabs, group);
   parent.append(section);
 }
-function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[]): void { for (const tab of tabs) parent.append(createTab(tab)); }
-function createTab(tab: VerticalTabItem): HTMLElement {
-  const row = document.createElement('article'); row.className = ['tab-row', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
-  const activate = document.createElement('button'); activate.className = 'tab-main'; activate.type = 'button'; activate.disabled = !tab.isActivatable; activate.title = tab.isActivatable ? tab.label : `${tab.label} 无法由扩展跳转`;
-  activate.addEventListener('click', () => postTarget('activateTab', tab.target));
-  const label = document.createElement('span'); label.className = 'tab-label'; label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? ' (预览)' : ''}`; activate.append(label);
-  if (tab.description) { const detail = document.createElement('span'); detail.className = 'tab-description'; detail.textContent = tab.description; activate.append(detail); }
-  row.addEventListener('contextmenu', (event) => { event.preventDefault(); event.stopPropagation(); showContextMenu(event.clientX, event.clientY, tab); });
-  const actions = document.createElement('div'); actions.className = 'tab-actions'; actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target)); row.append(activate, actions); return row;
+
+function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], group: VerticalTabDisplayGroup): void {
+  for (const tab of tabs) parent.append(createTab(tab, group));
 }
-function button(label: string, title: string): HTMLButtonElement { const result = document.createElement('button'); result.type = 'button'; result.textContent = label; result.title = title; return result; }
+
+function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLElement {
+  const row = document.createElement('article');
+  row.className = ['tab-row', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
+  row.draggable = true;
+  row.dataset.groupId = group.id;
+  row.addEventListener('dragstart', (event) => {
+    draggedTarget = tab.target;
+    event.dataTransfer?.setData('application/x-vertical-tab-target', JSON.stringify(tab.target));
+    event.dataTransfer?.setData('text/plain', tab.label);
+    event.dataTransfer?.setDragImage(row, 8, 8);
+  });
+  row.addEventListener('dragend', () => { draggedTarget = undefined; });
+  row.addEventListener('dragover', (event) => handleTabDragOver(event, group));
+  row.addEventListener('drop', (event) => handleTabDrop(event, tab, group));
+  const activate = document.createElement('button');
+  activate.className = 'tab-main';
+  activate.type = 'button';
+  activate.disabled = !tab.isActivatable;
+  activate.title = tab.isActivatable ? tab.label : `${tab.label} 无法由扩展跳转`;
+  activate.addEventListener('click', () => postTarget('activateTab', tab.target));
+  const label = document.createElement('span');
+  label.className = 'tab-label';
+  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? ' (预览)' : ''}`;
+  activate.append(label);
+  if (tab.description) {
+    const detail = document.createElement('span');
+    detail.className = 'tab-description';
+    detail.textContent = tab.description;
+    activate.append(detail);
+  }
+  row.addEventListener('contextmenu', (event) => { event.preventDefault(); event.stopPropagation(); showContextMenu(event.clientX, event.clientY, tab); });
+  const actions = document.createElement('div');
+  actions.className = 'tab-actions';
+  actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target));
+  row.append(activate, actions);
+  return row;
+}
+
+function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
+  if (!draggedTarget || latestSnapshot?.groupMode === 'parentDir' || latestSnapshot?.groupMode === 'fileType') return;
+  event.preventDefault();
+  event.dataTransfer!.dropEffect = 'move';
+  group;
+}
+
+function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void {
+  if (!draggedTarget) return;
+  event.preventDefault();
+  const groupId = latestSnapshot?.groupMode === 'manual' && group.id !== '__ungrouped' ? group.id : undefined;
+  vscode.postMessage({ type: 'moveTab', target: draggedTarget, groupId });
+}
+
+function handleTabDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
+  if (!draggedTarget || latestSnapshot?.groupMode === 'parentDir' || latestSnapshot?.groupMode === 'fileType') return;
+  event.preventDefault();
+  event.dataTransfer!.dropEffect = group.mode === 'manual' || group.mode === 'vscode' ? 'move' : 'none';
+}
+
+function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
+  if (!draggedTarget) return;
+  event.preventDefault();
+  if (sameTarget(draggedTarget, tab.target)) return;
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const relativeY = bounds.height > 0 ? (event.clientY - bounds.top) / bounds.height : 0;
+  if (latestSnapshot?.groupMode === 'manual' && relativeY > 0.25 && relativeY < 0.75) {
+    vscode.postMessage({ type: 'createGroupFromTabs', source: draggedTarget, target: tab.target });
+    return;
+  }
+  const groupId = latestSnapshot?.groupMode === 'manual' && group.id !== '__ungrouped' ? group.id : undefined;
+  vscode.postMessage({ type: 'moveTab', target: draggedTarget, groupId, beforeTarget: tab.target });
+}
+
+function button(label: string, title: string): HTMLButtonElement {
+  const result = document.createElement('button');
+  result.type = 'button';
+  result.textContent = label;
+  result.title = title;
+  return result;
+}
+
 function actionButton(label: string, title: string, type: 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget, dismissAfterClick = false): HTMLButtonElement {
-  const result = button(label, title); result.className = 'tab-action';
+  const result = button(label, title);
+  result.className = 'tab-action';
   result.addEventListener('click', () => { postTarget(type, target); if (dismissAfterClick) dismissContextMenu(); });
   return result;
 }
+
 function postTarget(type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): void { vscode.postMessage({ type, target }); }
+
 function showContextMenu(x: number, y: number, tab: VerticalTabItem): void {
-  dismissContextMenu(); const menu = document.createElement('div'); menu.className = 'tab-context-menu'; menu.setAttribute('role', 'menu'); menu.addEventListener('click', (event) => event.stopPropagation());
-  menu.append(actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target, true), actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab.target, true));
-  const snapshot = latestSnapshot; if (snapshot) {
-    for (const group of snapshot.manualGroups) { const item = button(`移至：${group.name}`, `移至 ${group.name}`); item.addEventListener('click', () => { vscode.postMessage({ type: 'assignGroup', target: tab.target, groupId: group.id }); dismissContextMenu(); }); menu.append(item); }
-    if (tab.manualGroupId) { const item = button('移出分组', '移出分组'); item.addEventListener('click', () => { vscode.postMessage({ type: 'assignGroup', target: tab.target }); dismissContextMenu(); }); menu.append(item); }
+  dismissContextMenu();
+  const menu = document.createElement('div');
+  menu.className = 'tab-context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.addEventListener('click', (event) => event.stopPropagation());
+  menu.append(
+    actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target, true),
+    actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab.target, true),
+    globalActionButton('关闭已保存', '关闭已保存的标签', 'closeSaved'),
+    globalActionButton('全部关闭', '关闭所有未固定标签', 'closeAll'),
+    messageButton(tab.isPinned ? '取消固定标签' : '固定标签', tab.isPinned ? '取消固定标签' : '固定标签', { type: tab.isPinned ? 'unpinTab' : 'pinTab', target: tab.target }),
+  );
+  const snapshot = latestSnapshot;
+  if (snapshot) {
+    if (snapshot.groupMode === 'manual') appendManualGroupActions(menu, tab, snapshot.manualGroups);
+    if (snapshot.groupMode === 'vscode') {
+      menu.append(
+        messageButton('移至上一组', '移至上一编辑器组', { type: 'moveToPreviousGroup', target: tab.target }),
+        messageButton('移至下一组', '移至下一编辑器组', { type: 'moveToNextGroup', target: tab.target }),
+        messageButton('移至新组', '移至新编辑器组', { type: 'moveToNewGroup', target: tab.target }),
+      );
+    }
   }
-  menu.querySelectorAll('button').forEach((item) => item.classList.add('tab-context-action')); document.body.append(menu); const bounds = menu.getBoundingClientRect(); menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`; menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`; contextMenu = menu;
+  menu.querySelectorAll('button').forEach((item) => item.classList.add('tab-context-action'));
+  document.body.append(menu);
+  const bounds = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+  contextMenu = menu;
 }
-let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
-function dismissContextMenu(): void { contextMenu?.remove(); contextMenu = undefined; }
+
+function appendManualGroupActions(menu: HTMLElement, tab: VerticalTabItem, manualGroups: readonly ManualTabGroup[]): void {
+  for (const group of manualGroups) {
+    const item = button(`移至：${group.name}`, `移至 ${group.name}`);
+    item.addEventListener('click', () => {
+      vscode.postMessage({ type: 'assignGroup', target: tab.target, groupId: group.id });
+      dismissContextMenu();
+    });
+    menu.append(item);
+  }
+  if (tab.manualGroupId) {
+    const item = button('移出分组', '移出分组');
+    item.addEventListener('click', () => {
+      vscode.postMessage({ type: 'assignGroup', target: tab.target });
+      dismissContextMenu();
+    });
+    menu.append(item);
+  }
+}
+
+function globalActionButton(label: string, title: string, type: 'closeSaved' | 'closeAll'): HTMLButtonElement {
+  return messageButton(label, title, { type });
+}
+
+function messageButton(label: string, title: string, message: unknown): HTMLButtonElement {
+  const result = button(label, title);
+  result.addEventListener('click', () => {
+    vscode.postMessage(message);
+    dismissContextMenu();
+  });
+  return result;
+}
+
+function sameTarget(left: TabTarget, right: TabTarget): boolean {
+  if (JSON.stringify(left.identity) === JSON.stringify(right.identity)) return true;
+  return left.revision === right.revision && left.groupIndex === right.groupIndex && left.tabIndex === right.tabIndex;
+}
+
+function dismissContextMenu(): void {
+  contextMenu?.remove();
+  contextMenu = undefined;
+}
+
+type _GroupModeCheck = GroupMode;
+type _SortModeCheck = SortMode;

@@ -10,3 +10,15 @@ test('context menu close actions dismiss the menu after posting', () => {
   assert.match(source, /actionButton\('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab\.target, true\)/);
   assert.match(source, /if \(dismissAfterClick\) dismissContextMenu\(\)/);
 });
+
+test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /setGroupMode/);
+  assert.match(source, /setSortMode/);
+  assert.match(source, /closeAll/);
+  assert.match(source, /pinTab/);
+  assert.match(source, /unpinTab/);
+  assert.match(source, /moveTab/);
+  assert.match(source, /createGroupFromTabs/);
+});

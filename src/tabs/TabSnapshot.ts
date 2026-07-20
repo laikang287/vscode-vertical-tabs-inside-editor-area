@@ -1,4 +1,13 @@
-import type { ManualTabGroup, TabTargetIdentity, VerticalTabItem, VerticalTabsSnapshot } from '../webview/messages';
+import * as path from 'node:path';
+import type {
+  GroupMode,
+  ManualTabGroup,
+  SortMode,
+  TabTargetIdentity,
+  VerticalTabDisplayGroup,
+  VerticalTabItem,
+  VerticalTabsSnapshot,
+} from '../webview/messages';
 
 export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
 
@@ -10,6 +19,8 @@ export interface SnapshotSourceTab {
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
   readonly path?: string;
+  readonly uri?: string;
+  readonly mtime?: number;
   readonly targetIdentity: TabTargetIdentity;
   readonly isActivatable?: boolean;
   readonly isVerticalTabsPanel?: boolean;
@@ -17,17 +28,28 @@ export interface SnapshotSourceTab {
 }
 
 export interface SnapshotSourceGroup {
+  readonly label?: string;
+  readonly viewColumn?: number;
   readonly tabs: readonly SnapshotSourceTab[];
 }
 
-export type CloseAction = 'close' | 'closeOthers' | 'closeBelow' | 'closeSaved';
+export interface SnapshotBuildOptions {
+  readonly groupMode?: GroupMode;
+  readonly sortMode?: SortMode;
+  readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
+}
 
-/** Builds a flat source snapshot; presentation-only groups belong to this extension. */
+export type CloseAction = 'close' | 'closeOthers' | 'closeBelow' | 'closeSaved' | 'closeAll';
+
+/** Builds a presentation snapshot; VS Code editor groups remain the source of truth. */
 export function buildSnapshot(
   groups: readonly SnapshotSourceGroup[],
   revision: number,
   manualGroups: readonly ManualTabGroup[],
+  options: SnapshotBuildOptions = {},
 ): VerticalTabsSnapshot {
+  const groupMode = options.groupMode ?? 'vscode';
+  const sortMode = options.sortMode ?? 'none';
   const visibleTabs = groups.flatMap((group) => group.tabs.filter((tab) => !tab.isVerticalTabsPanel));
   const labelCounts = new Map<string, number>();
   for (const tab of visibleTabs) labelCounts.set(tab.label, (labelCounts.get(tab.label) ?? 0) + 1);
@@ -44,18 +66,25 @@ export function buildSnapshot(
       isPreview: tab.isPreview,
       isActivatable: tab.isActivatable ?? isActivatable(tab.inputKind),
       manualGroupId: tab.manualGroupId,
+      groupId: tab.manualGroupId,
+      isFile: isFileTab(tab),
+      resourcePath: tab.path,
+      mtime: tab.mtime,
     }];
   }));
-  return { revision, tabs, manualGroups };
+
+  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup);
+  return { revision, groupMode, sortMode, tabs, manualGroups, displayGroups };
 }
 
 export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: CloseAction, target?: VerticalTabItem['target']): VerticalTabItem['target'][] {
   if (action === 'closeSaved') return snapshot.tabs.filter((tab) => !tab.isDirty && !tab.isPinned).map((tab) => tab.target);
+  if (action === 'closeAll') return snapshot.tabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
   if (!target) return [];
   const selected = snapshot.tabs.find((tab) => sameTarget(tab.target, target));
   if (!selected) return [];
   if (action === 'close') return [target];
-  const bucket = snapshot.tabs.filter((tab) => tab.manualGroupId === selected.manualGroupId);
+  const bucket = findDisplayBucket(snapshot, selected) ?? snapshot.tabs.filter((tab) => tab.manualGroupId === selected.manualGroupId);
   const index = bucket.findIndex((tab) => sameTarget(tab.target, target));
   const candidates = action === 'closeOthers' ? bucket.filter((tab) => !sameTarget(tab.target, target)) : bucket.slice(index + 1);
   return candidates.filter((tab) => !tab.isPinned).map((tab) => tab.target);
@@ -84,6 +113,190 @@ export function sameIdentity(left: TabTargetIdentity, right: TabTargetIdentity):
     && left.label === right.label;
 }
 
+export function identityKey(identity: TabTargetIdentity): string {
+  return JSON.stringify(identity);
+}
+
+function buildDisplayGroups(
+  sourceGroups: readonly SnapshotSourceGroup[],
+  tabs: readonly VerticalTabItem[],
+  manualGroups: readonly ManualTabGroup[],
+  groupMode: GroupMode,
+  sortMode: SortMode,
+  manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+): VerticalTabDisplayGroup[] {
+  if (groupMode === 'manual') return buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup);
+  if (groupMode === 'parentDir') return buildAutoGroups(tabs, 'parentDir', sortMode);
+  if (groupMode === 'fileType') return buildAutoGroups(tabs, 'fileType', sortMode);
+  return buildVsCodeGroups(sourceGroups, tabs, sortMode);
+}
+
+function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: readonly VerticalTabItem[], sortMode: SortMode): VerticalTabDisplayGroup[] {
+  const groups: VerticalTabDisplayGroup[] = [];
+  for (let sourceIndex = 0; sourceIndex < sourceGroups.length; sourceIndex += 1) {
+    const groupTabs = tabs.filter((tab) => tab.target.groupIndex === sourceIndex);
+    if (groupTabs.length === 0) continue;
+    groups.push({
+      id: `vscode-${sourceIndex}`,
+      title: sourceGroups[sourceIndex]?.label ?? `编辑器组 ${groups.length + 1}`,
+      collapsed: false,
+      mode: 'vscode',
+      tabs: sortTabs(groupTabs, sortMode),
+      showHeader: true,
+      isManual: false,
+    });
+  }
+  if (groups.length === 1) {
+    groups[0] = { ...groups[0], showHeader: false };
+  }
+  return groups;
+}
+
+function buildManualGroups(
+  tabs: readonly VerticalTabItem[],
+  manualGroups: readonly ManualTabGroup[],
+  sortMode: SortMode,
+  manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+): VerticalTabDisplayGroup[] {
+  const knownGroups = new Set(manualGroups.map((group) => group.id));
+  const ungrouped = orderManualTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), '__ungrouped', manualOrderByGroup);
+  const displayGroups: VerticalTabDisplayGroup[] = [];
+  if (ungrouped.length > 0 || manualGroups.length === 0) {
+    displayGroups.push({
+      id: '__ungrouped',
+      title: '未分组',
+      collapsed: false,
+      mode: 'manual',
+      tabs: sortTabs(ungrouped, sortMode),
+      showHeader: manualGroups.length > 0,
+      isManual: true,
+    });
+  }
+  for (const group of manualGroups) {
+    const groupTabs = orderManualTabs(tabs.filter((tab) => tab.manualGroupId === group.id), group.id, manualOrderByGroup);
+    displayGroups.push({
+      id: group.id,
+      title: group.name,
+      collapsed: group.collapsed,
+      mode: 'manual',
+      tabs: group.collapsed ? [] : sortTabs(groupTabs, sortMode),
+      showHeader: true,
+      isManual: true,
+    });
+  }
+  return displayGroups;
+}
+
+function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir' | 'fileType', sortMode: SortMode): VerticalTabDisplayGroup[] {
+  const buckets = new Map<string, VerticalTabItem[]>();
+  for (const tab of tabs) {
+    const id = groupMode === 'parentDir' ? parentDirKey(tab) : fileTypeKey(tab);
+    const bucket = buckets.get(id) ?? [];
+    bucket.push(tab);
+    buckets.set(id, bucket);
+  }
+  const parentNameCounts = new Map<string, number>();
+  if (groupMode === 'parentDir') {
+    for (const id of buckets.keys()) {
+      const title = parentDirTitle(id);
+      parentNameCounts.set(title, (parentNameCounts.get(title) ?? 0) + 1);
+    }
+  }
+  return Array.from(buckets.entries()).map(([id, groupTabs]) => {
+    const title = groupMode === 'parentDir' ? parentDirTitle(id) : fileTypeTitle(id);
+    return {
+      id,
+      title,
+      description: groupMode === 'parentDir' && parentNameCounts.get(title) !== 1 ? parentDirDescription(id) : undefined,
+      collapsed: false,
+      mode: groupMode,
+      tabs: sortTabs(groupTabs, sortMode),
+      showHeader: true,
+      isManual: false,
+    };
+  });
+}
+
+function sortTabs(tabs: readonly VerticalTabItem[], sortMode: SortMode): readonly VerticalTabItem[] {
+  if (sortMode === 'none') return tabs;
+  return tabs
+    .map((tab, index) => ({ tab, index, fileSort: fileSortValue(tab, sortMode) }))
+    .sort((left, right) => {
+      if (left.fileSort === undefined || right.fileSort === undefined) return left.index - right.index;
+      const compared = left.fileSort.localeCompare(right.fileSort, undefined, { numeric: true, sensitivity: 'base' });
+      return compared === 0 ? left.index - right.index : compared;
+    })
+    .map((entry) => entry.tab);
+}
+
+function fileSortValue(tab: VerticalTabItem, sortMode: SortMode): string | undefined {
+  if (!tab.isFile) return undefined;
+  if (sortMode === 'nameAsc') return tab.label;
+  if (sortMode === 'nameDesc') return invertString(tab.label);
+  const mtime = readMtime(tab);
+  if (mtime === undefined) return undefined;
+  const value = sortMode === 'modifiedAsc' ? mtime : Number.MAX_SAFE_INTEGER - mtime;
+  return value.toString().padStart(16, '0');
+}
+
+function orderManualTabs(tabs: readonly VerticalTabItem[], groupId: string, manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined): readonly VerticalTabItem[] {
+  const order = manualOrderByGroup?.get(groupId);
+  if (!order) return tabs;
+  const rank = new Map(order.map((key, index) => [key, index]));
+  return [...tabs].sort((left, right) => (rank.get(identityKey(left.target.identity)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(identityKey(right.target.identity)) ?? Number.MAX_SAFE_INTEGER));
+}
+
+function findDisplayBucket(snapshot: VerticalTabsSnapshot, selected: VerticalTabItem): readonly VerticalTabItem[] | undefined {
+  return snapshot.displayGroups.find((group) => group.tabs.some((tab) => sameTarget(tab.target, selected.target)))?.tabs;
+}
+
 function isActivatable(inputKind: TabInputKind): boolean {
   return inputKind === 'text' || inputKind === 'diff' || inputKind === 'custom' || inputKind === 'notebook' || inputKind === 'notebookDiff';
+}
+
+function isFileTab(tab: SnapshotSourceTab): boolean {
+  return tab.inputKind === 'text' || tab.inputKind === 'custom' || tab.inputKind === 'notebook' || tab.inputKind === 'diff' || tab.inputKind === 'notebookDiff';
+}
+
+function parentDirKey(tab: VerticalTabItem): string {
+  const tabPath = path.posix.normalize(extractPath(tab) ?? '');
+  if (!tabPath || !tab.isFile) return '__other';
+  const dirname = path.posix.dirname(tabPath);
+  return dirname === '.' ? '__root' : dirname;
+}
+
+function parentDirTitle(id: string): string {
+  if (id === '__other') return '其他';
+  if (id === '__root') return '工作区根目录';
+  return path.posix.basename(id);
+}
+
+function parentDirDescription(id: string): string | undefined {
+  if (id === '__other' || id === '__root') return undefined;
+  return id;
+}
+
+function fileTypeKey(tab: VerticalTabItem): string {
+  const tabPath = extractPath(tab);
+  if (!tabPath || !tab.isFile) return '__other';
+  const extension = path.posix.extname(tabPath || tab.label).toLowerCase();
+  return extension || '__none';
+}
+
+function fileTypeTitle(id: string): string {
+  if (id === '__other') return '其他';
+  if (id === '__none') return '无扩展名';
+  return id;
+}
+
+function extractPath(tab: VerticalTabItem): string | undefined {
+  return tab.resourcePath ?? tab.description ?? (tab.label.includes('/') ? tab.label : undefined);
+}
+
+function readMtime(tab: VerticalTabItem): number | undefined {
+  return tab.mtime;
+}
+
+function invertString(value: string): string {
+  return Array.from(value).map((character) => String.fromCharCode(0xffff - character.charCodeAt(0))).join('');
 }
