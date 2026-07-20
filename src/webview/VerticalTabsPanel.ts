@@ -659,6 +659,9 @@ export class VerticalTabsPanel {
       this.groupMode = message.groupMode;
       await this.context.workspaceState.update(GROUP_MODE_STORAGE_KEY, message.groupMode);
       logInfo('切换垂直标签分组模式', { groupMode: message.groupMode });
+      if (message.groupMode === 'vscode') {
+        await this.syncVsCodeTabOrder();
+      }
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -667,6 +670,9 @@ export class VerticalTabsPanel {
       this.sortMode = message.sortMode;
       await this.context.workspaceState.update(SORT_MODE_STORAGE_KEY, message.sortMode);
       logInfo('切换垂直标签排序模式', { sortMode: message.sortMode });
+      if (this.groupMode === 'vscode') {
+        await this.syncVsCodeTabOrder();
+      }
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -766,6 +772,9 @@ export class VerticalTabsPanel {
       if (tab && isActivatableTabForCommands(tab)) {
         await this.activateTab(tab);
         await vscode.commands.executeCommand(message.type === 'pinTab' ? 'workbench.action.pinEditor' : 'workbench.action.unpinEditor');
+        if (this.groupMode === 'vscode') {
+          await this.syncVsCodeTabOrder();
+        }
       } else {
         logWarn('固定状态切换失败：标签不可可靠激活', { target: message.target });
       }
@@ -894,6 +903,42 @@ export class VerticalTabsPanel {
       const beforeIndex = tab.group.tabs.indexOf(beforeTab);
       if (targetIndex > beforeIndex) await vscode.commands.executeCommand('workbench.action.moveEditorLeftInGroup');
       else if (targetIndex < beforeIndex) await vscode.commands.executeCommand('workbench.action.moveEditorRightInGroup');
+    }
+  }
+
+  private async syncVsCodeTabOrder(): Promise<void> {
+    const snapshot = await this.createSnapshot();
+    for (const displayGroup of snapshot.displayGroups) {
+      if (displayGroup.mode !== 'vscode' || displayGroup.tabs.length <= 1) {
+        continue;
+      }
+      const group = vscode.window.tabGroups.all[displayGroup.tabs[0]?.target.groupIndex ?? -1];
+      if (!group || group.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+        continue;
+      }
+      await this.syncVsCodeGroupOrder(group, displayGroup.tabs.map((tab) => tab.target.identity));
+    }
+  }
+
+  private async syncVsCodeGroupOrder(group: vscode.TabGroup, identities: readonly TabTargetIdentity[]): Promise<void> {
+    for (let desiredIndex = 0; desiredIndex < identities.length; desiredIndex += 1) {
+      const identity = identities[desiredIndex];
+      const tab = group.tabs.find((candidate) => sameIdentity(targetIdentity(candidate), identity));
+      if (!tab || !isActivatableTabForCommands(tab)) {
+        logWarn('同步 VS Code 横向标签顺序时跳过不可移动标签', { desiredIndex, identity });
+        continue;
+      }
+      let currentIndex = group.tabs.indexOf(tab);
+      while (currentIndex > desiredIndex) {
+        await this.activateTab(tab);
+        await vscode.commands.executeCommand('workbench.action.moveEditorLeftInGroup');
+        const nextIndex = group.tabs.findIndex((candidate) => sameIdentity(targetIdentity(candidate), identity));
+        if (nextIndex < 0 || nextIndex >= currentIndex) {
+          logWarn('同步 VS Code 横向标签顺序提前停止：左移命令未改变位置', { label: tab.label, currentIndex, nextIndex, desiredIndex });
+          break;
+        }
+        currentIndex = nextIndex;
+      }
     }
   }
 

@@ -62,16 +62,16 @@ test('matches stale snapshot targets by stable identity', () => {
 
   assert.equal(sameIdentity(previous.tabs[1].target.identity, current.tabs[1].target.identity), true);
   assert.deepEqual(selectCloseTargets(current, 'closeOthers', previous.tabs[1].target), [current.tabs[0].target, current.tabs[2].target]);
-  assert.deepEqual(selectCloseTargets(current, 'closeBelow', previous.tabs[1].target), [current.tabs[2].target]);
+  assert.deepEqual(selectCloseTargets(current, 'closeBelow', previous.tabs[1].target), [current.tabs[0].target, current.tabs[2].target]);
 });
 
 test('selects close targets within the same manual display bucket and preserves pinned tabs', () => {
-  const snapshot = buildSnapshot(source, 3, [{ id: 'work', name: '工作', collapsed: false }]);
+  const snapshot = buildSnapshot(source, 3, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual' });
   const work = snapshot.tabs[0].target;
   const topLevel = snapshot.tabs[1].target;
   assert.deepEqual(selectCloseTargets(snapshot, 'close', work), [work]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeOthers', work), []);
-  assert.deepEqual(selectCloseTargets(snapshot, 'closeBelow', topLevel), []);
+  assert.deepEqual(selectCloseTargets(snapshot, 'closeBelow', topLevel), [snapshot.tabs[2].target, snapshot.tabs[3].target]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeSaved'), [snapshot.tabs[2].target, snapshot.tabs[3].target]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeAll'), [snapshot.tabs[0].target, snapshot.tabs[2].target, snapshot.tabs[3].target]);
 });
@@ -105,6 +105,24 @@ test('builds file type groups and sorts files inside groups only', () => {
   assert.equal(snapshot.displayGroups[0]!.title, '.ts');
   assert.deepEqual(snapshot.displayGroups[0]!.tabs.map((tab) => tab.label), ['a.ts', 'b.ts']);
   assert.equal(snapshot.displayGroups[1]!.title, '无扩展名');
+});
+
+test('keeps pinned tabs at the front of each display group for every sort mode', () => {
+  const tabs: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'b.ts', path: 'src/b.ts', mtime: 200, isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/b.ts' } },
+    { label: 'a.ts', path: 'src/a.ts', mtime: 100, isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/a.ts' } },
+    { label: 'c.ts', path: 'src/c.ts', mtime: 300, isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/c.ts' } },
+    { label: 'd.ts', path: 'src/d.ts', mtime: 400, isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/d.ts' } },
+  ] }];
+
+  const unsorted = buildSnapshot(tabs, 17, [], { groupMode: 'vscode', sortMode: 'none' });
+  assert.deepEqual(unsorted.displayGroups[0]!.tabs.map((tab) => tab.label), ['b.ts', 'c.ts', 'a.ts', 'd.ts']);
+
+  const byName = buildSnapshot(tabs, 18, [], { groupMode: 'vscode', sortMode: 'nameDesc' });
+  assert.deepEqual(byName.displayGroups[0]!.tabs.map((tab) => tab.label), ['c.ts', 'b.ts', 'd.ts', 'a.ts']);
+
+  const byModified = buildSnapshot(tabs, 19, [], { groupMode: 'vscode', sortMode: 'modifiedAsc' });
+  assert.deepEqual(byModified.displayGroups[0]!.tabs.map((tab) => tab.label), ['b.ts', 'c.ts', 'a.ts', 'd.ts']);
 });
 
 test('orders manual tabs from persisted identity order', () => {

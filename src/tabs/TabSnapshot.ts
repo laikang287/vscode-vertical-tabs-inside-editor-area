@@ -81,12 +81,12 @@ export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: Close
   if (action === 'closeSaved') return snapshot.tabs.filter((tab) => !tab.isDirty && !tab.isPinned).map((tab) => tab.target);
   if (action === 'closeAll') return snapshot.tabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
   if (!target) return [];
-  const selected = snapshot.tabs.find((tab) => sameTarget(tab.target, target));
+  const selected = snapshot.tabs.find((tab) => sameIdentity(tab.target.identity, target.identity));
   if (!selected) return [];
-  if (action === 'close') return [target];
+  if (action === 'close') return [selected.target];
   const bucket = findDisplayBucket(snapshot, selected) ?? snapshot.tabs.filter((tab) => tab.manualGroupId === selected.manualGroupId);
-  const index = bucket.findIndex((tab) => sameTarget(tab.target, target));
-  const candidates = action === 'closeOthers' ? bucket.filter((tab) => !sameTarget(tab.target, target)) : bucket.slice(index + 1);
+  const index = bucket.findIndex((tab) => sameIdentity(tab.target.identity, selected.target.identity));
+  const candidates = action === 'closeOthers' ? bucket.filter((tab) => !sameIdentity(tab.target.identity, selected.target.identity)) : bucket.slice(index + 1);
   return candidates.filter((tab) => !tab.isPinned).map((tab) => tab.target);
 }
 
@@ -247,10 +247,11 @@ function suffix(segments: readonly string[], suffixLength: number): string {
 }
 
 function sortTabs(tabs: readonly VerticalTabItem[], sortMode: SortMode): readonly VerticalTabItem[] {
-  if (sortMode === 'none') return tabs;
   return tabs
     .map((tab, index) => ({ tab, index, fileSort: fileSortValue(tab, sortMode) }))
     .sort((left, right) => {
+      if (left.tab.isPinned !== right.tab.isPinned) return left.tab.isPinned ? -1 : 1;
+      if (sortMode === 'none') return left.index - right.index;
       if (left.fileSort === undefined || right.fileSort === undefined) return left.index - right.index;
       const compared = left.fileSort.localeCompare(right.fileSort, undefined, { numeric: true, sensitivity: 'base' });
       return compared === 0 ? left.index - right.index : compared;
@@ -276,7 +277,7 @@ function orderManualTabs(tabs: readonly VerticalTabItem[], groupId: string, manu
 }
 
 function findDisplayBucket(snapshot: VerticalTabsSnapshot, selected: VerticalTabItem): readonly VerticalTabItem[] | undefined {
-  return snapshot.displayGroups.find((group) => group.tabs.some((tab) => sameTarget(tab.target, selected.target)))?.tabs;
+  return snapshot.displayGroups.find((group) => group.tabs.some((tab) => sameIdentity(tab.target.identity, selected.target.identity)))?.tabs;
 }
 
 function activationKind(tab: SnapshotSourceTab): TabActivationKind {
