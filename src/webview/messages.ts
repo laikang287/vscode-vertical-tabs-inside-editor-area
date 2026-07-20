@@ -35,6 +35,7 @@ export type WebviewMessage =
   | { readonly type: 'reorderManualTab'; readonly target: TabTarget; readonly groupId?: string; readonly beforeTarget?: TabTarget }
   | { readonly type: 'createGroupFromTabs'; readonly source: TabTarget; readonly target: TabTarget }
   | { readonly type: 'moveToPreviousGroup' | 'moveToNextGroup' | 'moveToNewGroup'; readonly target: TabTarget }
+  | { readonly type: 'moveToGroup'; readonly target: TabTarget; readonly groupIndex: number }
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
 export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot };
@@ -59,6 +60,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   }
   if (value.type === 'createGroupFromTabs' && isTabTarget(value.source) && isTabTarget(value.target)) return { type: 'createGroupFromTabs', source: value.source, target: value.target };
   if ((value.type === 'moveToPreviousGroup' || value.type === 'moveToNextGroup' || value.type === 'moveToNewGroup') && isTabTarget(value.target)) return { type: value.type, target: value.target };
+  if (value.type === 'moveToGroup' && isTabTarget(value.target) && isNonNegativeInteger(value.groupIndex)) return { type: 'moveToGroup', target: value.target, groupIndex: value.groupIndex };
   if (value.type === 'activateTab' && isTabTarget(value.target) && (value.requestId === undefined || isRequestId(value.requestId))) {
     return { type: 'activateTab', target: value.target, ...(value.requestId === undefined ? {} : { requestId: value.requestId }) };
   }

@@ -163,6 +163,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   row.className = ['tab-row', `tree-level-${level}`, tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
   row.draggable = false;
   row.dataset.groupId = group.id;
+  row.dataset.targetIdentity = JSON.stringify(tab.target.identity);
   const dragHandle = document.createElement('button');
   dragHandle.className = 'tab-drag-handle';
   dragHandle.type = 'button';
@@ -200,6 +201,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   activate.addEventListener('click', () => {
     const requestId = nextActivateRequestId();
     logToExtension('debug', '标签激活按钮 click，发送激活请求', targetDetails(tab.target, tab.label, requestId));
+    markActiveTab(tab.target);
     vscode.postMessage({ type: 'activateTab', target: tab.target, requestId });
   });
   const label = document.createElement('span');
@@ -392,8 +394,8 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
       menu.append(
         messageButton('移至上一组', '移至上一编辑器组', { type: 'moveToPreviousGroup', target: tab.target }),
         messageButton('移至下一组', '移至下一编辑器组', { type: 'moveToNextGroup', target: tab.target }),
-        messageButton('移至新组', '移至新编辑器组', { type: 'moveToNewGroup', target: tab.target }),
       );
+      appendVsCodeGroupActions(menu, tab, snapshot.displayGroups);
     }
   }
   menu.querySelectorAll('button').forEach((item) => item.classList.add('tab-context-action'));
@@ -415,30 +417,53 @@ function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
 }
 
 function appendManualGroupActions(menu: HTMLElement, tab: VerticalTabItem, manualGroups: readonly ManualTabGroup[]): void {
+  appendGroupSubmenu(menu, '移至分组', '移动到手动分组', (submenu, trigger) => {
+    for (const group of manualGroups) {
+      const item = button(group.name, `移至 ${group.name}`);
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'assignGroup', target: tab.target, groupId: group.id });
+        dismissContextMenu();
+      });
+      submenu.append(item);
+    }
+    if (tab.manualGroupId) {
+      const item = button('移出分组', '移出分组');
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'assignGroup', target: tab.target });
+        dismissContextMenu();
+      });
+      submenu.append(item);
+    }
+    if (submenu.childElementCount === 0) trigger.disabled = true;
+  });
+}
+
+function appendVsCodeGroupActions(menu: HTMLElement, tab: VerticalTabItem, displayGroups: readonly VerticalTabDisplayGroup[]): void {
+  appendGroupSubmenu(menu, '移至分组', '移动到 VS Code 编辑器组', (submenu, trigger) => {
+    for (const group of displayGroups) {
+      if (group.mode !== 'vscode' || group.tabs.some((candidate) => sameTarget(candidate.target, tab.target))) continue;
+      const firstTarget = group.tabs[0]?.target;
+      if (!firstTarget) continue;
+      const item = button(group.title, `移至 ${group.title}`);
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'moveToGroup', target: tab.target, groupIndex: firstTarget.groupIndex });
+        dismissContextMenu();
+      });
+      submenu.append(item);
+    }
+    if (submenu.childElementCount === 0) trigger.disabled = true;
+  });
+}
+
+function appendGroupSubmenu(menu: HTMLElement, label: string, title: string, fill: (submenu: HTMLElement, trigger: HTMLButtonElement) => void): void {
   const wrapper = document.createElement('div');
   wrapper.className = 'tab-context-submenu';
-  const trigger = button('移动分组', '移动到手动分组');
+  const trigger = button(label, title);
   trigger.className = 'tab-context-submenu-trigger';
   const submenu = document.createElement('div');
   submenu.className = 'tab-context-submenu-list';
   submenu.setAttribute('role', 'menu');
-  for (const group of manualGroups) {
-    const item = button(group.name, `移至 ${group.name}`);
-    item.addEventListener('click', () => {
-      vscode.postMessage({ type: 'assignGroup', target: tab.target, groupId: group.id });
-      dismissContextMenu();
-    });
-    submenu.append(item);
-  }
-  if (tab.manualGroupId) {
-    const item = button('移出分组', '移出分组');
-    item.addEventListener('click', () => {
-      vscode.postMessage({ type: 'assignGroup', target: tab.target });
-      dismissContextMenu();
-    });
-    submenu.append(item);
-  }
-  if (submenu.childElementCount === 0) trigger.disabled = true;
+  fill(submenu, trigger);
   wrapper.append(trigger, submenu);
   menu.append(wrapper);
 }
@@ -471,6 +496,17 @@ function messageButton(label: string, title: string, message: unknown): HTMLButt
 function sameTarget(left: TabTarget, right: TabTarget): boolean {
   if (JSON.stringify(left.identity) === JSON.stringify(right.identity)) return true;
   return left.revision === right.revision && left.groupIndex === right.groupIndex && left.tabIndex === right.tabIndex;
+}
+
+function markActiveTab(target: TabTarget): void {
+  if (!latestSnapshot) return;
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-active'))) {
+    row.classList.remove('is-active');
+  }
+  const row = Array.from(document.querySelectorAll<HTMLElement>('.tab-row')).find((candidate) => {
+    return candidate.dataset.targetIdentity === JSON.stringify(target.identity);
+  });
+  row?.classList.add('is-active');
 }
 
 function dismissContextMenu(): void {

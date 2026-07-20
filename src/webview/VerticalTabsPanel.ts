@@ -33,7 +33,8 @@ const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_WAIT_INTERVAL_MS = 10;
 const INPUT_MTIME_TIMEOUT_MS = 250;
 const INITIAL_HOST_REFRESH_DELAY_MS = 800;
-const MAX_EMPTY_RAIL_RESTORE_RATIO = 0.4;
+const MAX_EMPTY_RAIL_RESTORE_RATIO = 0.3;
+const MAX_AUTO_APPLIED_RAIL_RATIO = 0.3;
 const SNAPSHOT_REFRESH_TIMEOUT_MS = 2000;
 const WEBVIEW_POST_RETRY_DELAY_MS = 250;
 const WEBVIEW_POST_MAX_ATTEMPTS = 8;
@@ -811,6 +812,12 @@ export class VerticalTabsPanel {
       return;
     }
 
+    if (message.type === 'moveToGroup') {
+      await this.moveEditorToVsCodeGroup(message.target, message.groupIndex);
+      await this.refresh({ reason: 'operation' });
+      return;
+    }
+
     if (message.type === 'activateTab') {
       const tab = this.resolveTab(message.target);
       logDebug('收到标签激活请求', {
@@ -824,6 +831,7 @@ export class VerticalTabsPanel {
       });
       if (tab) {
         await this.activateTab(tab, message.requestId);
+        await this.refresh({ reason: 'navigate' });
       } else {
         logWarn('激活标签失败：标签目标已失效', { requestId: message.requestId, target: message.target, groups: describeTabGroups() });
       }
@@ -930,6 +938,55 @@ export class VerticalTabsPanel {
         before: describeTab(beforeTab),
       });
     }
+  }
+
+  private async moveEditorToVsCodeGroup(target: TabTarget, targetGroupIndex: number): Promise<void> {
+    const tab = this.resolveTab(target);
+    const destination = vscode.window.tabGroups.all[targetGroupIndex];
+    if (!tab || !destination || destination.tabs.some((candidate) => isVerticalTabsPanel(candidate)) || tab.group === destination) {
+      logWarn('跟随 VS Code 模式移至分组失败：源标签或目标分组无效', {
+        target,
+        targetGroupIndex,
+        source: tab ? describeTab(tab) : undefined,
+        destination: describeTabGroup(destination, targetGroupIndex),
+      });
+      return;
+    }
+    if (!isActivatableTabForCommands(tab)) {
+      logWarn('跟随 VS Code 模式移至分组失败：标签不可可靠激活', { target });
+      return;
+    }
+    const sourceIdentity = targetIdentity(tab);
+    logInfo('跟随 VS Code 模式移至分组', { source: describeTab(tab), destination: describeTabGroup(destination, targetGroupIndex) });
+    await this.activateTab(tab);
+    await this.moveActiveEditorToGroup(sourceIdentity, destination);
+  }
+
+  private async moveActiveEditorToGroup(sourceIdentity: TabTargetIdentity, destination: vscode.TabGroup): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const source = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+      const targetGroupIndex = vscode.window.tabGroups.all.indexOf(destination);
+      if (!source || targetGroupIndex < 0 || destination.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+        logWarn('跟随 VS Code 模式移至分组停止：源标签或目标分组位置已失效', { attempt, source: describeTabPosition(source), destination: describeTabGroup(destination, targetGroupIndex) });
+        return;
+      }
+      if (source.group === destination) {
+        logDebug('跟随 VS Code 模式移至分组完成', { attempt, targetGroupIndex, source: describeTabPosition(source) });
+        return;
+      }
+      const command = source.groupIndex < targetGroupIndex
+        ? 'workbench.action.moveEditorToNextGroup'
+        : 'workbench.action.moveEditorToPreviousGroup';
+      const previousGroupIndex = source.groupIndex;
+      await vscode.commands.executeCommand(command);
+      const next = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+      if (!next || next.groupIndex === previousGroupIndex) {
+        logWarn('跟随 VS Code 模式移至分组停止：移动命令未改变源标签分组', { command, previousGroupIndex, next: describeTabPosition(next), targetGroupIndex });
+        return;
+      }
+      logDebug('跟随 VS Code 模式移至分组移动一步', { command, previousGroupIndex, nextGroupIndex: next.groupIndex, targetGroupIndex, attempt });
+    }
+    logWarn('跟随 VS Code 模式移至分组停止：超过最大移动步数', { sourceIdentity, destination: describeTabGroup(destination, vscode.window.tabGroups.all.indexOf(destination)) });
   }
 
   private async moveActiveEditorBeforeTarget(sourceIdentity: TabTargetIdentity, beforeIdentity: TabTargetIdentity): Promise<void> {
@@ -1584,6 +1641,19 @@ function describeTabGroups(): readonly Record<string, unknown>[] {
   }));
 }
 
+function describeTabGroup(group: vscode.TabGroup | undefined, groupIndex: number): Record<string, unknown> | undefined {
+  if (!group) {
+    return undefined;
+  }
+  return {
+    groupIndex,
+    viewColumn: group.viewColumn,
+    isActive: group.isActive,
+    tabCount: group.tabs.length,
+    labels: group.tabs.map((tab) => tab.label),
+  };
+}
+
 function hasVerticalTabsPanel(): boolean {
   return findVerticalTabsTab() !== undefined;
 }
@@ -1639,7 +1709,7 @@ async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<n
 function getConfiguredRailRatio(context: vscode.ExtensionContext): number {
   const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
   const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
-  return resolveRailRatio(savedRatio, configuredRatio);
+  return clampAutomaticRailRatio(resolveRailRatio(savedRatio, configuredRatio), { savedRatio, configuredRatio, source: 'configured' });
 }
 
 function getDefaultRailRatio(): number {
@@ -1650,9 +1720,9 @@ function getDefaultRailRatio(): number {
 function getEmptyRailRestoreRatio(context: vscode.ExtensionContext): number {
   const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
   if (typeof savedRatio === 'number' && Number.isFinite(savedRatio) && savedRatio > 0 && savedRatio <= MAX_EMPTY_RAIL_RESTORE_RATIO) {
-    return normalizeRailRatio(savedRatio);
+    return clampAutomaticRailRatio(savedRatio, { savedRatio, source: 'emptyRestore' });
   }
-  return getDefaultRailRatio();
+  return clampAutomaticRailRatio(getDefaultRailRatio(), { savedRatio, source: 'emptyRestoreFallback' });
 }
 
 async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
@@ -1662,7 +1732,7 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
     return false;
   }
   const totalWidth = getEditorAreaWidth(layout);
-  const normalizedRatio = normalizeRailRatio(ratio);
+  const normalizedRatio = clampAutomaticRailRatio(ratio, { source: 'applyLeadingRailRatio' });
   const railWidth = Math.max(1, Math.ceil(totalWidth * normalizedRatio));
   const existingRailLikeGroup = findExistingRailLikeRootGroup(layout, normalizedRatio);
   logDebug('准备调整左侧标签栏宽度', {
@@ -1698,6 +1768,21 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
   };
   logDebug('应用左侧标签栏宽度布局', { requestedRatio: ratio, normalizedRatio, previousLayout: layout, nextLayout });
   return applyEditorLayout(nextLayout);
+}
+
+function clampAutomaticRailRatio(ratio: number, details: Record<string, unknown>): number {
+  const normalized = normalizeRailRatio(ratio);
+  const clamped = Math.min(normalized, MAX_AUTO_APPLIED_RAIL_RATIO);
+  if (clamped !== normalized) {
+    logWarn('自动应用垂直标签栏宽度比例过大，已限制以避免压缩右侧编辑器组', {
+      ...details,
+      requestedRatio: ratio,
+      normalizedRatio: normalized,
+      clampedRatio: clamped,
+      maxAutoAppliedRailRatio: MAX_AUTO_APPLIED_RAIL_RATIO,
+    });
+  }
+  return clamped;
 }
 
 function findExistingRailLikeRootGroup(layout: EditorLayout, ratio: number): { readonly index: number; readonly size: number; readonly ratio: number } | undefined {

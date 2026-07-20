@@ -41,6 +41,7 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'reorderManualTab', target }), { type: 'reorderManualTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'createGroupFromTabs', source: target, target }), { type: 'createGroupFromTabs', source: target, target });
   assert.deepEqual(parseWebviewMessage({ type: 'moveToPreviousGroup', target }), { type: 'moveToPreviousGroup', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'moveToGroup', target, groupIndex: 2 }), { type: 'moveToGroup', target, groupIndex: 2 });
 });
 
 test('rejects malformed and unknown messages', () => {
@@ -77,6 +78,8 @@ test('rejects malformed and unknown messages', () => {
     { type: 'moveTab', target, groupId: '../bad' },
     { type: 'moveTab', target, beforeTarget: { revision: 1, groupIndex: 0, tabIndex: 0 } },
     { type: 'createGroupFromTabs', source: target },
+    { type: 'moveToGroup', target, groupIndex: -1 },
+    { type: 'moveToGroup', target, groupIndex: 1.5 },
   ]) {
     assert.equal(parseWebviewMessage(value), undefined);
   }

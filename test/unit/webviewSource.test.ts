@@ -70,13 +70,40 @@ test('manual move group actions are grouped under a hover submenu', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(source, /const trigger = button\('移动分组', '移动到手动分组'\)/);
+  assert.match(source, /appendGroupSubmenu\(menu, '移至分组', '移动到手动分组'/);
   assert.match(source, /trigger\.className = 'tab-context-submenu-trigger'/);
   assert.match(source, /submenu\.className = 'tab-context-submenu-list'/);
   assert.match(source, /const item = button\(group\.name, `移至 \$\{group\.name\}`\)/);
+  assert.doesNotMatch(source, /button\('移动分组'/);
   assert.doesNotMatch(source, /button\(`移至：\$\{group\.name\}`/);
   assert.match(style, /\.tab-context-submenu:hover \.tab-context-submenu-list/);
   assert.match(style, /\.tab-context-submenu-trigger::after/);
+});
+
+test('vscode mode context menu moves to existing groups without exposing new group', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /messageButton\('移至新组'/);
+  assert.match(source, /function appendVsCodeGroupActions\(menu: HTMLElement, tab: VerticalTabItem, displayGroups: readonly VerticalTabDisplayGroup\[\]\): void/);
+  assert.match(source, /appendGroupSubmenu\(menu, '移至分组', '移动到 VS Code 编辑器组'/);
+  assert.match(source, /type: 'moveToGroup', target: tab\.target, groupIndex: firstTarget\.groupIndex/);
+  assert.match(panelSource, /message\.type === 'moveToGroup'/);
+  assert.match(panelSource, /private async moveEditorToVsCodeGroup\(target: TabTarget, targetGroupIndex: number\): Promise<void>/);
+  assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceIdentity: TabTargetIdentity, destination: vscode\.TabGroup\): Promise<void>/);
+  assert.match(panelSource, /vscode\.window\.tabGroups\.all\.indexOf\(destination\)/);
+  assert.match(panelSource, /workbench\.action\.moveEditorToNextGroup/);
+  assert.match(panelSource, /workbench\.action\.moveEditorToPreviousGroup/);
+});
+
+test('activation updates webview selection immediately and refreshes after navigation', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /markActiveTab\(tab\.target\)/);
+  assert.match(source, /function markActiveTab\(target: TabTarget\): void/);
+  assert.match(source, /\.tab-row\.is-active/);
+  assert.match(panelSource, /await this\.activateTab\(tab, message\.requestId\);\s*await this\.refresh\(\{ reason: 'navigate' \}\);/);
 });
 
 test('webview retries the initial snapshot request while it is still loading', () => {
@@ -123,11 +150,14 @@ test('extension avoids persisting and restoring transient empty-rail widths', ()
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /if \(!this\.hasVisibleUserTabs\(\)\)/);
-  assert.match(source, /MAX_EMPTY_RAIL_RESTORE_RATIO = 0\.4/);
+  assert.match(source, /MAX_EMPTY_RAIL_RESTORE_RATIO = 0\.3/);
+  assert.match(source, /MAX_AUTO_APPLIED_RAIL_RATIO = 0\.3/);
   assert.match(source, /getEmptyRailRestoreRatio\(this\.context\)/);
   assert.match(source, /准备保存垂直标签栏宽度比例/);
   assert.match(source, /lastObservedRailWidth/);
   assert.match(source, /canPersistObservedRatio/);
+  assert.match(source, /clampAutomaticRailRatio/);
+  assert.match(source, /自动应用垂直标签栏宽度比例过大，已限制以避免压缩右侧编辑器组/);
 });
 
 test('extension logs and skips width application when a rail-sized root group already exists', () => {
