@@ -17,6 +17,7 @@ export class VerticalTabsPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private arrangingRail = false;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groups: [] };
 
   private constructor(
@@ -124,54 +125,60 @@ export class VerticalTabsPanel {
   }
 
   private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
-    let ownGroupIndex = await this.waitForOwnGroup();
-    if (ownGroupIndex < 0) {
-      return;
-    }
-
-    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
-    let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
-    if (ownGroup.tabs.length > 1) {
-      await vscode.commands.executeCommand('workbench.action.newGroupLeft');
-      this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
-      await vscode.commands.executeCommand('workbench.action.moveEditorToLeftGroup');
-      ownGroupIndex = await this.waitForOwnGroup();
+    this.arrangingRail = true;
+    try {
+      let ownGroupIndex = await this.waitForOwnGroup();
       if (ownGroupIndex < 0) {
         return;
       }
-      ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
-    }
 
-    for (let moves = 0; ownGroupIndex > 0 && moves < vscode.window.tabGroups.all.length; moves += 1) {
       this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
-      await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
-      ownGroupIndex = await this.waitForOwnGroup();
-      if (ownGroupIndex < 0) {
+      let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+      if (ownGroup.tabs.length > 1) {
+        await vscode.commands.executeCommand('workbench.action.newGroupLeft');
+        this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
+        await vscode.commands.executeCommand('workbench.action.moveEditorToLeftGroup');
+        ownGroupIndex = await this.waitForOwnGroup();
+        if (ownGroupIndex < 0) {
+          return;
+        }
+        ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+      }
+
+      for (let moves = 0; ownGroupIndex > 0 && moves < vscode.window.tabGroups.all.length; moves += 1) {
+        this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
+        await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
+        ownGroupIndex = await this.waitForOwnGroup();
+        if (ownGroupIndex < 0) {
+          return;
+        }
+      }
+
+      if (this.findOwnGroupIndex() !== 0) {
         return;
       }
-    }
 
-    if (this.findOwnGroupIndex() !== 0) {
-      return;
-    }
-
-    const width = this.preferredWidth();
-    if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
-      await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
-    } else {
+      const width = this.preferredWidth();
+      if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
+        await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
+      } else {
+        await this.applyRailWidth(width);
+      }
       await this.applyRailWidth(width);
-    }
 
-    this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
-    await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
-    if (previousEditor) {
-      await vscode.window.showTextDocument(previousEditor.document, {
-        viewColumn: previousEditor.viewColumn,
-        preserveFocus: false,
-        selection: previousEditor.selection,
-      });
+      this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.One, false);
+      await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+      if (previousEditor) {
+        await vscode.window.showTextDocument(previousEditor.document, {
+          viewColumn: previousEditor.viewColumn,
+          preserveFocus: false,
+          selection: previousEditor.selection,
+        });
+      }
+      this.refresh();
+    } finally {
+      this.arrangingRail = false;
     }
-    this.refresh();
   }
 
   private preferredWidth(): number {
@@ -280,6 +287,9 @@ export class VerticalTabsPanel {
     }
 
     if (message.type === 'railWidth') {
+      if (this.arrangingRail) {
+        return;
+      }
       await this.context.globalState.update(WIDTH_STORAGE_KEY, normalizeRailWidth(message.width));
       return;
     }

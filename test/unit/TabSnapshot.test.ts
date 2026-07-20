@@ -34,12 +34,11 @@ test('builds grouped tab snapshots and removes the extension panel', () => {
   assert.equal(snapshot.groups[1].tabs[1].isPreview, true);
 });
 
-test('removes the whole rail group even if a foreign tab appears in it', () => {
+test('removes only the extension tab if it appears next to user tabs', () => {
   const snapshot = buildSnapshot([
     {
       isActive: true,
       viewColumn: 1,
-      isVerticalTabsGroup: true,
       tabs: [
         { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', isVerticalTabsPanel: true },
         { label: 'unexpected.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text' },
@@ -52,9 +51,33 @@ test('removes the whole rail group even if a foreign tab appears in it', () => {
     },
   ], 8);
 
+  assert.equal(snapshot.groups.length, 2);
+  assert.equal(snapshot.groups[0].viewColumn, 1);
+  assert.equal(snapshot.groups[0].tabs.length, 1);
+  assert.equal(snapshot.groups[0].tabs[0].label, 'unexpected.ts');
+  assert.equal(snapshot.groups[1].viewColumn, 2);
+  assert.equal(snapshot.groups[1].tabs[0].label, 'main.ts');
+});
+
+test('removes an empty extension rail group from the snapshot', () => {
+  const snapshot = buildSnapshot([
+    {
+      isActive: true,
+      viewColumn: 1,
+      isVerticalTabsGroup: true,
+      tabs: [
+        { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', isVerticalTabsPanel: true },
+      ],
+    },
+    {
+      isActive: false,
+      viewColumn: 2,
+      tabs: [{ label: 'main.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text' }],
+    },
+  ], 9);
+
   assert.equal(snapshot.groups.length, 1);
   assert.equal(snapshot.groups[0].viewColumn, 2);
-  assert.equal(snapshot.groups[0].tabs[0].label, 'main.ts');
 });
 
 test('selects the correct close targets and preserves pinned tabs in batches', () => {
