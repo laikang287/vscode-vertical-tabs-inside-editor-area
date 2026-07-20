@@ -1,21 +1,21 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { isEditorLayout, normalizeRailWidth, type EditorLayout } from '../layout/RailLayout';
+import { isEditorLayout, type EditorLayout } from '../layout/RailLayout';
 import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
-const WIDTH_STORAGE_KEY = 'verticalTabs.railWidthPx';
 const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
+const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const RAIL_SETTLE_DELAY_MS = 400;
 const RAIL_RETRY_DELAY_MS = 100;
 const RAIL_ARRANGE_ATTEMPTS = 3;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_ACTIVATE_WAIT_ATTEMPTS = 30;
 const GROUP_WAIT_INTERVAL_MS = 10;
-const DEFAULT_RAIL_RATIO = 0.25;
+const DEFAULT_RAIL_RATIO = 0.2;
 const MIN_RAIL_RATIO = 0.1;
 const MAX_RAIL_RATIO = 0.5;
 
@@ -35,7 +35,6 @@ export class VerticalTabsPanel {
   // finished creating, moving and sizing the dedicated editor group.
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
-  private railWidthRevision = 0;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, tabs: [], manualGroups: [] };
   private readonly manualGroups: ManualTabGroup[] = [];
   private readonly manualGroupByTab = new WeakMap<vscode.Tab, string>();
@@ -233,9 +232,9 @@ export class VerticalTabsPanel {
     }
 
     const savedRatio = this.context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
-    let ratio = normalizeRailRatio(savedRatio);
-    let measurementRevision = this.railWidthRevision;
-    if (!await applyTwoColumnLayout(ratio)) {
+    const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
+    const ratio = normalizeRailRatio(typeof savedRatio === 'number' ? savedRatio : configuredRatio);
+    if (!await applyTwoColumnLayout(ratio, this.lastObservedRailWidth)) {
       return false;
     }
 
@@ -243,19 +242,14 @@ export class VerticalTabsPanel {
       return false;
     }
 
+    // VS Code creates new editor groups at equal widths and may ignore the
+    // requested sizes during that structural change. Apply the same layout a
+    // second time after both groups exist so the 20/80 split takes effect.
+    if (!await applyTwoColumnLayout(ratio, this.lastObservedRailWidth)) {
+      return false;
+    }
+
     if (typeof savedRatio !== 'number') {
-      const measuredWidth = await this.waitForRailWidthAfter(measurementRevision);
-      if (typeof measuredWidth === 'number') {
-        const correctedRatio = normalizeRailRatio(ratio * this.preferredWidth() / measuredWidth);
-        if (Math.abs(correctedRatio - ratio) >= 0.005) {
-          ratio = correctedRatio;
-          measurementRevision = this.railWidthRevision;
-          if (!await applyTwoColumnLayout(ratio) || !await this.keepOnlyPanelInLeftGroup()) {
-            return false;
-          }
-          await this.waitForRailWidthAfter(measurementRevision);
-        }
-      }
       await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, ratio);
     }
 
@@ -276,15 +270,6 @@ export class VerticalTabsPanel {
     }
     this.refresh();
     return true;
-  }
-
-  private preferredWidth(): number {
-    const remembered = this.context.globalState.get<number>(WIDTH_STORAGE_KEY);
-    if (typeof remembered === 'number') {
-      return normalizeRailWidth(remembered);
-    }
-    const configured = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidth', 280);
-    return normalizeRailWidth(configured);
   }
 
   private async keepOnlyPanelInLeftGroup(): Promise<boolean> {
@@ -321,19 +306,9 @@ export class VerticalTabsPanel {
     return false;
   }
 
-  private async waitForRailWidthAfter(revision: number): Promise<number | undefined> {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      if (this.railWidthRevision > revision) {
-        return this.lastObservedRailWidth;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-    }
-    return undefined;
-  }
-
   private async saveEditorWidthRatio(): Promise<void> {
     const layout = await getEditorLayout();
-    const ratio = layout?.groups[0]?.size;
+    const ratio = layout ? getLeadingGroupRatio(layout) : undefined;
     if (typeof ratio === 'number') {
       await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, normalizeRailRatio(ratio));
     }
@@ -448,11 +423,9 @@ export class VerticalTabsPanel {
 
     if (message.type === 'railWidth') {
       this.lastObservedRailWidth = message.width;
-      this.railWidthRevision += 1;
       if (this.arrangingRail) {
         return;
       }
-      await this.context.globalState.update(WIDTH_STORAGE_KEY, normalizeRailWidth(message.width));
       await this.saveEditorWidthRatio();
       return;
     }
@@ -655,14 +628,47 @@ async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   }
 }
 
-async function applyTwoColumnLayout(ratio: number): Promise<boolean> {
+async function applyTwoColumnLayout(ratio: number, observedGroupWidth?: number): Promise<boolean> {
+  const layout = await getEditorLayout();
+  const totalWidth = getEditorAreaWidth(layout, observedGroupWidth);
+  const railWidth = Math.max(1, Math.round(totalWidth * normalizeRailRatio(ratio)));
   return applyEditorLayout({
     orientation: 0,
     groups: [
-      { size: normalizeRailRatio(ratio) },
-      { size: 1 - normalizeRailRatio(ratio) },
+      { size: railWidth },
+      { size: totalWidth - railWidth },
     ],
   });
+}
+
+function getEditorAreaWidth(layout: EditorLayout | undefined, observedGroupWidth?: number): number {
+  if (layout) {
+    const rootSizes = layout.groups.map((group) => group.size);
+    if (rootSizes.length > 0 && rootSizes.every((size): size is number => typeof size === 'number' && size > 1)) {
+      if (layout.orientation === 0 || rootSizes.length === 1) {
+        return Math.max(2, Math.round(rootSizes.reduce((sum, size) => sum + size, 0)));
+      }
+    }
+  }
+  if (typeof observedGroupWidth === 'number' && Number.isFinite(observedGroupWidth) && observedGroupWidth > 1) {
+    return Math.max(2, Math.round(observedGroupWidth));
+  }
+  // setEditorLayout accepts relative sizes as well as the pixel sizes returned
+  // by getEditorLayout. Integer weights avoid fractional sizes being clamped by
+  // recent VS Code versions before their ratio is applied.
+  return 1000;
+}
+
+function getLeadingGroupRatio(layout: EditorLayout): number | undefined {
+  if (layout.orientation !== 0 || layout.groups.length < 2) {
+    return undefined;
+  }
+  const sizes = layout.groups.map((group) => group.size);
+  if (!sizes.every((size): size is number => typeof size === 'number' && Number.isFinite(size) && size > 0)) {
+    return undefined;
+  }
+  const total = sizes.reduce((sum, size) => sum + size, 0);
+  return total > 0 ? sizes[0] / total : undefined;
 }
 
 function normalizeRailRatio(value: unknown): number {
@@ -673,7 +679,11 @@ function normalizeRailRatio(value: unknown): number {
 }
 
 function isVerticalTabsPanel(tab: vscode.Tab): boolean {
-  return tab.input instanceof vscode.TabInputWebview && tab.input.viewType === VIEW_TYPE;
+  if (!(tab.input instanceof vscode.TabInputWebview)) {
+    return false;
+  }
+  return tab.input.viewType === VIEW_TYPE
+    || tab.input.viewType === `${MAIN_THREAD_WEBVIEW_PREFIX}${VIEW_TYPE}`;
 }
 
 function inputKind(input: vscode.Tab['input']): TabInputKind {

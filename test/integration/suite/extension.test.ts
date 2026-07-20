@@ -28,19 +28,16 @@ suite('Vertical Tabs extension', () => {
 
     await vscode.commands.executeCommand('verticalTabs.open');
     await vscode.commands.executeCommand('verticalTabs.open');
-    await new Promise<void>((resolve) => setTimeout(resolve, 500));
-    if (verticalTabs().length === 0) {
-      this.skip();
-    }
     await waitFor(() => verticalTabs().length === 1);
+    await waitFor(() => verticalTabs()[0]?.group.tabs.length === 1);
 
     const [{ group }] = verticalTabs();
     assert.equal(vscode.window.tabGroups.all[0], group, 'The vertical-tabs group should be the left-most group.');
     assert.equal(group.tabs.length, 1, 'The vertical-tabs panel should have an exclusive editor group.');
 
     const layout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
-    const railRatio = firstLeaf(layout)?.size;
-    assert.ok(typeof railRatio === 'number' && railRatio >= 0.1 && railRatio <= 0.5, 'The rail width should be represented by a valid editor layout ratio.');
+    const railRatio = leadingGroupRatio(layout);
+    assert.ok(typeof railRatio === 'number' && Math.abs(railRatio - 0.2) < 0.01, `The rail should use 20% of the editor area on first open; received ${railRatio} from ${JSON.stringify(layout)}.`);
 
     await vscode.commands.executeCommand('verticalTabs.focus');
     const document = await vscode.workspace.openTextDocument({ content: 'locked rail verification' });
@@ -65,7 +62,7 @@ suite('Vertical Tabs extension', () => {
     };
     assert.ok(manifest.activationEvents.includes('onStartupFinished'));
     assert.ok(manifest.activationEvents.includes('onWebviewPanel:verticalTabs.editorArea'));
-    assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultRailWidth'].default, 280);
+    assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultRailWidthRatio'].default, 0.2);
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));
   });
 });
@@ -83,7 +80,8 @@ function verticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
   const result: Array<{ tab: vscode.Tab; group: vscode.TabGroup }> = [];
   for (const group of vscode.window.tabGroups.all) {
     for (const tab of group.tabs) {
-      if (tab.input instanceof vscode.TabInputWebview && tab.input.viewType === 'verticalTabs.editorArea') {
+      if (tab.input instanceof vscode.TabInputWebview && (tab.input.viewType === 'verticalTabs.editorArea'
+        || tab.input.viewType === 'mainThreadWebview-verticalTabs.editorArea')) {
         result.push({ tab, group });
       }
     }
@@ -91,12 +89,12 @@ function verticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
   return result;
 }
 
-function firstLeaf(layout: EditorLayout): EditorLayoutGroup | undefined {
-  let group = layout.groups[0];
-  while (group?.groups?.length) {
-    group = group.groups[0];
+function leadingGroupRatio(layout: EditorLayout): number | undefined {
+  const sizes = layout.groups.map((group) => group.size);
+  if (!sizes.every((size): size is number => typeof size === 'number' && size > 0)) {
+    return undefined;
   }
-  return group;
+  return sizes[0] / sizes.reduce((sum, size) => sum + size, 0);
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

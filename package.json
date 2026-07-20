@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -58,12 +58,13 @@
     "configuration": {
       "title": "Vertical Tabs",
       "properties": {
-        "verticalTabs.defaultRailWidth": {
+        "verticalTabs.defaultRailWidthRatio": {
           "type": "number",
-          "default": 280,
-          "minimum": 180,
+          "default": 0.2,
+          "minimum": 0.1,
+          "maximum": 0.5,
           "scope": "window",
-          "markdownDescription": "首次显示垂直标签栏时使用的宽度（像素）。之后优先恢复用户上次拖动后的宽度。"
+          "markdownDescription": "首次显示垂直标签栏时占编辑器区域的宽度比例。之后优先恢复用户上次拖动后的比例。"
         }
       }
     },
