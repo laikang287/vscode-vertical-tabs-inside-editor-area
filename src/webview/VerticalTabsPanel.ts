@@ -858,7 +858,11 @@ export class VerticalTabsPanel {
   }
 
   private async activateTab(tab: vscode.Tab): Promise<void> {
-    logDebug('使用公开 API 打开标签', { label: tab.label, inputKind: inputKind(tab.input), viewColumn: tab.group.viewColumn });
+    logDebug('激活标签', { label: tab.label, inputKind: inputKind(tab.input), viewColumn: tab.group.viewColumn });
+    if (await this.selectExistingTab(tab)) {
+      return;
+    }
+
     const options: vscode.TextDocumentShowOptions = { viewColumn: tab.group.viewColumn, preserveFocus: false };
     if (tab.input instanceof vscode.TabInputText) {
       await vscode.window.showTextDocument(tab.input.uri, options);
@@ -888,6 +892,48 @@ export class VerticalTabsPanel {
       return;
     }
     logWarn('标签类型不支持通过公开 API 激活', { label: tab.label, inputKind: inputKind(tab.input) });
+  }
+
+  private async selectExistingTab(tab: vscode.Tab): Promise<boolean> {
+    const target = findTabPosition(tab);
+    if (!target || target.group.viewColumn === undefined) {
+      logDebug('无法定位已有标签，跳过内置导航兜底', { label: tab.label });
+      return false;
+    }
+
+    await focusEditorGroup(target.group.viewColumn);
+    if (activeTabMatches(target, tab)) {
+      return true;
+    }
+
+    if (target.tabIndex >= 0 && target.tabIndex < 9) {
+      const command = `workbench.action.openEditorAtIndex${target.tabIndex + 1}`;
+      try {
+        await vscode.commands.executeCommand(command);
+        if (activeTabMatches(target, tab)) {
+          logDebug('通过索引命令选择已有标签', { label: tab.label, command });
+          return true;
+        }
+      } catch (error) {
+        logDebug('按索引选择已有标签失败，将尝试组内循环导航', { label: tab.label, command, error });
+      }
+    }
+
+    for (let step = 0; step < target.group.tabs.length; step += 1) {
+      try {
+        await vscode.commands.executeCommand('workbench.action.nextEditorInGroup');
+      } catch (error) {
+        logDebug('组内循环选择已有标签失败', { label: tab.label, step, error });
+        return false;
+      }
+      if (activeTabMatches(target, tab)) {
+        logDebug('通过组内循环命令选择已有标签', { label: tab.label, step });
+        return true;
+      }
+    }
+
+    logDebug('内置导航命令未能选择目标已有标签', { label: tab.label, tabIndex: target.tabIndex, groupIndex: target.groupIndex });
+    return false;
   }
 
   private postMessage(message: ExtensionMessage): void {
@@ -1061,6 +1107,47 @@ function findTextDocumentViewColumn(uri: vscode.Uri): vscode.ViewColumn | undefi
   return undefined;
 }
 
+interface TabPosition {
+  readonly group: vscode.TabGroup;
+  readonly groupIndex: number;
+  readonly tabIndex: number;
+}
+
+function findTabPosition(tab: vscode.Tab): TabPosition | undefined {
+  const exact = findTabPositionBy((candidate) => candidate === tab);
+  if (exact) {
+    return exact;
+  }
+  const identity = targetIdentity(tab);
+  return findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), identity));
+}
+
+function findTabPositionBy(predicate: (tab: vscode.Tab) => boolean): TabPosition | undefined {
+  const groups = vscode.window.tabGroups.all;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const group = groups[groupIndex];
+    if (!group) {
+      continue;
+    }
+    const tabIndex = group.tabs.findIndex((candidate) => !isVerticalTabsPanel(candidate) && predicate(candidate));
+    if (tabIndex >= 0) {
+      return { group, groupIndex, tabIndex };
+    }
+  }
+  return undefined;
+}
+
+function activeTabMatches(target: TabPosition, tab: vscode.Tab): boolean {
+  const group = vscode.window.tabGroups.all[target.groupIndex];
+  if (!group || group.viewColumn !== target.group.viewColumn || !group.isActive) {
+    return false;
+  }
+  const activeTab = group.activeTab;
+  return activeTab !== undefined
+    && group.tabs.indexOf(activeTab) === target.tabIndex
+    && sameIdentity(targetIdentity(activeTab), targetIdentity(tab));
+}
+
 function hasVerticalTabsPanel(): boolean {
   return findVerticalTabsTab() !== undefined;
 }
@@ -1194,7 +1281,7 @@ function isActivatableTab(tab: vscode.Tab): boolean | undefined {
 function isActivatableTabForCommands(tab: vscode.Tab): boolean {
   const kind = inputKind(tab.input);
   return kind === 'text' || kind === 'diff' || kind === 'custom' || kind === 'notebook' || kind === 'notebookDiff'
-    || getActivatableBuiltInWebviewTarget(tab) !== undefined;
+    || kind === 'webview' || kind === 'terminal' || kind === 'unknown';
 }
 
 function getActivatableBuiltInWebviewTarget(tab: vscode.Tab): 'welcome' | 'settings' | undefined {

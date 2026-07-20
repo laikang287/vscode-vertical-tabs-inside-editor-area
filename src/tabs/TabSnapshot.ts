@@ -4,6 +4,7 @@ import type {
   ManualTabGroup,
   SortMode,
   TabTargetIdentity,
+  TabActivationKind,
   VerticalTabDisplayGroup,
   VerticalTabItem,
   VerticalTabsSnapshot,
@@ -64,7 +65,8 @@ export function buildSnapshot(
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,
-      isActivatable: tab.isActivatable ?? isActivatable(tab.inputKind),
+      activationKind: activationKind(tab),
+      isActivatable: activationKind(tab) !== 'unsupported',
       manualGroupId: tab.manualGroupId,
       groupId: tab.manualGroupId,
       isFile: isFileTab(tab),
@@ -250,8 +252,15 @@ function findDisplayBucket(snapshot: VerticalTabsSnapshot, selected: VerticalTab
   return snapshot.displayGroups.find((group) => group.tabs.some((tab) => sameTarget(tab.target, selected.target)))?.tabs;
 }
 
-function isActivatable(inputKind: TabInputKind): boolean {
-  return inputKind === 'text' || inputKind === 'diff' || inputKind === 'custom' || inputKind === 'notebook' || inputKind === 'notebookDiff';
+function activationKind(tab: SnapshotSourceTab): TabActivationKind {
+  if (tab.isActivatable !== undefined) return tab.isActivatable ? 'bestEffort' : 'unsupported';
+  if (tab.inputKind === 'text' || tab.inputKind === 'diff' || tab.inputKind === 'custom' || tab.inputKind === 'notebook' || tab.inputKind === 'notebookDiff') {
+    return 'reliable';
+  }
+  if (tab.inputKind === 'webview' || tab.inputKind === 'terminal' || tab.inputKind === 'unknown') {
+    return 'bestEffort';
+  }
+  return 'unsupported';
 }
 
 function isFileTab(tab: SnapshotSourceTab): boolean {

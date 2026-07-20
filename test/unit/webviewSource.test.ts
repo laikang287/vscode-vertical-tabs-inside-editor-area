@@ -88,3 +88,24 @@ test('extension marks built-in welcome and settings webviews as activatable', ()
   assert.match(source, /viewType\.includes\('settings'\)/);
   assert.match(source, /workbench\.action\.openSettings/);
 });
+
+test('webview enables best-effort activation with a distinct tooltip', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /activate\.disabled = !tab\.isActivatable/);
+  assert.match(source, /function activationTitle\(tab: VerticalTabItem\): string/);
+  assert.match(source, /tab\.activationKind === 'bestEffort'/);
+  assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
+});
+
+test('extension selects existing tabs via bounded workbench navigation commands', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab\): Promise<boolean>/);
+  assert.match(source, /workbench\.action\.openEditorAtIndex\$\{target\.tabIndex \+ 1\}/);
+  assert.match(source, /workbench\.action\.nextEditorInGroup/);
+  assert.match(source, /step < target\.group\.tabs\.length/);
+  assert.match(source, /function activeTabMatches\(target: TabPosition, tab: vscode\.Tab\): boolean/);
+  assert.match(source, /group\.tabs\.indexOf\(activeTab\) === target\.tabIndex/);
+  assert.match(source, /sameIdentity\(targetIdentity\(activeTab\), targetIdentity\(tab\)\)/);
+});

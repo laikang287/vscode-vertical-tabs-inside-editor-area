@@ -6,9 +6,10 @@ export type TabTargetIdentity =
 export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
 export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
 export type SortMode = 'none' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
+export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
 export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean;
-  readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly manualGroupId?: string;
+  readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly activationKind: TabActivationKind; readonly manualGroupId?: string;
   readonly groupId?: string; readonly isFile: boolean; readonly resourcePath?: string; readonly mtime?: number;
 }
 export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }

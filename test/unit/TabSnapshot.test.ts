@@ -19,8 +19,31 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.tabs[0].manualGroupId, 'work');
   assert.equal(snapshot.tabs[0].description, 'src/index.ts');
   assert.equal(snapshot.tabs[1].description, 'test/index.ts');
-  assert.equal(snapshot.tabs[2].isActivatable, false);
+  assert.equal(snapshot.tabs[0].activationKind, 'reliable');
+  assert.equal(snapshot.tabs[2].activationKind, 'bestEffort');
+  assert.equal(snapshot.tabs[2].isActivatable, true);
   assert.equal(snapshot.manualGroups[0].name, '工作');
+});
+
+test('classifies reliable and best-effort activation targets', () => {
+  const snapshot = buildSnapshot([{ tabs: [
+    { label: 'a.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/a.ts' } },
+    { label: 'Settings', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'settings', label: 'Settings' } },
+    { label: 'Terminal', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
+    { label: 'Unknown', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'unknown', targetIdentity: { kind: 'unknown', label: 'Unknown' } },
+  ] }], 14, []);
+
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.activationKind), ['reliable', 'bestEffort', 'bestEffort', 'bestEffort']);
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.isActivatable), [true, true, true, true]);
+});
+
+test('preserves explicit unsupported activation from the host snapshot', () => {
+  const snapshot = buildSnapshot([{ tabs: [
+    { label: 'Blocked', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'unknown', isActivatable: false, targetIdentity: { kind: 'unknown', label: 'Blocked' } },
+  ] }], 15, []);
+
+  assert.equal(snapshot.tabs[0].activationKind, 'unsupported');
+  assert.equal(snapshot.tabs[0].isActivatable, false);
 });
 
 test('keeps user tabs next to an extension panel and omits empty extension-only groups', () => {

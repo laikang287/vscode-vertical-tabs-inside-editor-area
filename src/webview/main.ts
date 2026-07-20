@@ -133,7 +133,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLEl
   activate.className = 'tab-main';
   activate.type = 'button';
   activate.disabled = !tab.isActivatable;
-  activate.title = tab.isActivatable ? tab.label : `${tab.label} 无法由扩展跳转`;
+  activate.title = activationTitle(tab);
   activate.addEventListener('click', () => postTarget('activateTab', tab.target));
   const label = document.createElement('span');
   label.className = 'tab-label';
@@ -151,6 +151,12 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLEl
   actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target));
   row.append(activate, actions);
   return row;
+}
+
+function activationTitle(tab: VerticalTabItem): string {
+  if (tab.activationKind === 'reliable') return tab.label;
+  if (tab.activationKind === 'bestEffort') return `${tab.label}：使用 VS Code 内置导航命令尝试跳转`;
+  return `${tab.label} 无法由扩展跳转`;
 }
 
 function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {

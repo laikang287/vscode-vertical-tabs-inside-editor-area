@@ -81,6 +81,18 @@ suite('Vertical Tabs extension', () => {
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultRailWidthRatio'].default, 0.2);
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));
   });
+
+  test('activates existing built-in webview tabs without duplicating them', async function () {
+    this.timeout(15_000);
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+
+    await verifyBuiltInWebviewNavigation('settings');
+    await verifyBuiltInWebviewNavigation('welcome');
+
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+  });
 });
 
 interface EditorLayoutGroup {
@@ -134,4 +146,84 @@ async function waitForEditorLayout(predicate: (layout: EditorLayout) => boolean)
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
   }
   assert.fail(`Timed out waiting for the editor layout to settle. Latest layout: ${JSON.stringify(latest)}.`);
+}
+
+async function verifyBuiltInWebviewNavigation(kind: 'settings' | 'welcome'): Promise<void> {
+  await closeNonVerticalTabs();
+  await waitFor(() => vscode.window.tabGroups.all.every((group) => group.tabs.every((tab) => isVerticalTabsTab(tab))));
+  const document = await vscode.workspace.openTextDocument({ content: `navigation before ${kind}` });
+  await vscode.window.showTextDocument(document, { preserveFocus: false });
+  if (kind === 'settings') {
+    await vscode.commands.executeCommand('workbench.action.openSettings');
+  } else {
+    await openWelcomeForTest();
+  }
+  await waitFor(() => matchingBuiltInWebviewTabs(kind).length > 0);
+  const before = matchingBuiltInWebviewTabs(kind).length;
+
+  await vscode.window.showTextDocument(document, { preserveFocus: false });
+  await waitFor(() => activeTextDocumentUri() === document.uri.toString());
+  await vscode.commands.executeCommand('verticalTabs.open');
+  await waitFor(() => verticalTabs().length === 1);
+
+  await vscode.commands.executeCommand('verticalTabs.next');
+  await waitFor(() => matchingBuiltInWebviewTabs(kind).some(({ tab, group }) => group.isActive && group.activeTab === tab));
+  assert.equal(matchingBuiltInWebviewTabs(kind).length, before, `${kind} navigation should not create a duplicate tab.`);
+  await closeNonVerticalTabs();
+}
+
+function matchingBuiltInWebviewTabs(kind: 'settings' | 'welcome'): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
+  const result: Array<{ tab: vscode.Tab; group: vscode.TabGroup }> = [];
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (isBuiltInEditorTab(tab, kind)) {
+        result.push({ tab, group });
+      }
+    }
+  }
+  return result;
+}
+
+function isBuiltInEditorTab(tab: vscode.Tab, kind: 'settings' | 'welcome'): boolean {
+  const viewType = tab.input instanceof vscode.TabInputWebview ? tab.input.viewType.toLowerCase() : '';
+  const label = tab.label.toLowerCase();
+  if (kind === 'settings') {
+    return viewType.includes('settings') || viewType.includes('preferences') || label.includes('settings') || label === '设置';
+  }
+  return viewType.includes('welcome') || viewType.includes('gettingstarted') || label.includes('welcome') || label.includes('getting started') || label === '欢迎';
+}
+
+function activeTextDocumentUri(): string | undefined {
+  const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+  return active?.input instanceof vscode.TabInputText ? active.input.uri.toString() : undefined;
+}
+
+async function closeNonVerticalTabs(): Promise<void> {
+  const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => !isVerticalTabsTab(tab));
+  if (tabs.length > 0) {
+    await vscode.window.tabGroups.close(tabs, true);
+  }
+}
+
+function isVerticalTabsTab(tab: vscode.Tab): boolean {
+  return tab.input instanceof vscode.TabInputWebview && (tab.input.viewType === 'verticalTabs.editorArea'
+    || tab.input.viewType === 'mainThreadWebview-verticalTabs.editorArea');
+}
+
+async function openWelcomeForTest(): Promise<void> {
+  const attempts: Array<readonly [string, ...unknown[]]> = [
+    ['workbench.action.openWelcome'],
+    ['workbench.action.openWalkthrough', 'gettingStarted', false],
+    ['workbench.action.openWalkthrough', { category: 'gettingStarted' }, false],
+  ];
+  let latestError: unknown;
+  for (const [command, ...args] of attempts) {
+    try {
+      await vscode.commands.executeCommand(command, ...args);
+      return;
+    } catch (error) {
+      latestError = error;
+    }
+  }
+  throw latestError;
 }
