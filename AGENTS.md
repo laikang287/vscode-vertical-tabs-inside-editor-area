@@ -62,6 +62,7 @@
 - 单元测试：`npm run test:unit`
 - Extension Host 集成测试：`npm run test:integration`
 - 全部测试：`npm test`
+- 递增版本号：每次构建 VSIX 前必须先更新 `package.json` 的 `version`，不得重复产出同一版本号的安装包。
 - 构建 VSIX：`npm run package`
 - 完整验收：`npm run verify`
 
@@ -71,11 +72,12 @@
 
 每项独立功能完成后，必须依序执行：
 
-1. `npm run verify`；任何失败都必须先修复，不能提交。
-2. 确认 `dist/vertical-tabs-in-editor-area-<version>.vsix` 已生成且 VSIX 内容校验通过。
-3. 执行 `git status` 与 `git diff --check`，只暂存该功能相关文件；不得提交 `node_modules/`、`out/` 或 `dist/*.vsix`。
-4. 使用 Conventional Commit 自动创建 Git 提交。初版工程固定使用 `chore: scaffold VS Code extension`；后续用户可见功能使用 `feat:`，修复使用 `fix:`。Git 提交说明使用中文
-5. 在交付说明中写明执行过的测试和生成的 VSIX 绝对路径。
+1. 递增 `package.json` 的 `version`；每次构建都必须使用新版本号，VSIX 文件名必须与该版本号一致。
+2. `npm run verify`；任何失败都必须先修复，不能提交。
+3. 确认 `dist/vertical-tabs-in-editor-area-<version>.vsix` 已生成且 VSIX 内容校验通过。
+4. 执行 `git status` 与 `git diff --check`，只暂存该功能相关文件；不得提交 `node_modules/`、`out/` 或 `dist/*.vsix`。
+5. 使用 Conventional Commit 自动创建 Git 提交。初版工程固定使用 `chore: scaffold VS Code extension`；后续用户可见功能使用 `feat:`，修复使用 `fix:`。Git 提交说明使用中文
+6. 在交付说明中写明执行过的测试和生成的 VSIX 绝对路径。
 
 ## VS Code 与 Webview 边界
 
