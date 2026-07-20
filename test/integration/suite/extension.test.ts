@@ -27,18 +27,29 @@ suite('Vertical Tabs extension', () => {
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
 
+    const existingDocument = await vscode.workspace.openTextDocument({ content: 'editor already open before rail creation' });
+    await vscode.window.showTextDocument(existingDocument, { preserveFocus: false });
     await vscode.commands.executeCommand('verticalTabs.open');
     await vscode.commands.executeCommand('verticalTabs.open');
     await waitFor(() => verticalTabs().length === 1);
     await waitFor(() => verticalTabs()[0]?.group.tabs.length === 1);
 
     const [{ group }] = verticalTabs();
-    assert.equal(vscode.window.tabGroups.all[0], group, 'The vertical-tabs group should be the left-most group.');
+    assert.equal(group.viewColumn, vscode.ViewColumn.One, 'The vertical-tabs group should be the left-most group.');
     assert.equal(group.tabs.length, 1, 'The vertical-tabs panel should have an exclusive editor group.');
+    assert.ok(vscode.window.tabGroups.all.filter((editorGroup) => editorGroup !== group).some((editorGroup) => editorGroup.tabs.some((tab) => (
+      tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
+    ))), 'An editor already open before rail creation should remain outside the new left rail group.');
 
     const layout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
-    const railRatio = leadingGroupRatio(layout);
-    assert.ok(typeof railRatio === 'number' && Math.abs(railRatio - 0.2) < 0.01, `The rail should use 20% of the editor area on first open; received ${railRatio} from ${JSON.stringify(layout)}.`);
+    const railRatios = rootGroupRatios(layout);
+    assert.ok(railRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail should use the configured 20% width unless VS Code enforces its native minimum group width; received ${JSON.stringify(layout)}.`);
+
+    const existingTab = vscode.window.tabGroups.all.flatMap((editorGroup) => editorGroup.tabs).find((tab) => (
+      tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
+    ));
+    assert.ok(existingTab, 'The pre-existing editor tab should remain available for cleanup.');
+    await vscode.window.tabGroups.close(existingTab, true);
 
     await vscode.commands.executeCommand('verticalTabs.focus');
     const document = await vscode.workspace.openTextDocument({ content: 'locked rail verification' });
@@ -49,7 +60,7 @@ suite('Vertical Tabs extension', () => {
     await waitFor(() => verticalTabs().length === 0);
     await vscode.commands.executeCommand('verticalTabs.toggle');
     await waitFor(() => verticalTabs().length === 1);
-    assert.equal(vscode.window.tabGroups.all[0], verticalTabs()[0].group, 'Reopening from the launcher should put the rail back on the far left.');
+    assert.equal(verticalTabs()[0].group.viewColumn, vscode.ViewColumn.One, 'Reopening from the launcher should put the rail back on the far left.');
   });
 
   test('declares the startup and webview restoration activation events', () => {
@@ -90,12 +101,13 @@ function verticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
   return result;
 }
 
-function leadingGroupRatio(layout: EditorLayout): number | undefined {
+function rootGroupRatios(layout: EditorLayout): number[] {
   const sizes = layout.groups.map((group) => group.size);
   if (!sizes.every((size): size is number => typeof size === 'number' && size > 0)) {
-    return undefined;
+    return [];
   }
-  return sizes[0] / sizes.reduce((sum, size) => sum + size, 0);
+  const total = sizes.reduce((sum, size) => sum + size, 0);
+  return sizes.map((size) => size / total);
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

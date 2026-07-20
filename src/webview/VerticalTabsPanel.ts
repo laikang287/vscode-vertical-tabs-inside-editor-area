@@ -11,10 +11,7 @@ const TITLE = 'Vertical Tabs';
 const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
 const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const RAIL_SETTLE_DELAY_MS = 400;
-const RAIL_RETRY_DELAY_MS = 100;
-const RAIL_ARRANGE_ATTEMPTS = 3;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
-const GROUP_ACTIVATE_WAIT_ATTEMPTS = 30;
 const GROUP_WAIT_INTERVAL_MS = 10;
 const DEFAULT_RAIL_RATIO = 0.2;
 const MIN_RAIL_RATIO = 0.1;
@@ -33,7 +30,7 @@ export class VerticalTabsPanel {
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   // Ignore the Webview's initial ResizeObserver report until VS Code has
-  // finished creating, moving and sizing the dedicated editor group.
+  // finished creating and sizing the dedicated editor group.
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, tabs: [], manualGroups: [] };
@@ -166,15 +163,9 @@ export class VerticalTabsPanel {
   }
 
   private static async create(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
-    logInfo('开始创建新的垂直标签面板', {
-      userTabsPresent: hasUserTabs(),
-      editorGroups: vscode.window.tabGroups.all.length,
-    });
-    if (!hasUserTabs()) {
-      logDebug('没有用户标签，先打开欢迎页');
-      await openWelcomePage();
-    }
+    logInfo('开始创建新的垂直标签面板', { editorGroups: vscode.window.tabGroups.all.length });
     const previouslyActiveEditor = vscode.window.activeTextEditor;
+    const ratio = await prepareLeftRailGroup(context);
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
       TITLE,
@@ -191,7 +182,7 @@ export class VerticalTabsPanel {
       (existing) => existing.reveal(false),
     );
     await VerticalTabsPanel.setVisibilityContext(true);
-    await instance.settleAndEnsureRail(previouslyActiveEditor);
+    await instance.settleAndEnsureRail(previouslyActiveEditor, ratio);
     logInfo('新的垂直标签面板创建流程完成', { settled: instance.hasSettledRail() });
     return instance;
   }
@@ -241,7 +232,7 @@ export class VerticalTabsPanel {
     return update;
   }
 
-  private async settleAndEnsureRail(previousEditor?: vscode.TextEditor): Promise<void> {
+  private async settleAndEnsureRail(previousEditor?: vscode.TextEditor, preparedRatio?: number): Promise<void> {
     this.arrangingRail = true;
     logDebug('等待编辑器状态稳定后安排左侧标签栏', {
       delayMs: RAIL_SETTLE_DELAY_MS,
@@ -253,24 +244,19 @@ export class VerticalTabsPanel {
       return;
     }
 
-    for (let attempt = 0; attempt < RAIL_ARRANGE_ATTEMPTS; attempt += 1) {
-      logDebug('开始安排左侧标签栏', { attempt: attempt + 1, maxAttempts: RAIL_ARRANGE_ATTEMPTS });
-      try {
-        if (await this.ensureRail(previousEditor)) {
-          this.arrangingRail = false;
-          logInfo('左侧标签栏安排完成', { attempt: attempt + 1 });
-          return;
-        }
-      } catch (error) {
-        logError('安排左侧标签栏时发生异常', { attempt: attempt + 1, error });
+    try {
+      if (await this.ensureRail(previousEditor, preparedRatio)) {
+        this.arrangingRail = false;
+        logInfo('左侧标签栏安排完成');
+        return;
       }
-      logWarn('左侧标签栏安排未完成，准备重试', { attempt: attempt + 1 });
-      await new Promise<void>((resolve) => setTimeout(resolve, RAIL_RETRY_DELAY_MS));
+    } catch (error) {
+      logError('安排左侧标签栏时发生异常', error);
     }
-    logError('左侧标签栏安排失败，重试次数已耗尽', { attempts: RAIL_ARRANGE_ATTEMPTS });
+    logError('左侧标签栏安排失败');
   }
 
-  private async ensureRail(previousEditor?: vscode.TextEditor): Promise<boolean> {
+  private async ensureRail(previousEditor?: vscode.TextEditor, preparedRatio?: number): Promise<boolean> {
     const initialGroupIndex = await this.waitForOwnGroup();
     if (initialGroupIndex < 0) {
       logWarn('未能在编辑器标签中找到垂直标签 Webview');
@@ -282,48 +268,15 @@ export class VerticalTabsPanel {
       tabCount: vscode.window.tabGroups.all[initialGroupIndex]?.tabs.length,
     });
 
-    if (!await this.revealInFirstGroup()) {
-      logWarn('无法将垂直标签 Webview 激活到第一个编辑器分组');
+    const finalGroup = vscode.window.tabGroups.all[initialGroupIndex];
+    if (finalGroup?.viewColumn !== vscode.ViewColumn.One) {
+      logWarn('垂直标签 Webview 未直接创建在第一个编辑器分组', {
+        groupIndex: initialGroupIndex,
+        viewColumn: finalGroup?.viewColumn,
+      });
       return false;
     }
 
-    const savedRatio = this.context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
-    const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
-    const ratio = normalizeRailRatio(typeof savedRatio === 'number' ? savedRatio : configuredRatio);
-    logDebug('确定垂直标签栏宽度比例', {
-      savedRatio,
-      configuredRatio,
-      appliedRatio: ratio,
-      observedWidth: this.lastObservedRailWidth,
-    });
-    if (!await applyTwoColumnLayout(ratio, this.lastObservedRailWidth)) {
-      logWarn('首次应用双列编辑器布局失败');
-      return false;
-    }
-
-    if (!await this.keepOnlyPanelInLeftGroup()) {
-      logWarn('未能将左侧分组中的其他标签全部迁移到右侧');
-      return false;
-    }
-
-    // VS Code creates new editor groups at equal widths and may ignore the
-    // requested sizes during that structural change. Apply the same layout a
-    // second time after both groups exist so the 20/80 split takes effect.
-    if (!await applyTwoColumnLayout(ratio, this.lastObservedRailWidth)) {
-      logWarn('在编辑器分组创建后再次应用双列布局失败');
-      return false;
-    }
-
-    if (typeof savedRatio !== 'number') {
-      await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, ratio);
-      logDebug('保存首次使用的垂直标签栏宽度比例', { ratio });
-    }
-
-    if (!await this.revealInFirstGroup()) {
-      logWarn('锁定前无法重新激活左侧垂直标签分组');
-      return false;
-    }
-    const finalGroup = vscode.window.tabGroups.all[0];
     if (finalGroup.tabs.length !== 1 || !isVerticalTabsPanel(finalGroup.tabs[0])) {
       logWarn('锁定前左侧分组状态不符合预期', {
         tabCount: finalGroup.tabs.length,
@@ -331,6 +284,18 @@ export class VerticalTabsPanel {
       });
       return false;
     }
+    if (preparedRatio !== undefined) {
+      // VS Code publishes the new group before its native split layout has
+      // committed. Wait one event-loop turn, then write the width once.
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+      if (!await applyLeadingRailRatio(preparedRatio)) {
+        logWarn('无法在创建垂直标签 Webview 后应用宽度比例');
+        return false;
+      }
+      await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, preparedRatio);
+      logDebug('保存首次使用的垂直标签栏宽度比例', { ratio: preparedRatio });
+    }
+    this.panel.reveal(vscode.ViewColumn.One, false);
     await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
     logInfo('左侧垂直标签分组已锁定');
     if (previousEditor) {
@@ -345,55 +310,9 @@ export class VerticalTabsPanel {
     return true;
   }
 
-  private async keepOnlyPanelInLeftGroup(): Promise<boolean> {
-    for (let moves = 0; moves < 100; moves += 1) {
-      const group = vscode.window.tabGroups.all[0];
-      const tab = group?.tabs.find((candidate) => !isVerticalTabsPanel(candidate));
-      if (!tab) {
-        const isolated = group?.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0]);
-        logDebug('左侧分组标签迁移结束', { movedTabs: moves, isolated });
-        return isolated;
-      }
-      logDebug('准备将混入左侧分组的标签移至右侧', {
-        moveNumber: moves + 1,
-        label: tab.label,
-        inputKind: inputKind(tab.input),
-      });
-      if (!await this.activateTabInLeftGroup(tab)) {
-        logWarn('无法激活待迁移的左侧标签', { label: tab.label, inputKind: inputKind(tab.input) });
-        return false;
-      }
-      await vscode.commands.executeCommand('workbench.action.moveEditorToRightGroup');
-      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-    }
-    logError('左侧分组迁移标签达到安全上限', { maxMoves: 100 });
-    return false;
-  }
-
-  private async activateTabInLeftGroup(tab: vscode.Tab): Promise<boolean> {
-    if (!await this.revealInFirstGroup()) {
-      return false;
-    }
-    const index = vscode.window.tabGroups.all[0]?.tabs.indexOf(tab) ?? -1;
-    if (index < 0 || index >= 9) {
-      logWarn('待迁移标签索引超出可用编辑器命令范围', { index, label: tab.label });
-      return false;
-    }
-    await vscode.commands.executeCommand(`workbench.action.openEditorAtIndex${index + 1}`);
-    for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
-      if (tab.isActive) {
-        logTrace('待迁移标签已激活', { index, attempts: attempt + 1 });
-        return true;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-    }
-    logWarn('等待待迁移标签激活超时', { index, label: tab.label });
-    return false;
-  }
-
   private async saveEditorWidthRatio(): Promise<void> {
     const layout = await getEditorLayout();
-    const ratio = layout ? getLeadingGroupRatio(layout) : undefined;
+    const ratio = getObservedRailRatio(layout, this.lastObservedRailWidth) ?? (layout ? getRailGroupRatio(layout) : undefined);
     if (typeof ratio === 'number') {
       const normalizedRatio = normalizeRailRatio(ratio);
       await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, normalizedRatio);
@@ -407,7 +326,7 @@ export class VerticalTabsPanel {
     const ownGroupIndex = this.findOwnGroupIndex();
     const ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
     return !this.arrangingRail
-      && ownGroupIndex === 0
+      && ownGroup?.viewColumn === vscode.ViewColumn.One
       && ownGroup?.tabs.length === 1
       && isVerticalTabsPanel(ownGroup.tabs[0]);
   }
@@ -427,21 +346,6 @@ export class VerticalTabsPanel {
     }
     logWarn('等待垂直标签 Webview 发布超时', { attempts: GROUP_PUBLISH_WAIT_ATTEMPTS });
     return -1;
-  }
-
-  private async revealInFirstGroup(): Promise<boolean> {
-    logTrace('请求在第一个编辑器分组显示垂直标签 Webview');
-    this.panel.reveal(vscode.ViewColumn.One, false);
-    for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
-      if (this.findOwnGroupIndex() === 0
-        && vscode.window.tabGroups.activeTabGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
-        logTrace('垂直标签 Webview 已在第一个分组激活', { attempts: attempt + 1 });
-        return true;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-    }
-    logWarn('等待垂直标签 Webview 在第一个分组激活超时', { attempts: GROUP_ACTIVATE_WAIT_ATTEMPTS });
-    return false;
   }
 
   private dispose(): void {
@@ -718,10 +622,6 @@ export class VerticalTabsPanel {
   }
 }
 
-function hasUserTabs(): boolean {
-  return vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => !isVerticalTabsPanel(tab)));
-}
-
 function findVerticalTabsTab(): vscode.Tab | undefined {
   for (const group of vscode.window.tabGroups.all) {
     const tab = group.tabs.find((candidate) => isVerticalTabsPanel(candidate));
@@ -734,23 +634,6 @@ function findVerticalTabsTab(): vscode.Tab | undefined {
 
 function hasVerticalTabsPanel(): boolean {
   return findVerticalTabsTab() !== undefined;
-}
-
-async function openWelcomePage(): Promise<void> {
-  const commands = await vscode.commands.getCommands(true);
-  if (commands.includes('workbench.action.openWelcomePage')) {
-    logDebug('通过 openWelcomePage 命令打开欢迎页');
-    await vscode.commands.executeCommand('workbench.action.openWelcomePage');
-  } else if (commands.includes('workbench.action.openWalkthrough')) {
-    logDebug('通过 openWalkthrough 命令打开欢迎页');
-    await vscode.commands.executeCommand('workbench.action.openWalkthrough', 'vscode.gettingStarted');
-  } else if (commands.includes('workbench.action.openAgentSessionsWelcome')) {
-    logDebug('通过 openAgentSessionsWelcome 命令打开欢迎页');
-    await vscode.commands.executeCommand('workbench.action.openAgentSessionsWelcome');
-  } else {
-    logWarn('没有找到可用的 VS Code 欢迎页命令');
-  }
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 async function getEditorLayout(): Promise<EditorLayout | undefined> {
@@ -781,27 +664,27 @@ async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   }
 }
 
-async function applyTwoColumnLayout(ratio: number, observedGroupWidth?: number): Promise<boolean> {
-  const layout = await getEditorLayout();
-  const totalWidth = getEditorAreaWidth(layout, observedGroupWidth);
-  const railWidth = Math.max(1, Math.round(totalWidth * normalizeRailRatio(ratio)));
-  logDebug('计算双列编辑器布局尺寸', {
-    requestedRatio: ratio,
-    observedGroupWidth,
-    totalWidth,
-    railWidth,
-    editorWidth: totalWidth - railWidth,
-  });
-  return applyEditorLayout({
-    orientation: 0,
-    groups: [
-      { size: railWidth },
-      { size: totalWidth - railWidth },
-    ],
-  });
+async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<number | undefined> {
+  const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
+  const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
+  const ratio = normalizeRailRatio(typeof savedRatio === 'number' ? savedRatio : configuredRatio);
+  try {
+    await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+    await vscode.commands.executeCommand('workbench.action.newGroupLeft');
+    logDebug('在创建 Webview 前通过原生命令新建左侧空编辑器分组', {
+      editorGroups: vscode.window.tabGroups.all.length,
+      savedRatio,
+      configuredRatio,
+      ratio,
+    });
+    return ratio;
+  } catch (error) {
+    logError('创建左侧空编辑器分组失败', { savedRatio, configuredRatio, ratio, error });
+    return undefined;
+  }
 }
 
-function getEditorAreaWidth(layout: EditorLayout | undefined, observedGroupWidth?: number): number {
+function getEditorAreaWidth(layout: EditorLayout | undefined): number {
   if (layout) {
     const rootSizes = layout.groups.map((group) => group.size);
     if (rootSizes.length > 0 && rootSizes.every((size): size is number => typeof size === 'number' && size > 1)) {
@@ -810,16 +693,45 @@ function getEditorAreaWidth(layout: EditorLayout | undefined, observedGroupWidth
       }
     }
   }
-  if (typeof observedGroupWidth === 'number' && Number.isFinite(observedGroupWidth) && observedGroupWidth > 1) {
-    return Math.max(2, Math.round(observedGroupWidth));
-  }
   // setEditorLayout accepts relative sizes as well as the pixel sizes returned
   // by getEditorLayout. Integer weights avoid fractional sizes being clamped by
   // recent VS Code versions before their ratio is applied.
   return 1000;
 }
 
-function getLeadingGroupRatio(layout: EditorLayout): number | undefined {
+async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
+  const layout = await getEditorLayout();
+  if (!layout || layout.orientation !== 0 || layout.groups.length !== 2) {
+    logWarn('无法在当前布局中调整左侧标签栏宽度', { layout });
+    return false;
+  }
+  const totalWidth = getEditorAreaWidth(layout);
+  const railWidth = Math.max(1, Math.round(totalWidth * normalizeRailRatio(ratio)));
+  logDebug('创建 Webview 后调整左侧标签栏宽度', { ratio, totalWidth, railWidth });
+  if (!layout.groups[0].groups && !layout.groups[1].groups) {
+    return applyEditorLayout({
+      orientation: 0,
+      groups: [{ size: railWidth }, { size: totalWidth - railWidth }],
+    });
+  }
+  return applyEditorLayout({
+    ...layout,
+    groups: [
+      { ...layout.groups[0], size: railWidth },
+      { ...layout.groups[1], size: totalWidth - railWidth },
+    ],
+  });
+}
+
+function getObservedRailRatio(layout: EditorLayout | undefined, railWidth: number | undefined): number | undefined {
+  if (typeof railWidth !== 'number' || !Number.isFinite(railWidth) || railWidth <= 0) {
+    return undefined;
+  }
+  const totalWidth = getEditorAreaWidth(layout);
+  return totalWidth > 0 ? railWidth / totalWidth : undefined;
+}
+
+function getRailGroupRatio(layout: EditorLayout): number | undefined {
   if (layout.orientation !== 0 || layout.groups.length < 2) {
     return undefined;
   }
@@ -828,7 +740,9 @@ function getLeadingGroupRatio(layout: EditorLayout): number | undefined {
     return undefined;
   }
   const total = sizes.reduce((sum, size) => sum + size, 0);
-  return total > 0 ? sizes[0] / total : undefined;
+  // `newGroupLeft` puts the newly-created visual left group at the end of the
+  // command layout array, even though its view column is one.
+  return total > 0 ? sizes[sizes.length - 1] / total : undefined;
 }
 
 function normalizeRailRatio(value: unknown): number {
