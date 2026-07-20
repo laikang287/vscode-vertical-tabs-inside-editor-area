@@ -1,4 +1,9 @@
-export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; }
+export type TabTargetIdentity =
+  | { readonly kind: 'text' | 'custom' | 'notebook'; readonly uri: string }
+  | { readonly kind: 'diff' | 'notebookDiff'; readonly originalUri: string; readonly modifiedUri: string }
+  | { readonly kind: 'webview'; readonly viewType: string; readonly label: string }
+  | { readonly kind: 'terminal' | 'unknown'; readonly label: string };
+export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
 export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean;
   readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly manualGroupId?: string;
@@ -28,5 +33,21 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }
-function isTabTarget(value: unknown): value is TabTarget { return isRecord(value) && isNonNegativeInteger(value.revision) && isNonNegativeInteger(value.groupIndex) && isNonNegativeInteger(value.tabIndex); }
+function isTabTarget(value: unknown): value is TabTarget {
+  return isRecord(value)
+    && isNonNegativeInteger(value.revision)
+    && isNonNegativeInteger(value.groupIndex)
+    && isNonNegativeInteger(value.tabIndex)
+    && isTabTargetIdentity(value.identity);
+}
+function isTabTargetIdentity(value: unknown): value is TabTargetIdentity {
+  if (!isRecord(value) || typeof value.kind !== 'string') return false;
+  if ((value.kind === 'text' || value.kind === 'custom' || value.kind === 'notebook') && isUri(value.uri)) return true;
+  if ((value.kind === 'diff' || value.kind === 'notebookDiff') && isUri(value.originalUri) && isUri(value.modifiedUri)) return true;
+  if (value.kind === 'webview' && isViewType(value.viewType) && isLabel(value.label)) return true;
+  return (value.kind === 'terminal' || value.kind === 'unknown') && isLabel(value.label);
+}
 function isNonNegativeInteger(value: unknown): value is number { return typeof value === 'number' && Number.isInteger(value) && value >= 0; }
+function isUri(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 4096; }
+function isViewType(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
+function isLabel(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 500; }

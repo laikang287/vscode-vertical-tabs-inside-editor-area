@@ -1,4 +1,4 @@
-import type { ManualTabGroup, VerticalTabItem, VerticalTabsSnapshot } from '../webview/messages';
+import type { ManualTabGroup, TabTargetIdentity, VerticalTabItem, VerticalTabsSnapshot } from '../webview/messages';
 
 export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
 
@@ -10,6 +10,8 @@ export interface SnapshotSourceTab {
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
   readonly path?: string;
+  readonly targetIdentity: TabTargetIdentity;
+  readonly isActivatable?: boolean;
   readonly isVerticalTabsPanel?: boolean;
   readonly manualGroupId?: string;
 }
@@ -33,14 +35,14 @@ export function buildSnapshot(
   const tabs: VerticalTabItem[] = groups.flatMap((group, groupIndex) => group.tabs.flatMap((tab, tabIndex) => {
     if (tab.isVerticalTabsPanel) return [];
     return [{
-      target: { revision, groupIndex, tabIndex },
+      target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
       description: labelCounts.get(tab.label) !== 1 ? tab.path : undefined,
       isActive: tab.isActive,
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,
-      isActivatable: isActivatable(tab.inputKind),
+      isActivatable: tab.isActivatable ?? isActivatable(tab.inputKind),
       manualGroupId: tab.manualGroupId,
     }];
   }));
@@ -60,7 +62,26 @@ export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: Close
 }
 
 export function sameTarget(left: VerticalTabItem['target'], right: VerticalTabItem['target']): boolean {
+  if (sameIdentity(left.identity, right.identity)) return true;
   return left.revision === right.revision && left.groupIndex === right.groupIndex && left.tabIndex === right.tabIndex;
+}
+
+export function sameIdentity(left: TabTargetIdentity, right: TabTargetIdentity): boolean {
+  if (left.kind !== right.kind) return false;
+  if ((left.kind === 'text' || left.kind === 'custom' || left.kind === 'notebook')
+    && (right.kind === 'text' || right.kind === 'custom' || right.kind === 'notebook')) {
+    return left.uri === right.uri;
+  }
+  if ((left.kind === 'diff' || left.kind === 'notebookDiff')
+    && (right.kind === 'diff' || right.kind === 'notebookDiff')) {
+    return left.originalUri === right.originalUri && left.modifiedUri === right.modifiedUri;
+  }
+  if (left.kind === 'webview' && right.kind === 'webview') {
+    return left.viewType === right.viewType && left.label === right.label;
+  }
+  return (left.kind === 'terminal' || left.kind === 'unknown')
+    && (right.kind === 'terminal' || right.kind === 'unknown')
+    && left.label === right.label;
 }
 
 function isActivatable(inputKind: TabInputKind): boolean {

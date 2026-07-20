@@ -12,7 +12,7 @@ test('accepts refresh requests', () => {
 });
 
 test('accepts tab actions with a valid snapshot target', () => {
-  const target = { revision: 4, groupIndex: 1, tabIndex: 2 };
+  const target = { revision: 4, groupIndex: 1, tabIndex: 2, identity: { kind: 'text', uri: 'file:///workspace/index.ts' } };
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeSaved' }), { type: 'closeSaved' });
@@ -35,6 +35,8 @@ test('rejects malformed and unknown messages', () => {
     { type: 'activateTab' },
     { type: 'activateTab', target: { revision: -1, groupIndex: 0, tabIndex: 0 } },
     { type: 'activateTab', target: { revision: 1.5, groupIndex: 0, tabIndex: 0 } },
+    { type: 'activateTab', target: { revision: 1, groupIndex: 0, tabIndex: 0 } },
+    { type: 'activateTab', target: { revision: 1, groupIndex: 0, tabIndex: 0, identity: { kind: 'text', uri: '' } } },
     { type: 'railWidth', width: 179 },
     { type: 'railWidth', width: 280.5 },
     { type: 'railWidth', width: '280' },

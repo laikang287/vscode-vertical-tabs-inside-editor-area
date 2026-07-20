@@ -13,9 +13,9 @@ import {
   type EditorLayout,
 } from '../layout/RailLayout';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
-import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
+import { buildSnapshot, sameIdentity, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
@@ -303,8 +303,9 @@ export class VerticalTabsPanel {
       await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, preparedRatio);
       logDebug('保存首次使用的垂直标签栏宽度比例', { ratio: preparedRatio });
     }
-    this.panel.reveal(vscode.ViewColumn.One, false);
-    await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+    if (!await this.focusAndLockOwnGroup()) {
+      return false;
+    }
     logInfo('左侧垂直标签分组已锁定');
     if (previousEditor) {
       const restoredViewColumn = findTextDocumentViewColumn(previousEditor.document.uri) ?? previousEditor.viewColumn;
@@ -400,6 +401,19 @@ export class VerticalTabsPanel {
     this.panel.dispose();
   }
 
+  private async focusAndLockOwnGroup(): Promise<boolean> {
+    const ownGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+    if (!ownGroup || !ownGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+      logWarn('锁定垂直标签分组失败：找不到面板所在分组');
+      return false;
+    }
+    await focusEditorGroup(ownGroup.viewColumn);
+    this.panel.reveal(ownGroup.viewColumn ?? vscode.ViewColumn.One, false);
+    await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+    return true;
+  }
+
   private scheduleRefresh(): void {
     if (this.refreshTimer) {
       return;
@@ -438,6 +452,8 @@ export class VerticalTabsPanel {
       isPreview: tab.isPreview,
       inputKind: inputKind(tab.input),
       path: inputPath(tab.input),
+      targetIdentity: targetIdentity(tab),
+      isActivatable: isActivatableTab(tab),
       isVerticalTabsPanel: isVerticalTabsPanel(tab),
       manualGroupId: this.manualGroupByTab.get(tab),
     };
@@ -559,12 +575,33 @@ export class VerticalTabsPanel {
   }
 
   private resolveTab(target: TabTarget): vscode.Tab | undefined {
-    if (target.revision !== this.currentSnapshot.revision) {
-      logWarn('标签目标快照版本已失效', { targetRevision: target.revision, currentRevision: this.currentSnapshot.revision });
-      return undefined;
+    const indexedTab = vscode.window.tabGroups.all[target.groupIndex]?.tabs[target.tabIndex];
+    if (indexedTab && !isVerticalTabsPanel(indexedTab) && sameIdentity(targetIdentity(indexedTab), target.identity)) {
+      if (target.revision !== this.currentSnapshot.revision) {
+        logDebug('通过稳定标识接受过期快照中的索引标签目标', {
+          targetRevision: target.revision,
+          currentRevision: this.currentSnapshot.revision,
+          label: indexedTab.label,
+        });
+      }
+      return indexedTab;
     }
-    const tab = vscode.window.tabGroups.all[target.groupIndex]?.tabs[target.tabIndex];
-    return tab && !isVerticalTabsPanel(tab) ? tab : undefined;
+    if (indexedTab && !isVerticalTabsPanel(indexedTab) && target.revision === this.currentSnapshot.revision) {
+      logDebug('同一快照版本内按索引解析标签目标', { label: indexedTab.label });
+      return indexedTab;
+    }
+    if (target.revision !== this.currentSnapshot.revision) {
+      logDebug('标签目标快照版本已变化，按稳定标识重新查找', { targetRevision: target.revision, currentRevision: this.currentSnapshot.revision });
+    }
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (!isVerticalTabsPanel(tab) && sameIdentity(targetIdentity(tab), target.identity)) {
+          return tab;
+        }
+      }
+    }
+    logWarn('无法按稳定标识解析标签目标', { target });
+    return undefined;
   }
 
   private async navigate(direction: 1 | -1): Promise<void> {
@@ -600,6 +637,11 @@ export class VerticalTabsPanel {
     }
     if (tab.input instanceof vscode.TabInputNotebook) {
       await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
+      return;
+    }
+    if (tab.input instanceof vscode.TabInputWebview && isWelcomeWebviewTab(tab)) {
+      await focusEditorGroup(tab.group.viewColumn);
+      await openWelcomeEditor();
       return;
     }
     logWarn('标签类型不支持通过公开 API 激活', { label: tab.label, inputKind: inputKind(tab.input) });
@@ -676,8 +718,9 @@ export class VerticalTabsPanel {
         logWarn('恢复空垂直标签栏宽度失败');
         return false;
       }
-      this.panel.reveal(vscode.ViewColumn.One, false);
-      await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+      if (!await this.focusAndLockOwnGroup()) {
+        return false;
+      }
       logInfo('已恢复空垂直标签栏的右侧编辑器区域和宽度', { ratio });
       return true;
     } finally {
@@ -837,6 +880,36 @@ function inputKind(input: vscode.Tab['input']): TabInputKind {
   return 'unknown';
 }
 
+function targetIdentity(tab: vscode.Tab): TabTargetIdentity {
+  const input = tab.input;
+  if (input instanceof vscode.TabInputText) return { kind: 'text', uri: input.uri.toString() };
+  if (input instanceof vscode.TabInputTextDiff) return { kind: 'diff', originalUri: input.original.toString(), modifiedUri: input.modified.toString() };
+  if (input instanceof vscode.TabInputCustom) return { kind: 'custom', uri: input.uri.toString() };
+  if (input instanceof vscode.TabInputNotebook) return { kind: 'notebook', uri: input.uri.toString() };
+  if (input instanceof vscode.TabInputNotebookDiff) return { kind: 'notebookDiff', originalUri: input.original.toString(), modifiedUri: input.modified.toString() };
+  if (input instanceof vscode.TabInputWebview) return { kind: 'webview', viewType: input.viewType, label: tab.label };
+  if (input instanceof vscode.TabInputTerminal) return { kind: 'terminal', label: tab.label };
+  return { kind: 'unknown', label: tab.label };
+}
+
+function isActivatableTab(tab: vscode.Tab): boolean | undefined {
+  return tab.input instanceof vscode.TabInputWebview && isWelcomeWebviewTab(tab) ? true : undefined;
+}
+
+function isWelcomeWebviewTab(tab: vscode.Tab): boolean {
+  if (!(tab.input instanceof vscode.TabInputWebview)) {
+    return false;
+  }
+  const viewType = tab.input.viewType.toLowerCase();
+  const label = tab.label.toLowerCase();
+  return viewType.includes('welcome')
+    || viewType.includes('gettingstarted')
+    || label === 'welcome'
+    || label === 'getting started'
+    || label === '欢迎'
+    || label.includes('开始');
+}
+
 function inputPath(input: vscode.Tab['input']): string | undefined {
   const uri = input instanceof vscode.TabInputText
     || input instanceof vscode.TabInputCustom
@@ -850,4 +923,27 @@ function inputPath(input: vscode.Tab['input']): string | undefined {
   }
   const relative = vscode.workspace.asRelativePath(uri, false);
   return relative === uri.fsPath ? uri.path : relative;
+}
+
+async function focusEditorGroup(viewColumn: vscode.ViewColumn | undefined): Promise<void> {
+  const commands: Partial<Record<vscode.ViewColumn, string>> = {
+    [vscode.ViewColumn.One]: 'workbench.action.focusFirstEditorGroup',
+    [vscode.ViewColumn.Two]: 'workbench.action.focusSecondEditorGroup',
+    [vscode.ViewColumn.Three]: 'workbench.action.focusThirdEditorGroup',
+    [vscode.ViewColumn.Four]: 'workbench.action.focusFourthEditorGroup',
+    [vscode.ViewColumn.Five]: 'workbench.action.focusFifthEditorGroup',
+    [vscode.ViewColumn.Six]: 'workbench.action.focusSixthEditorGroup',
+    [vscode.ViewColumn.Seven]: 'workbench.action.focusSeventhEditorGroup',
+    [vscode.ViewColumn.Eight]: 'workbench.action.focusEighthEditorGroup',
+    [vscode.ViewColumn.Nine]: 'workbench.action.focusNinthEditorGroup',
+  };
+  const command = viewColumn === undefined ? undefined : commands[viewColumn];
+  if (!command) {
+    return;
+  }
+  try {
+    await vscode.commands.executeCommand(command);
+  } catch (error) {
+    logDebug('聚焦编辑器组失败，将继续尝试后续操作', { viewColumn, command, error });
+  }
 }

@@ -51,11 +51,15 @@ function createTab(tab: VerticalTabItem): HTMLElement {
   const actions = document.createElement('div'); actions.className = 'tab-actions'; actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target)); row.append(activate, actions); return row;
 }
 function button(label: string, title: string): HTMLButtonElement { const result = document.createElement('button'); result.type = 'button'; result.textContent = label; result.title = title; return result; }
-function actionButton(label: string, title: string, type: 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): HTMLButtonElement { const result = button(label, title); result.className = 'tab-action'; result.addEventListener('click', () => postTarget(type, target)); return result; }
+function actionButton(label: string, title: string, type: 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget, dismissAfterClick = false): HTMLButtonElement {
+  const result = button(label, title); result.className = 'tab-action';
+  result.addEventListener('click', () => { postTarget(type, target); if (dismissAfterClick) dismissContextMenu(); });
+  return result;
+}
 function postTarget(type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): void { vscode.postMessage({ type, target }); }
 function showContextMenu(x: number, y: number, tab: VerticalTabItem): void {
   dismissContextMenu(); const menu = document.createElement('div'); menu.className = 'tab-context-menu'; menu.setAttribute('role', 'menu'); menu.addEventListener('click', (event) => event.stopPropagation());
-  menu.append(actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target), actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab.target));
+  menu.append(actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target, true), actionButton('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab.target, true));
   const snapshot = latestSnapshot; if (snapshot) {
     for (const group of snapshot.manualGroups) { const item = button(`移至：${group.name}`, `移至 ${group.name}`); item.addEventListener('click', () => { vscode.postMessage({ type: 'assignGroup', target: tab.target, groupId: group.id }); dismissContextMenu(); }); menu.append(item); }
     if (tab.manualGroupId) { const item = button('移出分组', '移出分组'); item.addEventListener('click', () => { vscode.postMessage({ type: 'assignGroup', target: tab.target }); dismissContextMenu(); }); menu.append(item); }
