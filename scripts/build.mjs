@@ -1,0 +1,29 @@
+import { build } from 'esbuild';
+import { globSync } from 'glob';
+
+const shared = {
+  bundle: true,
+  external: ['vscode', 'mocha', 'glob'],
+  format: 'cjs',
+  logLevel: 'info',
+  platform: 'node',
+  sourcemap: true,
+  target: 'node20',
+};
+
+await Promise.all([
+  build({ ...shared, entryPoints: ['src/extension.ts'], outfile: 'out/extension.js' }),
+  build({ ...shared, entryPoints: ['src/webview/main.ts'], outfile: 'out/webview.js' }),
+  build({
+    ...shared,
+    entryPoints: ['test/integration/suite/index.ts', 'test/integration/suite/extension.test.ts'],
+    outbase: 'test/integration/suite',
+    outdir: 'out/test/integration/suite',
+  }),
+  build({
+    ...shared,
+    entryPoints: globSync('test/unit/**/*.test.ts'),
+    outbase: 'test/unit',
+    outdir: 'out/test/unit',
+  }),
+]);

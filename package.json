@@ -1,0 +1,53 @@
+{
+  "name": "vertical-tabs-in-editor-area",
+  "displayName": "Vertical Tabs in Editor Area",
+  "description": "A vertical tabs placeholder hosted in the VS Code editor area.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://example.invalid/local/vertical-tabs-in-editor-area.git"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:verticalTabs.open"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "verticalTabs.open",
+        "title": "Vertical Tabs: Open"
+      }
+    ]
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "compile": "npm run check-types && node scripts/build.mjs",
+    "check-types": "tsc --noEmit",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test:integration": "npm run compile --silent && node scripts/run-integration-tests.mjs",
+    "test": "npm run test:unit && npm run test:integration",
+    "package": "node scripts/package.mjs",
+    "check:vsix": "node scripts/check-vsix.mjs",
+    "verify": "npm run compile && npm test && npm run package && npm run check:vsix"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.15.3",
+    "@types/vscode": "^1.125.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.5",
+    "glob": "^11.0.2",
+    "mocha": "^11.2.2",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,15 @@
+.vscode/**
+.github/**
+src/**
+test/**
+scripts/**
+node_modules/**
+dist/**
+out/test/**
+out/**/*.map
+*.ts
+tsconfig.json
+AGENTS.md
+.gitignore
+.vscodeignore
+README.zh-CN.md

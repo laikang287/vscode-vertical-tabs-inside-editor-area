@@ -1,0 +1,29 @@
+:root {
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+}
+
+body {
+  margin: 0;
+}
+
+.vertical-tabs {
+  box-sizing: border-box;
+  min-width: 180px;
+  padding: 16px;
+  border-right: 1px solid var(--vscode-editorWidget-border);
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.5;
+}
