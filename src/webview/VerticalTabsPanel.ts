@@ -200,26 +200,20 @@ export class VerticalTabsPanel {
         ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
       }
 
-      for (let moves = 0; ownGroupIndex > 0 && moves < vscode.window.tabGroups.all.length; moves += 1) {
-        if (!await this.activateOwnGroup()) {
-          return;
-        }
-        await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
-        ownGroupIndex = await this.waitForOwnGroup();
-        if (ownGroupIndex < 0) {
-          return;
-        }
-      }
-
-      if (this.findOwnGroupIndex() !== 0) {
+      if (!await this.moveOwnGroupToFarLeft()) {
         return;
       }
 
       const width = this.preferredWidth();
       if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
         await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
-      } else {
-        await this.applyRailWidth(width);
+      }
+
+      // setEditorLayout can remap existing groups while rebuilding a nested layout.
+      // Move the webview again afterwards so opening from the launcher always
+      // completes with the rail in the physical left-most editor group.
+      if (!await this.moveOwnGroupToFarLeft()) {
+        return;
       }
       await this.applyRailWidth(width);
 
@@ -268,6 +262,34 @@ export class VerticalTabsPanel {
         return index;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+    return -1;
+  }
+
+  private async moveOwnGroupToFarLeft(): Promise<boolean> {
+    let ownGroupIndex = this.findOwnGroupIndex();
+    const maximumMoves = vscode.window.tabGroups.all.length;
+    for (let moves = 0; ownGroupIndex > 0 && moves < maximumMoves; moves += 1) {
+      if (!await this.activateOwnGroup()) {
+        return false;
+      }
+      const previousIndex = ownGroupIndex;
+      await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
+      ownGroupIndex = await this.waitForOwnGroupBefore(previousIndex);
+      if (ownGroupIndex < 0) {
+        return false;
+      }
+    }
+    return ownGroupIndex === 0;
+  }
+
+  private async waitForOwnGroupBefore(previousIndex: number): Promise<number> {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const index = this.findOwnGroupIndex();
+      if (index >= 0 && index < previousIndex) {
+        return index;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
     }
     return -1;
   }

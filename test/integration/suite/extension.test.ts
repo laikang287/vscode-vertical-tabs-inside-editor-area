@@ -50,6 +50,7 @@ suite('Vertical Tabs extension', () => {
     await waitFor(() => verticalTabs().length === 0);
     await vscode.commands.executeCommand('verticalTabs.toggle');
     await waitFor(() => verticalTabs().length === 1);
+    assert.equal(vscode.window.tabGroups.all[0], verticalTabs()[0].group, 'Reopening from the launcher should put the rail back on the far left.');
   });
 
   test('declares the startup and webview restoration activation events', () => {
