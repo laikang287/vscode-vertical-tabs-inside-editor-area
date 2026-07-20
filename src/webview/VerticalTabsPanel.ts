@@ -876,9 +876,15 @@ export class VerticalTabsPanel {
       await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
       return;
     }
-    if (tab.input instanceof vscode.TabInputWebview && isWelcomeWebviewTab(tab)) {
+    const builtInWebviewTarget = getActivatableBuiltInWebviewTarget(tab);
+    if (builtInWebviewTarget === 'welcome') {
       await focusEditorGroup(tab.group.viewColumn);
       await openWelcomeEditor();
+      return;
+    }
+    if (builtInWebviewTarget === 'settings') {
+      await focusEditorGroup(tab.group.viewColumn);
+      await vscode.commands.executeCommand('workbench.action.openSettings');
       return;
     }
     logWarn('标签类型不支持通过公开 API 激活', { label: tab.label, inputKind: inputKind(tab.input) });
@@ -1182,27 +1188,40 @@ function targetIdentity(tab: vscode.Tab): TabTargetIdentity {
 }
 
 function isActivatableTab(tab: vscode.Tab): boolean | undefined {
-  return tab.input instanceof vscode.TabInputWebview && isWelcomeWebviewTab(tab) ? true : undefined;
+  return getActivatableBuiltInWebviewTarget(tab) ? true : undefined;
 }
 
 function isActivatableTabForCommands(tab: vscode.Tab): boolean {
   const kind = inputKind(tab.input);
   return kind === 'text' || kind === 'diff' || kind === 'custom' || kind === 'notebook' || kind === 'notebookDiff'
-    || (tab.input instanceof vscode.TabInputWebview && isWelcomeWebviewTab(tab));
+    || getActivatableBuiltInWebviewTarget(tab) !== undefined;
 }
 
-function isWelcomeWebviewTab(tab: vscode.Tab): boolean {
+function getActivatableBuiltInWebviewTarget(tab: vscode.Tab): 'welcome' | 'settings' | undefined {
   if (!(tab.input instanceof vscode.TabInputWebview)) {
-    return false;
+    return undefined;
   }
   const viewType = tab.input.viewType.toLowerCase();
   const label = tab.label.toLowerCase();
-  return viewType.includes('welcome')
+  if (viewType.includes('welcome')
     || viewType.includes('gettingstarted')
+    || label.includes('welcome')
+    || label.includes('get started')
     || label === 'welcome'
     || label === 'getting started'
     || label === '欢迎'
-    || label.includes('开始');
+    || label.includes('开始')
+    || label.includes('入门')) {
+    return 'welcome';
+  }
+  if (viewType.includes('settings')
+    || viewType.includes('preferences')
+    || label.includes('settings')
+    || label === '设置'
+    || label.includes('首选项')) {
+    return 'settings';
+  }
+  return undefined;
 }
 
 function inputPath(input: vscode.Tab['input']): string | undefined {

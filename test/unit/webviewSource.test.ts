@@ -78,3 +78,13 @@ test('extension avoids persisting and restoring transient empty-rail widths', ()
   assert.match(source, /MAX_EMPTY_RAIL_RESTORE_RATIO = 0\.4/);
   assert.match(source, /getEmptyRailRestoreRatio\(this\.context\)/);
 });
+
+test('extension marks built-in welcome and settings webviews as activatable', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /function getActivatableBuiltInWebviewTarget\(tab: vscode\.Tab\): 'welcome' \| 'settings' \| undefined/);
+  assert.match(source, /viewType\.includes\('gettingstarted'\)/);
+  assert.match(source, /label\.includes\('入门'\)/);
+  assert.match(source, /viewType\.includes\('settings'\)/);
+  assert.match(source, /workbench\.action\.openSettings/);
+});
