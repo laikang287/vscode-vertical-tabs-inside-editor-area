@@ -1,7 +1,7 @@
 {
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
-  "description": "A vertical tabs placeholder hosted in the VS Code editor area.",
+  "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
   "version": "0.1.0",
   "publisher": "local",
   "license": "MIT",
@@ -18,13 +18,33 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:verticalTabs.open"
+    "onCommand:verticalTabs.open",
+    "onWebviewPanel:verticalTabs.editorArea"
   ],
   "contributes": {
     "commands": [
       {
         "command": "verticalTabs.open",
         "title": "Vertical Tabs: Open"
+      },
+      {
+        "command": "verticalTabs.focus",
+        "title": "Vertical Tabs: Focus"
+      },
+      {
+        "command": "verticalTabs.previous",
+        "title": "Vertical Tabs: Previous Tab"
+      },
+      {
+        "command": "verticalTabs.next",
+        "title": "Vertical Tabs: Next Tab"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "verticalTabs.focus",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v"
       }
     ]
   },

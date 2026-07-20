@@ -11,8 +11,26 @@ test('accepts refresh requests', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'requestRefresh' }), { type: 'requestRefresh' });
 });
 
+test('accepts tab actions with a valid snapshot target', () => {
+  const target = { revision: 4, groupIndex: 1, tabIndex: 2 };
+  assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'closeSaved' }), { type: 'closeSaved' });
+});
+
 test('rejects malformed and unknown messages', () => {
-  for (const value of [undefined, null, [], 'ready', {}, { type: 'unknown' }, { type: 42 }]) {
+  for (const value of [
+    undefined,
+    null,
+    [],
+    'ready',
+    {},
+    { type: 'unknown' },
+    { type: 42 },
+    { type: 'activateTab' },
+    { type: 'activateTab', target: { revision: -1, groupIndex: 0, tabIndex: 0 } },
+    { type: 'activateTab', target: { revision: 1.5, groupIndex: 0, tabIndex: 0 } },
+  ]) {
     assert.equal(parseWebviewMessage(value), undefined);
   }
 });
