@@ -10,8 +10,6 @@ const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
 const groups = document.querySelector<HTMLElement>('#groups');
 const verticalTabs = document.querySelector<HTMLElement>('.vertical-tabs');
-const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
-const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 const expandAllButton = document.querySelector<HTMLButtonElement>('#expand-all');
 const collapseAllButton = document.querySelector<HTMLButtonElement>('#collapse-all');
 const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
@@ -31,8 +29,6 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
-groupModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setGroupMode', groupMode: groupModeSelect.value }));
-sortModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value }));
 expandAllButton?.addEventListener('click', () => setAllGroupsCollapsed(false));
 collapseAllButton?.addEventListener('click', () => setAllGroupsCollapsed(true));
 document.addEventListener('click', () => dismissContextMenu());
@@ -49,9 +45,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   }
   latestSnapshot = message.snapshot;
   groups.replaceChildren();
-  const { tabs, displayGroups, groupMode, sortMode } = message.snapshot;
-  if (groupModeSelect) groupModeSelect.value = groupMode;
-  if (sortModeSelect) sortModeSelect.value = sortMode;
+  const { tabs, displayGroups } = message.snapshot;
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
   updateTreeActionState();
@@ -368,6 +362,10 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
     );
   }
   const snapshot = latestSnapshot;
+  if (snapshot) {
+    appendGroupModeActions(menu, snapshot.groupMode);
+    appendSortModeActions(menu, snapshot.sortMode);
+  }
   menu.append(
     createGroupButton(snapshot?.groupMode === 'manual'),
     globalActionButton('关闭已保存', '关闭已保存的标签', 'closeSaved'),
@@ -399,6 +397,55 @@ function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
     dismissContextMenu();
   });
   return result;
+}
+
+function appendGroupModeActions(menu: HTMLElement, currentMode: GroupMode): void {
+  appendGroupSubmenu(menu, '分组方式', '切换分组方式', (submenu) => {
+    for (const option of groupModeOptions()) {
+      const selected = option.value === currentMode;
+      const item = button(`${selected ? '✓ ' : ''}${option.label}`, option.title);
+      item.disabled = selected;
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'setGroupMode', groupMode: option.value });
+        dismissContextMenu();
+      });
+      submenu.append(item);
+    }
+  });
+}
+
+function appendSortModeActions(menu: HTMLElement, currentMode: SortMode): void {
+  appendGroupSubmenu(menu, '排序方式', '切换排序方式', (submenu) => {
+    for (const option of sortModeOptions()) {
+      const selected = option.value === currentMode;
+      const item = button(`${selected ? '✓ ' : ''}${option.label}`, option.title);
+      item.disabled = selected;
+      item.addEventListener('click', () => {
+        vscode.postMessage({ type: 'setSortMode', sortMode: option.value });
+        dismissContextMenu();
+      });
+      submenu.append(item);
+    }
+  });
+}
+
+function groupModeOptions(): Array<{ readonly value: GroupMode; readonly label: string; readonly title: string }> {
+  return [
+    { value: 'vscode', label: '跟随 VS Code', title: '按 VS Code 编辑器组分组' },
+    { value: 'manual', label: '手动分组', title: '使用手动标签分组' },
+    { value: 'parentDir', label: '按父目录', title: '按文件父目录分组' },
+    { value: 'fileType', label: '按文件类型', title: '按文件类型分组' },
+  ];
+}
+
+function sortModeOptions(): Array<{ readonly value: SortMode; readonly label: string; readonly title: string }> {
+  return [
+    { value: 'none', label: '不排序', title: '保持原始标签顺序' },
+    { value: 'modifiedAsc', label: '修改时间正序', title: '按修改时间从旧到新排序' },
+    { value: 'modifiedDesc', label: '修改时间逆序', title: '按修改时间从新到旧排序' },
+    { value: 'nameAsc', label: '文件名正序', title: '按文件名升序排序' },
+    { value: 'nameDesc', label: '文件名逆序', title: '按文件名降序排序' },
+  ];
 }
 
 function appendManualGroupActions(menu: HTMLElement, tab: VerticalTabItem, manualGroups: readonly ManualTabGroup[]): void {

@@ -1353,23 +1353,6 @@ export class VerticalTabsPanel {
   <main class="vertical-tabs" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
-        <label title="切换分组模式">分组
-          <select id="group-mode">
-            <option value="vscode">跟随 VS Code</option>
-            <option value="manual">手动分组</option>
-            <option value="parentDir">按父目录</option>
-            <option value="fileType">按文件类型</option>
-          </select>
-        </label>
-        <label title="切换排序方式">排序
-          <select id="sort-mode">
-            <option value="none">不排序</option>
-            <option value="modifiedAsc">修改时间正序</option>
-            <option value="modifiedDesc">修改时间逆序</option>
-            <option value="nameAsc">文件名正序</option>
-            <option value="nameDesc">文件名逆序</option>
-          </select>
-        </label>
         <button id="expand-all" type="button" title="展开所有分组">全部展开</button>
         <button id="collapse-all" type="button" title="折叠所有分组">全部折叠</button>
       </div>

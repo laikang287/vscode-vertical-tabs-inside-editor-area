@@ -53,6 +53,20 @@ test('webview exposes grouping, sorting, bulk close, pinning, and drag messages'
   assert.doesNotMatch(source, /vscode\.postMessage\(\{ type: 'createGroupFromTabs'/);
 });
 
+test('grouping and sorting selectors are exposed as context submenus instead of toolbar controls', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.doesNotMatch(panelSource, /id="group-mode"/);
+  assert.doesNotMatch(panelSource, /id="sort-mode"/);
+  assert.doesNotMatch(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
+  assert.doesNotMatch(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
+  assert.match(webviewSource, /appendGroupSubmenu\(menu, '分组方式', '切换分组方式'/);
+  assert.match(webviewSource, /appendGroupSubmenu\(menu, '排序方式', '切换排序方式'/);
+  assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'setGroupMode', groupMode: option\.value \}\)/);
+  assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'setSortMode', sortMode: option\.value \}\)/);
+});
+
 test('manual group creation is disabled outside manual mode and accepted only in manual mode', () => {
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
