@@ -55,6 +55,11 @@ function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
       requestInitialSnapshot('requestRefresh');
     } else if (!latestSnapshot) {
       logToExtension('warn', '等待标签快照超时', `attempts=${refreshAttempts}`);
+      window.setTimeout(() => {
+        if (!latestSnapshot) {
+          requestInitialSnapshot('requestRefresh');
+        }
+      }, 2000);
     }
   }, 500);
 }

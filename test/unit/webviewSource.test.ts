@@ -44,6 +44,8 @@ test('webview retries the initial snapshot request while it is still loading', (
   assert.match(source, /requestInitialSnapshot\('ready'\)/);
   assert.match(source, /requestInitialSnapshot\('requestRefresh'\)/);
   assert.match(source, /refreshAttempts < 5/);
+  assert.match(source, /等待标签快照超时/);
+  assert.match(source, /2000/);
 });
 
 test('webview reports startup, render, and script failures to the extension log', () => {
@@ -69,6 +71,9 @@ test('extension registers the webview message listener before setting html and k
   assert.match(source, /onDidReceiveMessage[\s\S]+this\.configureWebview\(\)/);
   assert.match(source, /INITIAL_HOST_REFRESH_DELAY_MS = 800/);
   assert.match(source, /reason: 'hostInitialFallback', ensureEmptyLayout: false/);
+  assert.match(source, /SNAPSHOT_REFRESH_TIMEOUT_MS = 2000/);
+  assert.match(source, /刷新垂直标签快照失败，将发送上一份可用快照避免 Webview 停留在加载态/);
+  assert.match(source, /private async toSnapshotTabSafe\(tab: vscode\.Tab\): Promise<SnapshotSourceTab>/);
 });
 
 test('extension avoids persisting and restoring transient empty-rail widths', () => {
@@ -77,6 +82,18 @@ test('extension avoids persisting and restoring transient empty-rail widths', ()
   assert.match(source, /if \(!this\.hasVisibleUserTabs\(\)\)/);
   assert.match(source, /MAX_EMPTY_RAIL_RESTORE_RATIO = 0\.4/);
   assert.match(source, /getEmptyRailRestoreRatio\(this\.context\)/);
+});
+
+test('extension retries undelivered render messages', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /WEBVIEW_POST_RETRY_DELAY_MS = 250/);
+  assert.match(source, /WEBVIEW_POST_MAX_ATTEMPTS = 8/);
+  assert.match(source, /private postMessage\(message: ExtensionMessage, attempt = 1\): void/);
+  assert.match(source, /private disposed = false/);
+  assert.match(source, /this\.disposed = true/);
+  assert.match(source, /this\.disposed \|\| VerticalTabsPanel\.panels\.current !== this/);
+  assert.match(source, /this\.postMessage\(message, attempt \+ 1\)/);
 });
 
 test('extension marks built-in welcome and settings webviews as activatable', () => {

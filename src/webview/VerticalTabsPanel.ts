@@ -33,6 +33,9 @@ const GROUP_WAIT_INTERVAL_MS = 10;
 const INPUT_MTIME_TIMEOUT_MS = 250;
 const INITIAL_HOST_REFRESH_DELAY_MS = 800;
 const MAX_EMPTY_RAIL_RESTORE_RATIO = 0.4;
+const SNAPSHOT_REFRESH_TIMEOUT_MS = 2000;
+const WEBVIEW_POST_RETRY_DELAY_MS = 250;
+const WEBVIEW_POST_MAX_ATTEMPTS = 8;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -47,6 +50,7 @@ export class VerticalTabsPanel {
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private disposed = false;
   // Ignore the Webview's initial ResizeObserver report until VS Code has
   // finished creating and sizing the dedicated editor group.
   private arrangingRail = true;
@@ -397,9 +401,13 @@ export class VerticalTabsPanel {
 
   private dispose(): void {
     logInfo('垂直标签面板实例已释放');
+    this.disposed = true;
     VerticalTabsPanel.panels.clear(this);
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
+    }
+    if (this.initialHostRefreshTimer) {
+      clearTimeout(this.initialHostRefreshTimer);
     }
     queueMicrotask(() => VerticalTabsPanel.syncVisibilityContext());
     while (this.disposables.length > 0) {
@@ -469,7 +477,17 @@ export class VerticalTabsPanel {
       arrangingRail: this.arrangingRail,
       groupCount: vscode.window.tabGroups.all.length,
     });
-    this.currentSnapshot = await this.createSnapshot();
+    try {
+      this.currentSnapshot = await withTimeout(this.createSnapshot(), SNAPSHOT_REFRESH_TIMEOUT_MS);
+    } catch (error) {
+      logError('刷新垂直标签快照失败，将发送上一份可用快照避免 Webview 停留在加载态', {
+        reason: options.reason,
+        durationMs: Date.now() - started,
+        error,
+      });
+      this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
+      return;
+    }
     logDebug('完成刷新垂直标签快照', {
       reason: options.reason,
       revision: this.currentSnapshot.revision,
@@ -496,7 +514,7 @@ export class VerticalTabsPanel {
     const groups: SnapshotSourceGroup[] = await Promise.all(vscode.window.tabGroups.all.map(async (group, index) => ({
       label: `编辑器组 ${index + 1}`,
       viewColumn: group.viewColumn,
-      tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTab(tab))),
+      tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTabSafe(tab))),
     })));
     const snapshot = buildSnapshot(groups, revision, this.manualGroups, {
       groupMode: this.groupMode,
@@ -505,6 +523,25 @@ export class VerticalTabsPanel {
     });
     logDebug('标签快照创建完成', { revision, visibleTabs: snapshot.tabs.length, displayGroups: snapshot.displayGroups.length });
     return snapshot;
+  }
+
+  private async toSnapshotTabSafe(tab: vscode.Tab): Promise<SnapshotSourceTab> {
+    try {
+      return await this.toSnapshotTab(tab);
+    } catch (error) {
+      logError('转换单个标签快照失败，将以不可跳转标签继续渲染', { label: tab.label, error });
+      return {
+        label: tab.label || 'Unknown',
+        isActive: tab.isActive,
+        isDirty: tab.isDirty,
+        isPinned: tab.isPinned,
+        isPreview: tab.isPreview,
+        inputKind: 'unknown',
+        targetIdentity: { kind: 'unknown', label: tab.label || 'Unknown' },
+        isActivatable: false,
+        isVerticalTabsPanel: isVerticalTabsPanel(tab),
+      };
+    }
   }
 
   private async toSnapshotTab(tab: vscode.Tab): Promise<SnapshotSourceTab> {
@@ -986,12 +1023,32 @@ export class VerticalTabsPanel {
     }
   }
 
-  private postMessage(message: ExtensionMessage): void {
+  private postMessage(message: ExtensionMessage, attempt = 1): void {
+    if (this.disposed || VerticalTabsPanel.panels.current !== this) {
+      logDebug('跳过向 Webview 发送消息：面板已释放或实例已切换', { type: message.type, attempt });
+      return;
+    }
     void this.panel.webview.postMessage(message).then((delivered) => {
       if (!delivered) {
-        logWarn('向 Webview 发送消息未送达', { type: message.type });
+        logWarn('向 Webview 发送消息未送达', { type: message.type, attempt });
+        if (attempt < WEBVIEW_POST_MAX_ATTEMPTS) {
+          setTimeout(() => {
+            if (!this.disposed && VerticalTabsPanel.panels.current === this) {
+              this.postMessage(message, attempt + 1);
+            }
+          }, WEBVIEW_POST_RETRY_DELAY_MS);
+        }
       }
-    }, (error) => logError('向 Webview 发送消息失败', { type: message.type, error }));
+    }, (error) => {
+      logError('向 Webview 发送消息失败', { type: message.type, attempt, error });
+      if (attempt < WEBVIEW_POST_MAX_ATTEMPTS) {
+        setTimeout(() => {
+          if (!this.disposed && VerticalTabsPanel.panels.current === this) {
+            this.postMessage(message, attempt + 1);
+          }
+        }, WEBVIEW_POST_RETRY_DELAY_MS);
+      }
+    });
   }
 
   private configureWebview(): void {
