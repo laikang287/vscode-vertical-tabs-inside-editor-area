@@ -692,15 +692,29 @@ export class VerticalTabsPanel {
       return;
     }
 
+    if (message.type === 'requestCreateGroup') {
+      if (this.groupMode !== 'manual') {
+        logWarn('创建手动标签分组失败：当前不是手动分组模式', { groupMode: this.groupMode });
+        return;
+      }
+      const name = await vscode.window.showInputBox({
+        prompt: '输入分组名称',
+        placeHolder: '分组名称',
+        validateInput: (value) => value.trim().length === 0 ? '分组名称不能为空' : value.trim().length > 80 ? '分组名称不能超过 80 个字符' : undefined,
+      });
+      if (!name?.trim()) {
+        logDebug('取消创建手动标签分组');
+        return;
+      }
+      await this.createManualGroup(name);
+      return;
+    }
     if (message.type === 'createGroup') {
       if (this.groupMode !== 'manual') {
         logWarn('创建手动标签分组失败：当前不是手动分组模式', { groupMode: this.groupMode, name: message.name.trim() });
         return;
       }
-      logInfo('创建手动标签分组', { name: message.name.trim() });
-      this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: message.name.trim(), collapsed: false });
-      await this.persistManualGroups();
-      await this.refresh({ reason: 'operation' });
+      await this.createManualGroup(message.name);
       return;
     }
     if (message.type === 'renameGroup') {
@@ -854,6 +868,14 @@ export class VerticalTabsPanel {
       await vscode.window.tabGroups.close(tabs, true);
     }
     await this.refresh({ reason: 'navigate' });
+  }
+
+  private async createManualGroup(name: string): Promise<void> {
+    const trimmedName = name.trim();
+    logInfo('创建手动标签分组', { name: trimmedName });
+    this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: trimmedName, collapsed: false });
+    await this.persistManualGroups();
+    await this.refresh({ reason: 'operation' });
   }
 
   private setManualGroup(identity: TabTargetIdentity, groupId: string | undefined): void {

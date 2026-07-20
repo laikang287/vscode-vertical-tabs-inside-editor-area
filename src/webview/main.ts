@@ -462,8 +462,7 @@ function createGroupButton(enabled: boolean): HTMLButtonElement {
   result.disabled = !enabled;
   result.addEventListener('click', () => {
     if (!enabled) return;
-    const name = window.prompt('分组名称');
-    if (name?.trim()) vscode.postMessage({ type: 'createGroup', name: name.trim() });
+    vscode.postMessage({ type: 'requestCreateGroup' });
     dismissContextMenu();
   });
   return result;

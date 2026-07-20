@@ -61,6 +61,9 @@ test('manual group creation is disabled outside manual mode and accepted only in
   assert.match(webviewSource, /function createGroupButton\(enabled: boolean\): HTMLButtonElement/);
   assert.match(webviewSource, /result\.disabled = !enabled/);
   assert.match(webviewSource, /if \(!enabled\) return/);
+  assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'requestCreateGroup' \}\)/);
+  assert.doesNotMatch(webviewSource, /window\.prompt\('分组名称'\)/);
+  assert.match(panelSource, /vscode\.window\.showInputBox/);
   assert.match(panelSource, /创建手动标签分组失败：当前不是手动分组模式/);
   assert.doesNotMatch(panelSource, /this\.groupMode = 'manual';\s*await this\.context\.workspaceState\.update\(GROUP_MODE_STORAGE_KEY, this\.groupMode\);\s*\}\s*logInfo\('创建手动标签分组'/);
   assert.match(style, /\.tab-context-action:disabled/);
