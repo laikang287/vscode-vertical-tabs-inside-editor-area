@@ -1,6 +1,17 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { isEditorLayout, type EditorLayout } from '../layout/RailLayout';
+import {
+  DEFAULT_RAIL_RATIO,
+  getEditorAreaWidth,
+  getObservedRailRatio,
+  getRailGroupRatio,
+  isEditorLayout,
+  normalizeRailRatio,
+  resolveRailRatio,
+  shouldPersistRailGroupRatio,
+  shouldPersistObservedRailWidth,
+  type EditorLayout,
+} from '../layout/RailLayout';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
@@ -13,9 +24,6 @@ const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const RAIL_SETTLE_DELAY_MS = 150;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_WAIT_INTERVAL_MS = 10;
-const DEFAULT_RAIL_RATIO = 0.2;
-const MIN_RAIL_RATIO = 0.1;
-const MAX_RAIL_RATIO = 0.5;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -33,6 +41,7 @@ export class VerticalTabsPanel {
   // finished creating and sizing the dedicated editor group.
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
+  private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, tabs: [], manualGroups: [] };
   private readonly manualGroups: ManualTabGroup[] = [];
   private readonly manualGroupByTab = new WeakMap<vscode.Tab, string>();
@@ -315,13 +324,20 @@ export class VerticalTabsPanel {
 
   private async saveEditorWidthRatio(): Promise<void> {
     const layout = await getEditorLayout();
-    const ratio = getObservedRailRatio(layout, this.lastObservedRailWidth) ?? (layout ? getRailGroupRatio(layout) : undefined);
+    let ratio: number | undefined;
+    if (layout && shouldPersistRailGroupRatio(layout)) {
+      ratio = getRailGroupRatio(layout);
+    } else if (this.lastObservedRailWidth !== undefined) {
+      ratio = shouldPersistObservedRailWidth(layout, this.lastObservedRailWidth)
+        ? getObservedRailRatio(layout, this.lastObservedRailWidth)
+        : undefined;
+    }
     if (typeof ratio === 'number') {
       const normalizedRatio = normalizeRailRatio(ratio);
       await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, normalizedRatio);
       logDebug('保存用户调整后的垂直标签栏宽度比例', { measuredRatio: ratio, savedRatio: normalizedRatio });
     } else {
-      logWarn('无法从当前编辑器布局读取垂直标签栏宽度比例', { layout });
+      logDebug('跳过保存垂直标签栏宽度比例：当前布局没有独立的右侧编辑器区域', { layout });
     }
   }
 
@@ -402,6 +418,7 @@ export class VerticalTabsPanel {
       manualGroupCount: this.currentSnapshot.manualGroups.length,
     });
     this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
+    void this.ensureUsableEmptyRailLayout().catch((error) => logError('恢复空垂直标签栏布局失败', error));
   }
 
   private createSnapshot(): VerticalTabsSnapshot {
@@ -438,6 +455,9 @@ export class VerticalTabsPanel {
       this.lastObservedRailWidth = message.width;
       logDebug('观察到垂直标签 Webview 宽度', { width: message.width, arrangingRail: this.arrangingRail });
       if (this.arrangingRail) {
+        return;
+      }
+      if (await this.ensureUsableEmptyRailLayout()) {
         return;
       }
       await this.saveEditorWidthRatio();
@@ -623,6 +643,78 @@ export class VerticalTabsPanel {
 </body>
 </html>`;
   }
+
+  private async ensureUsableEmptyRailLayout(): Promise<boolean> {
+    if (this.emptyRailLayoutOperation) {
+      return this.emptyRailLayoutOperation;
+    }
+    if (!this.hasSettledRail() || this.currentSnapshot.tabs.length > 0) {
+      return false;
+    }
+    const groups = vscode.window.tabGroups.all;
+    if (groups.length !== 1 || groups[0]?.tabs.length !== 1 || !isVerticalTabsPanel(groups[0].tabs[0])) {
+      return false;
+    }
+
+    this.emptyRailLayoutOperation = this.restoreUsableEmptyRailLayout();
+    try {
+      return await this.emptyRailLayoutOperation;
+    } finally {
+      this.emptyRailLayoutOperation = undefined;
+    }
+  }
+
+  private async restoreUsableEmptyRailLayout(): Promise<boolean> {
+    const ratio = getConfiguredRailRatio(this.context);
+    logInfo('检测到垂直标签栏成为唯一编辑器组，准备恢复右侧编辑器区域', { ratio });
+    this.arrangingRail = true;
+    try {
+      await vscode.commands.executeCommand('workbench.action.newGroupRight');
+      await openWelcomeEditor();
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+      if (!await applyLeadingRailRatio(ratio)) {
+        logWarn('恢复空垂直标签栏宽度失败');
+        return false;
+      }
+      this.panel.reveal(vscode.ViewColumn.One, false);
+      await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+      logInfo('已恢复空垂直标签栏的右侧编辑器区域和宽度', { ratio });
+      return true;
+    } finally {
+      this.arrangingRail = false;
+    }
+  }
+}
+
+async function openWelcomeEditor(): Promise<void> {
+  const attempts: Array<readonly [string, ...unknown[]]> = [
+    ['workbench.action.openWelcome'],
+    ['workbench.action.openWalkthrough', 'gettingStarted', false],
+    ['workbench.action.openWalkthrough', { category: 'gettingStarted' }, false],
+  ];
+  for (const [command, ...args] of attempts) {
+    try {
+      await withTimeout(vscode.commands.executeCommand(command, ...args), 300);
+      logDebug('已在右侧编辑器区域打开 VS Code 欢迎页', { command });
+      return;
+    } catch (error) {
+      logDebug('尝试打开 VS Code 欢迎页失败', { command, error });
+    }
+  }
+  logWarn('打开 VS Code 欢迎页失败，将保留空的右侧编辑器组');
+}
+
+function withTimeout<T>(promise: Thenable<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+    promise.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    }, (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
 }
 
 function findVerticalTabsTab(): vscode.Tab | undefined {
@@ -679,7 +771,7 @@ async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
 async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<number | undefined> {
   const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
   const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
-  const ratio = normalizeRailRatio(typeof savedRatio === 'number' ? savedRatio : configuredRatio);
+  const ratio = getConfiguredRailRatio(context);
   try {
     await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
     await vscode.commands.executeCommand('workbench.action.newGroupLeft');
@@ -696,19 +788,10 @@ async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<n
   }
 }
 
-function getEditorAreaWidth(layout: EditorLayout | undefined): number {
-  if (layout) {
-    const rootSizes = layout.groups.map((group) => group.size);
-    if (rootSizes.length > 0 && rootSizes.every((size): size is number => typeof size === 'number' && size > 1)) {
-      if (layout.orientation === 0 || rootSizes.length === 1) {
-        return Math.max(2, Math.round(rootSizes.reduce((sum, size) => sum + size, 0)));
-      }
-    }
-  }
-  // setEditorLayout accepts relative sizes as well as the pixel sizes returned
-  // by getEditorLayout. Integer weights avoid fractional sizes being clamped by
-  // recent VS Code versions before their ratio is applied.
-  return 1000;
+function getConfiguredRailRatio(context: vscode.ExtensionContext): number {
+  const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
+  const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
+  return resolveRailRatio(savedRatio, configuredRatio);
 }
 
 async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
@@ -733,33 +816,6 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
       })),
     ],
   });
-}
-
-function getObservedRailRatio(layout: EditorLayout | undefined, railWidth: number | undefined): number | undefined {
-  if (typeof railWidth !== 'number' || !Number.isFinite(railWidth) || railWidth <= 0) {
-    return undefined;
-  }
-  const totalWidth = getEditorAreaWidth(layout);
-  return totalWidth > 0 ? railWidth / totalWidth : undefined;
-}
-
-function getRailGroupRatio(layout: EditorLayout): number | undefined {
-  if (layout.orientation !== 0 || layout.groups.length < 2) {
-    return undefined;
-  }
-  const sizes = layout.groups.map((group) => group.size);
-  if (!sizes.every((size): size is number => typeof size === 'number' && Number.isFinite(size) && size > 0)) {
-    return undefined;
-  }
-  const total = sizes.reduce((sum, size) => sum + size, 0);
-  return total > 0 ? sizes[0] / total : undefined;
-}
-
-function normalizeRailRatio(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return DEFAULT_RAIL_RATIO;
-  }
-  return Math.min(MAX_RAIL_RATIO, Math.max(MIN_RAIL_RATIO, value));
 }
 
 function isVerticalTabsPanel(tab: vscode.Tab): boolean {

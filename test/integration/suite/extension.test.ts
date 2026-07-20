@@ -50,6 +50,11 @@ suite('Vertical Tabs extension', () => {
     ));
     assert.ok(existingTab, 'The pre-existing editor tab should remain available for cleanup.');
     await vscode.window.tabGroups.close(existingTab, true);
+    await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length >= 2);
+    const emptyRailLayout = await waitForEditorLayout((candidate) => rootGroupRatios(candidate).some((ratio) => ratio >= 0.2 && ratio < 0.3));
+    const emptyRailRatios = rootGroupRatios(emptyRailLayout);
+    assert.ok(emptyRailRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail should restore its configured width after the last right-side tab closes; received ${JSON.stringify(emptyRailLayout)}.`);
+
     await vscode.commands.executeCommand('verticalTabs.focus');
     const document = await vscode.workspace.openTextDocument({ content: 'locked rail verification' });
     await vscode.window.showTextDocument(document, { preserveFocus: false });
@@ -117,4 +122,16 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
   }
   assert.fail('Timed out waiting for the editor state to settle.');
+}
+
+async function waitForEditorLayout(predicate: (layout: EditorLayout) => boolean): Promise<EditorLayout> {
+  let latest: EditorLayout | undefined;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    latest = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+    if (predicate(latest)) {
+      return latest;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail(`Timed out waiting for the editor layout to settle. Latest layout: ${JSON.stringify(latest)}.`);
 }

@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { countLayoutLeaves, isEditorLayout, MIN_RAIL_WIDTH, normalizeRailWidth, prependRailToLayout, setLeadingRailWidth } from '../../src/layout/RailLayout';
+import {
+  countLayoutLeaves,
+  isEditorLayout,
+  MIN_RAIL_WIDTH,
+  normalizeRailWidth,
+  prependRailToLayout,
+  resolveRailRatio,
+  setLeadingRailWidth,
+  shouldPersistObservedRailWidth,
+  shouldPersistRailGroupRatio,
+} from '../../src/layout/RailLayout';
 
 test('prepends a full-height rail to a horizontal editor layout', () => {
   const layout = { orientation: 0, groups: [{ size: 500 }, { groups: [{ size: 240 }, { size: 260 }] }] } as const;
@@ -39,6 +49,23 @@ test('updates the left-most leaf in a nested editor layout', () => {
   assert.equal(result.groups[0].groups?.[0].groups?.[1].size, 210);
   assert.equal(result.groups[0].groups?.[1].size, 220);
   assert.equal(result.groups[1].size, 600);
+});
+
+test('does not persist rail width when the rail is the only editor group or effectively full-width', () => {
+  assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 1000 }] }, 1000), false);
+  assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 1000 }] }), false);
+  assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 950 }, { size: 50 }] }, 950), false);
+  assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 950 }, { size: 50 }] }), false);
+  assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 240 }, { size: 760 }] }, 240), true);
+  assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 240 }, { size: 760 }] }), true);
+});
+
+test('resolves saved rail ratio before falling back to the configured default', () => {
+  assert.equal(resolveRailRatio(0.33, 0.2), 0.33);
+  assert.equal(resolveRailRatio(undefined, 0.24), 0.24);
+  assert.equal(resolveRailRatio(undefined, undefined), 0.2);
+  assert.equal(resolveRailRatio(0.02, 0.2), 0.1);
+  assert.equal(resolveRailRatio(0.99, 0.2), 0.5);
 });
 
 test('rejects invalid editor layout values', () => {
