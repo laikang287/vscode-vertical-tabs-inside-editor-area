@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { countLayoutLeaves, isEditorLayout, normalizeRailWidth, prependRailToLayout, setLeadingRailWidth, type EditorLayout } from '../layout/RailLayout';
 import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
@@ -18,7 +18,9 @@ export class VerticalTabsPanel {
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private arrangingRail = false;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, tabs: [], manualGroups: [] };
+  private readonly manualGroups: ManualTabGroup[] = [];
+  private readonly manualGroupByTab = new WeakMap<vscode.Tab, string>();
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
@@ -54,8 +56,9 @@ export class VerticalTabsPanel {
   static async open(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
     const existing = VerticalTabsPanel.panels.current;
     if (existing) {
+      const previousEditor = vscode.window.activeTextEditor;
       existing.reveal(false);
-      await existing.ensureRail();
+      await existing.ensureRail(undefined, previousEditor);
       return existing;
     }
 
@@ -132,11 +135,11 @@ export class VerticalTabsPanel {
         return;
       }
 
-      this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
+      this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.One, false);
       let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
       if (ownGroup.tabs.length > 1) {
         await vscode.commands.executeCommand('workbench.action.newGroupLeft');
-        this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
+        this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.One, false);
         await vscode.commands.executeCommand('workbench.action.moveEditorToLeftGroup');
         ownGroupIndex = await this.waitForOwnGroup();
         if (ownGroupIndex < 0) {
@@ -146,7 +149,7 @@ export class VerticalTabsPanel {
       }
 
       for (let moves = 0; ownGroupIndex > 0 && moves < vscode.window.tabGroups.all.length; moves += 1) {
-        this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.Beside, false);
+        this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.One, false);
         await vscode.commands.executeCommand('workbench.action.moveActiveEditorGroupLeft');
         ownGroupIndex = await this.waitForOwnGroup();
         if (ownGroupIndex < 0) {
@@ -259,12 +262,9 @@ export class VerticalTabsPanel {
   private createSnapshot(): VerticalTabsSnapshot {
     this.revision += 1;
     const groups: SnapshotSourceGroup[] = vscode.window.tabGroups.all.map((group) => ({
-      isActive: group.isActive,
-      viewColumn: group.viewColumn,
-      isVerticalTabsGroup: group.tabs.some((tab) => isVerticalTabsPanel(tab)),
       tabs: group.tabs.map((tab) => this.toSnapshotTab(tab)),
     }));
-    return buildSnapshot(groups, this.revision);
+    return buildSnapshot(groups, this.revision, this.manualGroups);
   }
 
   private toSnapshotTab(tab: vscode.Tab): SnapshotSourceTab {
@@ -277,6 +277,7 @@ export class VerticalTabsPanel {
       inputKind: inputKind(tab.input),
       path: inputPath(tab.input),
       isVerticalTabsPanel: isVerticalTabsPanel(tab),
+      manualGroupId: this.manualGroupByTab.get(tab),
     };
   }
 
@@ -296,6 +297,51 @@ export class VerticalTabsPanel {
 
     if (message.type === 'ready' || message.type === 'requestRefresh') {
       this.refresh();
+      return;
+    }
+
+    if (message.type === 'createGroup') {
+      this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: message.name.trim(), collapsed: false });
+      this.refresh();
+      return;
+    }
+    if (message.type === 'renameGroup') {
+      const group = this.manualGroups.find((candidate) => candidate.id === message.groupId);
+      if (group) {
+        const index = this.manualGroups.indexOf(group);
+        this.manualGroups[index] = { ...group, name: message.name.trim() };
+        this.refresh();
+      }
+      return;
+    }
+    if (message.type === 'toggleGroup') {
+      const group = this.manualGroups.find((candidate) => candidate.id === message.groupId);
+      if (group) {
+        const index = this.manualGroups.indexOf(group);
+        this.manualGroups[index] = { ...group, collapsed: !group.collapsed };
+        this.refresh();
+      }
+      return;
+    }
+    if (message.type === 'deleteGroup') {
+      const index = this.manualGroups.findIndex((candidate) => candidate.id === message.groupId);
+      if (index >= 0) {
+        this.manualGroups.splice(index, 1);
+        for (const group of vscode.window.tabGroups.all) for (const tab of group.tabs) {
+          if (this.manualGroupByTab.get(tab) === message.groupId) this.manualGroupByTab.delete(tab);
+        }
+        this.refresh();
+      }
+      return;
+    }
+    if (message.type === 'assignGroup') {
+      if (message.groupId !== undefined && !this.manualGroups.some((group) => group.id === message.groupId)) return;
+      const tab = this.resolveTab(message.target);
+      if (tab) {
+        if (message.groupId) this.manualGroupByTab.set(tab, message.groupId);
+        else this.manualGroupByTab.delete(tab);
+        this.refresh();
+      }
       return;
     }
 
@@ -332,12 +378,11 @@ export class VerticalTabsPanel {
 
   private async navigate(direction: 1 | -1): Promise<void> {
     this.refresh();
-    const tabs = this.currentSnapshot.groups.flatMap((group) => group.tabs).filter((tab) => tab.isActivatable);
+    const tabs = this.currentSnapshot.tabs.filter((tab) => tab.isActivatable);
     if (tabs.length === 0) {
       return;
     }
-    const activeIndex = tabs.findIndex((tab) => tab.isActive && this.currentSnapshot.groups
-      .some((group) => group.isActive && group.tabs.some((candidate) => candidate.target === tab.target)));
+    const activeIndex = tabs.findIndex((tab) => tab.isActive);
     const index = activeIndex < 0 ? 0 : (activeIndex + direction + tabs.length) % tabs.length;
     const tab = this.resolveTab(tabs[index].target);
     if (tab) {
@@ -393,7 +438,7 @@ export class VerticalTabsPanel {
 </head>
 <body>
   <main class="vertical-tabs" aria-live="polite">
-    <header class="toolbar"><h1>${TITLE}</h1><button id="close-saved" type="button" title="关闭已保存的标签">清理</button></header>
+    <header class="toolbar"><h1>${TITLE}</h1><span><button id="add-group" type="button" title="新建分组">新建分组</button><button id="close-saved" type="button" title="关闭已保存的标签">清理</button></span></header>
     <p id="description">正在同步打开的标签…</p>
     <section id="groups" aria-label="打开的编辑器标签"></section>
   </main>

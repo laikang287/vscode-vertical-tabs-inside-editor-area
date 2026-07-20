@@ -48,9 +48,10 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 
 #description { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.5; margin: 4px 6px; }
 
-.tab-group { border-top: 1px solid var(--vscode-editorWidget-border); }
-.tab-group:first-child { border-top: 0; }
-.tab-group.is-active-group h2 { color: var(--vscode-foreground); }
+.manual-group { border-top: 1px solid var(--vscode-editorWidget-border); margin-top: 6px; }
+.group-header { align-items: center; display: flex; gap: 4px; padding: 6px; }
+.group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 4px; }
+.group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .tab-row { display: flex; align-items: stretch; min-width: 0; }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
