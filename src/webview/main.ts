@@ -13,6 +13,7 @@ const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 let contextMenu: HTMLElement | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let draggedTarget: TabTarget | undefined;
+let refreshAttempts = 0;
 
 window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => { if (event.data.type === 'renderTabs') render(event.data); });
 closeSaved?.addEventListener('click', () => vscode.postMessage({ type: 'closeSaved' }));
@@ -27,7 +28,7 @@ document.addEventListener('click', () => dismissContextMenu());
 window.addEventListener('blur', () => dismissContextMenu());
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(); });
 new ResizeObserver(([entry]) => { const width = Math.round(entry.contentRect.width); if (width >= 180) vscode.postMessage({ type: 'railWidth', width }); }).observe(document.documentElement);
-vscode.postMessage({ type: 'ready' });
+requestInitialSnapshot('ready');
 
 function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): void {
   if (!groups || !description) return;
@@ -39,6 +40,16 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   if (addGroup) addGroup.hidden = groupMode !== 'manual';
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
+}
+
+function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
+  vscode.postMessage({ type });
+  refreshAttempts += 1;
+  window.setTimeout(() => {
+    if (!latestSnapshot && refreshAttempts < 5) {
+      requestInitialSnapshot('requestRefresh');
+    }
+  }, 500);
 }
 
 function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup): void {

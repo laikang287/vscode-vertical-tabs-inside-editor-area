@@ -30,6 +30,7 @@ const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const RAIL_SETTLE_DELAY_MS = 150;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_WAIT_INTERVAL_MS = 10;
+const INPUT_MTIME_TIMEOUT_MS = 250;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -897,8 +898,22 @@ export class VerticalTabsPanel {
       return false;
     }
     const groups = vscode.window.tabGroups.all;
-    if (groups.length !== 1 || groups[0]?.tabs.length !== 1 || !isVerticalTabsPanel(groups[0].tabs[0])) {
+    const ownGroupIndex = this.findOwnGroupIndex();
+    const hasUserTabs = groups.some((group) => group.tabs.some((tab) => !isVerticalTabsPanel(tab)));
+    if (ownGroupIndex < 0 || hasUserTabs) {
       return false;
+    }
+    if (groups.length !== 1 || groups[0]?.tabs.length !== 1 || !isVerticalTabsPanel(groups[0].tabs[0])) {
+      const reusableGroup = groups.find((group, index) => index !== ownGroupIndex && group.tabs.length === 0);
+      if (!reusableGroup) {
+        return false;
+      }
+      this.emptyRailLayoutOperation = this.restoreUsableEmptyRailLayout(reusableGroup.viewColumn);
+      try {
+        return await this.emptyRailLayoutOperation;
+      } finally {
+        this.emptyRailLayoutOperation = undefined;
+      }
     }
 
     this.emptyRailLayoutOperation = this.restoreUsableEmptyRailLayout();
@@ -909,12 +924,16 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async restoreUsableEmptyRailLayout(): Promise<boolean> {
+  private async restoreUsableEmptyRailLayout(reusableViewColumn?: vscode.ViewColumn): Promise<boolean> {
     const ratio = getConfiguredRailRatio(this.context);
-    logInfo('检测到垂直标签栏成为唯一编辑器组，准备恢复右侧编辑器区域', { ratio });
+    logInfo('检测到垂直标签栏没有可显示标签，准备恢复右侧编辑器区域', { ratio, reusableViewColumn });
     this.arrangingRail = true;
     try {
-      await vscode.commands.executeCommand('workbench.action.newGroupRight');
+      if (reusableViewColumn === undefined) {
+        await vscode.commands.executeCommand('workbench.action.newGroupRight');
+      } else {
+        await focusEditorGroup(reusableViewColumn);
+      }
       await openWelcomeEditor();
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
       if (!await applyLeadingRailRatio(ratio)) {
@@ -1144,7 +1163,8 @@ async function inputMtime(input: vscode.Tab['input']): Promise<number | undefine
     return undefined;
   }
   try {
-    return (await vscode.workspace.fs.stat(uri)).mtime;
+    const stat = await withTimeout(vscode.workspace.fs.stat(uri), INPUT_MTIME_TIMEOUT_MS);
+    return stat?.mtime;
   } catch {
     return undefined;
   }

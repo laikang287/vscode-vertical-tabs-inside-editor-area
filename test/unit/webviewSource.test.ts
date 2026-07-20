@@ -22,3 +22,18 @@ test('webview exposes grouping, sorting, bulk close, pinning, and drag messages'
   assert.match(source, /moveTab/);
   assert.match(source, /createGroupFromTabs/);
 });
+
+test('webview retries the initial snapshot request while it is still loading', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /requestInitialSnapshot\('ready'\)/);
+  assert.match(source, /requestInitialSnapshot\('requestRefresh'\)/);
+  assert.match(source, /refreshAttempts < 5/);
+});
+
+test('extension snapshot mtime lookup has a timeout', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /INPUT_MTIME_TIMEOUT_MS = 250/);
+  assert.match(source, /withTimeout\(vscode\.workspace\.fs\.stat\(uri\), INPUT_MTIME_TIMEOUT_MS\)/);
+});
