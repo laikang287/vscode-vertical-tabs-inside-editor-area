@@ -54,13 +54,14 @@ export function buildSnapshot(
   const visibleTabs = groups.flatMap((group) => group.tabs.filter((tab) => !tab.isVerticalTabsPanel));
   const labelCounts = new Map<string, number>();
   for (const tab of visibleTabs) labelCounts.set(tab.label, (labelCounts.get(tab.label) ?? 0) + 1);
+  const tabDescriptions = buildDuplicateTabDescriptions(visibleTabs, labelCounts);
 
   const tabs: VerticalTabItem[] = groups.flatMap((group, groupIndex) => group.tabs.flatMap((tab, tabIndex) => {
     if (tab.isVerticalTabsPanel) return [];
     return [{
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
-      description: labelCounts.get(tab.label) !== 1 ? tab.path : undefined,
+      description: tabDescriptions.get(tab),
       isActive: tab.isActive,
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
@@ -204,12 +205,15 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
       parentNameCounts.set(title, (parentNameCounts.get(title) ?? 0) + 1);
     }
   }
+  const parentDescriptions = groupMode === 'parentDir'
+    ? shortestUniquePathSuffixes(Array.from(buckets.keys()).map((id) => ({ key: id, path: id })))
+    : new Map<string, string>();
   return Array.from(buckets.entries()).map(([id, groupTabs]) => {
     const title = groupMode === 'parentDir' ? parentDirTitle(id) : fileTypeTitle(id);
     return {
       id,
       title,
-      description: groupMode === 'parentDir' && parentNameCounts.get(title) !== 1 ? parentDirDescription(id) : undefined,
+      description: groupMode === 'parentDir' && parentNameCounts.get(title) !== 1 ? parentDescriptions.get(id) : undefined,
       collapsed: false,
       mode: groupMode,
       tabs: sortTabs(groupTabs, sortMode),
@@ -217,6 +221,53 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
       isManual: false,
     };
   });
+}
+
+function buildDuplicateTabDescriptions(tabs: readonly SnapshotSourceTab[], labelCounts: ReadonlyMap<string, number>): ReadonlyMap<SnapshotSourceTab, string> {
+  const descriptions = new Map<SnapshotSourceTab, string>();
+  for (const [label, count] of labelCounts.entries()) {
+    if (count === 1) continue;
+    const duplicateTabs = tabs.filter((tab) => tab.label === label);
+    const duplicateDescriptions = shortestUniquePathSuffixes(duplicateTabs.map((tab) => ({ key: tab, path: parentDirPath(tab.path) })));
+    for (const tab of duplicateTabs) {
+      const description = duplicateDescriptions.get(tab);
+      if (description) descriptions.set(tab, description);
+    }
+  }
+  return descriptions;
+}
+
+function parentDirPath(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const normalized = path.posix.normalize(value);
+  const dirname = path.posix.dirname(normalized);
+  return dirname === '.' ? undefined : dirname;
+}
+
+function shortestUniquePathSuffixes<Key>(items: readonly { readonly key: Key; readonly path: string | undefined }[]): Map<Key, string> {
+  const normalizedItems = items.map((item) => ({
+    key: item.key,
+    segments: pathSegments(item.path),
+  }));
+  const result = new Map<Key, string>();
+  for (const item of normalizedItems) {
+    if (item.segments.length === 0) continue;
+    let suffixLength = 1;
+    while (suffixLength < item.segments.length && normalizedItems.some((other) => other !== item && suffix(other.segments, suffixLength) === suffix(item.segments, suffixLength))) {
+      suffixLength += 1;
+    }
+    result.set(item.key, suffix(item.segments, suffixLength));
+  }
+  return result;
+}
+
+function pathSegments(value: string | undefined): readonly string[] {
+  if (!value || value === '__other' || value === '__root') return [];
+  return path.posix.normalize(value).split('/').filter((segment) => segment.length > 0 && segment !== '.');
+}
+
+function suffix(segments: readonly string[], suffixLength: number): string {
+  return segments.slice(Math.max(0, segments.length - suffixLength)).join('/');
 }
 
 function sortTabs(tabs: readonly VerticalTabItem[], sortMode: SortMode): readonly VerticalTabItem[] {
@@ -278,11 +329,6 @@ function parentDirTitle(id: string): string {
   if (id === '__other') return '其他';
   if (id === '__root') return '工作区根目录';
   return path.posix.basename(id);
-}
-
-function parentDirDescription(id: string): string | undefined {
-  if (id === '__other' || id === '__root') return undefined;
-  return id;
 }
 
 function fileTypeKey(tab: VerticalTabItem): string {
