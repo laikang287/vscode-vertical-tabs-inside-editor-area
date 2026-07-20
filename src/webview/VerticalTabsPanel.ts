@@ -1,6 +1,7 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { isEditorLayout, type EditorLayout } from '../layout/RailLayout';
+import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
@@ -43,6 +44,7 @@ export class VerticalTabsPanel {
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext,
   ) {
+    logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn });
     this.configureWebview();
     // The panel can exist before VS Code publishes its tab through tabGroups.
     // Mark it visible from the instance itself so the launcher switches to its
@@ -50,21 +52,27 @@ export class VerticalTabsPanel {
     void VerticalTabsPanel.setVisibilityContext(true);
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
-      this.panel.webview.onDidReceiveMessage((message: unknown) => void this.handleMessage(message)),
+      this.panel.webview.onDidReceiveMessage((message: unknown) => {
+        void this.handleMessage(message).catch((error) => logError('处理 Webview 消息失败', error));
+      }),
       vscode.window.tabGroups.onDidChangeTabs(() => this.scheduleRefresh()),
       vscode.window.tabGroups.onDidChangeTabGroups(() => this.scheduleRefresh()),
     );
   }
 
   static initialize(context: vscode.ExtensionContext): void {
+    logInfo('初始化垂直标签面板服务', { serializerRegistered: VerticalTabsPanel.serializerRegistered });
     if (!VerticalTabsPanel.serializerRegistered) {
       context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
         deserializeWebviewPanel: async (panel) => {
+          logInfo('开始恢复持久化的垂直标签面板', { viewColumn: panel.viewColumn });
           const instance = VerticalTabsPanel.attach(panel, context);
           await VerticalTabsPanel.enqueue(() => instance.settleAndEnsureRail());
+          logInfo('持久化的垂直标签面板恢复完成');
         },
       }));
       VerticalTabsPanel.serializerRegistered = true;
+      logDebug('WebviewPanelSerializer 注册完成', { viewType: VIEW_TYPE });
     }
 
     context.subscriptions.push(
@@ -73,7 +81,8 @@ export class VerticalTabsPanel {
       vscode.window.tabGroups.onDidChangeTabGroups(() => VerticalTabsPanel.syncVisibilityContext()),
     );
     VerticalTabsPanel.syncVisibilityContext();
-    void VerticalTabsPanel.open(context).catch(() => undefined);
+    logDebug('计划在启动后自动打开垂直标签面板');
+    void VerticalTabsPanel.open(context).catch((error) => logError('启动时自动打开垂直标签面板失败', error));
   }
 
   static open(context: vscode.ExtensionContext): Promise<VerticalTabsPanel | undefined> {
@@ -81,8 +90,14 @@ export class VerticalTabsPanel {
   }
 
   private static async openCore(context: vscode.ExtensionContext): Promise<VerticalTabsPanel | undefined> {
+    logDebug('开始打开垂直标签面板', {
+      attached: VerticalTabsPanel.panels.current !== undefined,
+      publishedTab: hasVerticalTabsPanel(),
+      editorGroups: vscode.window.tabGroups.all.length,
+    });
     const existing = VerticalTabsPanel.panels.current;
     if (existing) {
+      logDebug('复用已附加的垂直标签面板', { settled: existing.hasSettledRail() });
       const previousEditor = vscode.window.activeTextEditor;
       existing.reveal(false);
       if (!existing.hasSettledRail()) {
@@ -94,12 +109,15 @@ export class VerticalTabsPanel {
     // A restored webview tab can be visible before VS Code invokes its serializer.
     // Wait for the serializer instead of creating a duplicate panel beside it.
     if (hasVerticalTabsPanel()) {
+      logDebug('检测到待反序列化的垂直标签 Webview，等待附加实例');
       const restored = await VerticalTabsPanel.waitForAttachedPanel();
       VerticalTabsPanel.syncVisibilityContext();
       if (restored) {
         const previousEditor = vscode.window.activeTextEditor;
         restored.reveal(false);
         await restored.settleAndEnsureRail(previousEditor);
+      } else {
+        logWarn('等待已恢复的垂直标签面板实例超时');
       }
       return restored;
     }
@@ -112,11 +130,13 @@ export class VerticalTabsPanel {
   }
 
   static async focus(context: vscode.ExtensionContext): Promise<void> {
+    logDebug('请求聚焦垂直标签面板');
     const instance = await VerticalTabsPanel.open(context);
     instance?.reveal(false);
   }
 
   static async close(): Promise<void> {
+    logDebug('请求关闭垂直标签面板');
     await VerticalTabsPanel.enqueue(async () => {
       const instance = VerticalTabsPanel.panels.current;
       if (instance) {
@@ -124,7 +144,10 @@ export class VerticalTabsPanel {
       } else {
         const tab = findVerticalTabsTab();
         if (tab) {
+          logDebug('关闭尚未附加实例的垂直标签 Webview');
           await vscode.window.tabGroups.close(tab, true);
+        } else {
+          logDebug('关闭请求无需处理：面板不存在');
         }
       }
       VerticalTabsPanel.syncVisibilityContext();
@@ -132,16 +155,23 @@ export class VerticalTabsPanel {
   }
 
   static dispose(): void {
+    logDebug('释放垂直标签面板服务');
     VerticalTabsPanel.panels.current?.panel.dispose();
   }
 
   static async navigate(context: vscode.ExtensionContext, direction: 1 | -1): Promise<void> {
+    logDebug('请求相邻标签导航', { direction });
     const instance = await VerticalTabsPanel.open(context);
     await instance?.navigate(direction);
   }
 
   private static async create(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
+    logInfo('开始创建新的垂直标签面板', {
+      userTabsPresent: hasUserTabs(),
+      editorGroups: vscode.window.tabGroups.all.length,
+    });
     if (!hasUserTabs()) {
+      logDebug('没有用户标签，先打开欢迎页');
       await openWelcomePage();
     }
     const previouslyActiveEditor = vscode.window.activeTextEditor;
@@ -155,18 +185,21 @@ export class VerticalTabsPanel {
         retainContextWhenHidden: true,
       },
     );
+    logDebug('WebviewPanel 创建完成', { viewType: VIEW_TYPE, requestedViewColumn: vscode.ViewColumn.One });
     const instance = VerticalTabsPanel.panels.show(
       () => new VerticalTabsPanel(panel, context),
       (existing) => existing.reveal(false),
     );
     await VerticalTabsPanel.setVisibilityContext(true);
     await instance.settleAndEnsureRail(previouslyActiveEditor);
+    logInfo('新的垂直标签面板创建流程完成', { settled: instance.hasSettledRail() });
     return instance;
   }
 
   private static attach(panel: vscode.WebviewPanel, context: vscode.ExtensionContext): VerticalTabsPanel {
     const existing = VerticalTabsPanel.panels.current;
     if (existing) {
+      logWarn('检测到重复恢复的垂直标签面板，关闭重复实例');
       panel.dispose();
       return existing;
     }
@@ -186,6 +219,7 @@ export class VerticalTabsPanel {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const instance = VerticalTabsPanel.panels.current;
       if (instance) {
+        logDebug('已恢复的垂直标签面板实例完成附加', { attempts: attempt + 1 });
         return instance;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 10));
@@ -199,6 +233,7 @@ export class VerticalTabsPanel {
 
   private static setVisibilityContext(visible: boolean): Promise<void> {
     const update = VerticalTabsPanel.visibilityOperations.then(async () => {
+      logTrace('更新垂直标签可见性上下文', { visible });
       await vscode.commands.executeCommand('setContext', 'verticalTabs.visible', visible);
       VerticalTabsPanel.visibilityEmitter.fire(visible);
     });
@@ -208,37 +243,66 @@ export class VerticalTabsPanel {
 
   private async settleAndEnsureRail(previousEditor?: vscode.TextEditor): Promise<void> {
     this.arrangingRail = true;
+    logDebug('等待编辑器状态稳定后安排左侧标签栏', {
+      delayMs: RAIL_SETTLE_DELAY_MS,
+      previousEditor: previousEditor?.document.uri.toString(),
+    });
     await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
     if (VerticalTabsPanel.panels.current !== this) {
+      logWarn('安排左侧标签栏时面板实例已变化，终止本次操作');
       return;
     }
 
     for (let attempt = 0; attempt < RAIL_ARRANGE_ATTEMPTS; attempt += 1) {
-      if (await this.ensureRail(previousEditor)) {
-        this.arrangingRail = false;
-        return;
+      logDebug('开始安排左侧标签栏', { attempt: attempt + 1, maxAttempts: RAIL_ARRANGE_ATTEMPTS });
+      try {
+        if (await this.ensureRail(previousEditor)) {
+          this.arrangingRail = false;
+          logInfo('左侧标签栏安排完成', { attempt: attempt + 1 });
+          return;
+        }
+      } catch (error) {
+        logError('安排左侧标签栏时发生异常', { attempt: attempt + 1, error });
       }
+      logWarn('左侧标签栏安排未完成，准备重试', { attempt: attempt + 1 });
       await new Promise<void>((resolve) => setTimeout(resolve, RAIL_RETRY_DELAY_MS));
     }
+    logError('左侧标签栏安排失败，重试次数已耗尽', { attempts: RAIL_ARRANGE_ATTEMPTS });
   }
 
   private async ensureRail(previousEditor?: vscode.TextEditor): Promise<boolean> {
-    if (await this.waitForOwnGroup() < 0) {
+    const initialGroupIndex = await this.waitForOwnGroup();
+    if (initialGroupIndex < 0) {
+      logWarn('未能在编辑器标签中找到垂直标签 Webview');
       return false;
     }
+    logDebug('已找到垂直标签 Webview 所在分组', {
+      groupIndex: initialGroupIndex,
+      groupCount: vscode.window.tabGroups.all.length,
+      tabCount: vscode.window.tabGroups.all[initialGroupIndex]?.tabs.length,
+    });
 
     if (!await this.revealInFirstGroup()) {
+      logWarn('无法将垂直标签 Webview 激活到第一个编辑器分组');
       return false;
     }
 
     const savedRatio = this.context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
     const configuredRatio = vscode.workspace.getConfiguration('verticalTabs').get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
     const ratio = normalizeRailRatio(typeof savedRatio === 'number' ? savedRatio : configuredRatio);
+    logDebug('确定垂直标签栏宽度比例', {
+      savedRatio,
+      configuredRatio,
+      appliedRatio: ratio,
+      observedWidth: this.lastObservedRailWidth,
+    });
     if (!await applyTwoColumnLayout(ratio, this.lastObservedRailWidth)) {
+      logWarn('首次应用双列编辑器布局失败');
       return false;
     }
 
     if (!await this.keepOnlyPanelInLeftGroup()) {
+      logWarn('未能将左侧分组中的其他标签全部迁移到右侧');
       return false;
     }
 
@@ -246,27 +310,36 @@ export class VerticalTabsPanel {
     // requested sizes during that structural change. Apply the same layout a
     // second time after both groups exist so the 20/80 split takes effect.
     if (!await applyTwoColumnLayout(ratio, this.lastObservedRailWidth)) {
+      logWarn('在编辑器分组创建后再次应用双列布局失败');
       return false;
     }
 
     if (typeof savedRatio !== 'number') {
       await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, ratio);
+      logDebug('保存首次使用的垂直标签栏宽度比例', { ratio });
     }
 
     if (!await this.revealInFirstGroup()) {
+      logWarn('锁定前无法重新激活左侧垂直标签分组');
       return false;
     }
     const finalGroup = vscode.window.tabGroups.all[0];
     if (finalGroup.tabs.length !== 1 || !isVerticalTabsPanel(finalGroup.tabs[0])) {
+      logWarn('锁定前左侧分组状态不符合预期', {
+        tabCount: finalGroup.tabs.length,
+        containsVerticalTabs: finalGroup.tabs.some((tab) => isVerticalTabsPanel(tab)),
+      });
       return false;
     }
     await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+    logInfo('左侧垂直标签分组已锁定');
     if (previousEditor) {
       await vscode.window.showTextDocument(previousEditor.document, {
         viewColumn: previousEditor.viewColumn,
         preserveFocus: false,
         selection: previousEditor.selection,
       });
+      logDebug('已恢复安排布局前的活动文本编辑器', { uri: previousEditor.document.uri.toString() });
     }
     this.refresh();
     return true;
@@ -277,14 +350,23 @@ export class VerticalTabsPanel {
       const group = vscode.window.tabGroups.all[0];
       const tab = group?.tabs.find((candidate) => !isVerticalTabsPanel(candidate));
       if (!tab) {
-        return group?.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0]);
+        const isolated = group?.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0]);
+        logDebug('左侧分组标签迁移结束', { movedTabs: moves, isolated });
+        return isolated;
       }
+      logDebug('准备将混入左侧分组的标签移至右侧', {
+        moveNumber: moves + 1,
+        label: tab.label,
+        inputKind: inputKind(tab.input),
+      });
       if (!await this.activateTabInLeftGroup(tab)) {
+        logWarn('无法激活待迁移的左侧标签', { label: tab.label, inputKind: inputKind(tab.input) });
         return false;
       }
       await vscode.commands.executeCommand('workbench.action.moveEditorToRightGroup');
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     }
+    logError('左侧分组迁移标签达到安全上限', { maxMoves: 100 });
     return false;
   }
 
@@ -294,15 +376,18 @@ export class VerticalTabsPanel {
     }
     const index = vscode.window.tabGroups.all[0]?.tabs.indexOf(tab) ?? -1;
     if (index < 0 || index >= 9) {
+      logWarn('待迁移标签索引超出可用编辑器命令范围', { index, label: tab.label });
       return false;
     }
     await vscode.commands.executeCommand(`workbench.action.openEditorAtIndex${index + 1}`);
     for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
       if (tab.isActive) {
+        logTrace('待迁移标签已激活', { index, attempts: attempt + 1 });
         return true;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     }
+    logWarn('等待待迁移标签激活超时', { index, label: tab.label });
     return false;
   }
 
@@ -310,7 +395,11 @@ export class VerticalTabsPanel {
     const layout = await getEditorLayout();
     const ratio = layout ? getLeadingGroupRatio(layout) : undefined;
     if (typeof ratio === 'number') {
-      await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, normalizeRailRatio(ratio));
+      const normalizedRatio = normalizeRailRatio(ratio);
+      await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, normalizedRatio);
+      logDebug('保存用户调整后的垂直标签栏宽度比例', { measuredRatio: ratio, savedRatio: normalizedRatio });
+    } else {
+      logWarn('无法从当前编辑器布局读取垂直标签栏宽度比例', { layout });
     }
   }
 
@@ -331,26 +420,32 @@ export class VerticalTabsPanel {
     for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
       const index = this.findOwnGroupIndex();
       if (index >= 0) {
+        logTrace('垂直标签 Webview 已发布到编辑器分组', { index, attempts: attempt + 1 });
         return index;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     }
+    logWarn('等待垂直标签 Webview 发布超时', { attempts: GROUP_PUBLISH_WAIT_ATTEMPTS });
     return -1;
   }
 
   private async revealInFirstGroup(): Promise<boolean> {
+    logTrace('请求在第一个编辑器分组显示垂直标签 Webview');
     this.panel.reveal(vscode.ViewColumn.One, false);
     for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
       if (this.findOwnGroupIndex() === 0
         && vscode.window.tabGroups.activeTabGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+        logTrace('垂直标签 Webview 已在第一个分组激活', { attempts: attempt + 1 });
         return true;
       }
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     }
+    logWarn('等待垂直标签 Webview 在第一个分组激活超时', { attempts: GROUP_ACTIVATE_WAIT_ATTEMPTS });
     return false;
   }
 
   private dispose(): void {
+    logInfo('垂直标签面板实例已释放');
     VerticalTabsPanel.panels.clear(this);
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
@@ -362,17 +457,21 @@ export class VerticalTabsPanel {
   }
 
   private reveal(preserveFocus: boolean): void {
+    logTrace('显示垂直标签面板', { viewColumn: this.panel.viewColumn, preserveFocus });
     this.panel.reveal(this.panel.viewColumn, preserveFocus);
   }
 
   private async close(): Promise<void> {
+    logInfo('开始关闭垂直标签面板');
     await this.saveEditorWidthRatio();
     const group = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
     if (group && group.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0])) {
       try {
         await vscode.window.tabGroups.close(group, true);
-      } catch {
+        logDebug('已关闭垂直标签专用编辑器分组');
+      } catch (error) {
         // Falling back to panel disposal still removes the extension view.
+        logWarn('关闭垂直标签专用编辑器分组失败，将回退到释放面板', error);
       }
     }
     this.panel.dispose();
@@ -390,6 +489,11 @@ export class VerticalTabsPanel {
 
   private refresh(): void {
     this.currentSnapshot = this.createSnapshot();
+    logTrace('刷新垂直标签快照', {
+      revision: this.currentSnapshot.revision,
+      tabCount: this.currentSnapshot.tabs.length,
+      manualGroupCount: this.currentSnapshot.manualGroups.length,
+    });
     this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
   }
 
@@ -418,11 +522,14 @@ export class VerticalTabsPanel {
   private async handleMessage(value: unknown): Promise<void> {
     const message = parseWebviewMessage(value);
     if (!message) {
+      logWarn('忽略无效或未知的 Webview 消息', { valueType: typeof value });
       return;
     }
+    logDebug('收到 Webview 消息', { type: message.type });
 
     if (message.type === 'railWidth') {
       this.lastObservedRailWidth = message.width;
+      logDebug('观察到垂直标签 Webview 宽度', { width: message.width, arrangingRail: this.arrangingRail });
       if (this.arrangingRail) {
         return;
       }
@@ -431,11 +538,13 @@ export class VerticalTabsPanel {
     }
 
     if (message.type === 'ready' || message.type === 'requestRefresh') {
+      logDebug('Webview 请求刷新标签快照', { type: message.type });
       this.refresh();
       return;
     }
 
     if (message.type === 'createGroup') {
+      logInfo('创建手动标签分组', { name: message.name.trim() });
       this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: message.name.trim(), collapsed: false });
       this.refresh();
       return;
@@ -446,6 +555,9 @@ export class VerticalTabsPanel {
         const index = this.manualGroups.indexOf(group);
         this.manualGroups[index] = { ...group, name: message.name.trim() };
         this.refresh();
+        logInfo('重命名手动标签分组', { groupId: message.groupId, name: message.name.trim() });
+      } else {
+        logWarn('重命名手动标签分组失败：分组不存在', { groupId: message.groupId });
       }
       return;
     }
@@ -455,6 +567,9 @@ export class VerticalTabsPanel {
         const index = this.manualGroups.indexOf(group);
         this.manualGroups[index] = { ...group, collapsed: !group.collapsed };
         this.refresh();
+        logDebug('切换手动标签分组折叠状态', { groupId: message.groupId, collapsed: !group.collapsed });
+      } else {
+        logWarn('切换手动标签分组失败：分组不存在', { groupId: message.groupId });
       }
       return;
     }
@@ -466,16 +581,25 @@ export class VerticalTabsPanel {
           if (this.manualGroupByTab.get(tab) === message.groupId) this.manualGroupByTab.delete(tab);
         }
         this.refresh();
+        logInfo('删除手动标签分组', { groupId: message.groupId });
+      } else {
+        logWarn('删除手动标签分组失败：分组不存在', { groupId: message.groupId });
       }
       return;
     }
     if (message.type === 'assignGroup') {
-      if (message.groupId !== undefined && !this.manualGroups.some((group) => group.id === message.groupId)) return;
+      if (message.groupId !== undefined && !this.manualGroups.some((group) => group.id === message.groupId)) {
+        logWarn('分配标签到手动分组失败：分组不存在', { groupId: message.groupId });
+        return;
+      }
       const tab = this.resolveTab(message.target);
       if (tab) {
         if (message.groupId) this.manualGroupByTab.set(tab, message.groupId);
         else this.manualGroupByTab.delete(tab);
         this.refresh();
+        logInfo('更新标签的手动分组', { label: tab.label, groupId: message.groupId });
+      } else {
+        logWarn('更新标签手动分组失败：标签目标已失效', { target: message.target });
       }
       return;
     }
@@ -483,7 +607,10 @@ export class VerticalTabsPanel {
     if (message.type === 'activateTab') {
       const tab = this.resolveTab(message.target);
       if (tab) {
+        logDebug('激活标签', { label: tab.label, inputKind: inputKind(tab.input), group: tab.group.viewColumn });
         await this.activateTab(tab);
+      } else {
+        logWarn('激活标签失败：标签目标已失效', { target: message.target });
       }
       return;
     }
@@ -497,6 +624,7 @@ export class VerticalTabsPanel {
           : 'closeSaved';
     const targets = selectCloseTargets(this.currentSnapshot, action, 'target' in message ? message.target : undefined);
     const tabs = targets.map((target) => this.resolveTab(target)).filter((tab): tab is vscode.Tab => tab !== undefined);
+    logInfo('执行标签关闭操作', { action, selectedTargets: targets.length, resolvedTabs: tabs.length });
     if (tabs.length > 0) {
       await vscode.window.tabGroups.close(tabs, true);
     }
@@ -505,6 +633,7 @@ export class VerticalTabsPanel {
 
   private resolveTab(target: TabTarget): vscode.Tab | undefined {
     if (target.revision !== this.currentSnapshot.revision) {
+      logWarn('标签目标快照版本已失效', { targetRevision: target.revision, currentRevision: this.currentSnapshot.revision });
       return undefined;
     }
     const tab = vscode.window.tabGroups.all[target.groupIndex]?.tabs[target.tabIndex];
@@ -515,17 +644,20 @@ export class VerticalTabsPanel {
     this.refresh();
     const tabs = this.currentSnapshot.tabs.filter((tab) => tab.isActivatable);
     if (tabs.length === 0) {
+      logDebug('相邻标签导航无需处理：没有可激活标签');
       return;
     }
     const activeIndex = tabs.findIndex((tab) => tab.isActive);
     const index = activeIndex < 0 ? 0 : (activeIndex + direction + tabs.length) % tabs.length;
     const tab = this.resolveTab(tabs[index].target);
     if (tab) {
+      logDebug('相邻标签导航选择目标', { direction, label: tab.label, inputKind: inputKind(tab.input) });
       await this.activateTab(tab);
     }
   }
 
   private async activateTab(tab: vscode.Tab): Promise<void> {
+    logDebug('使用公开 API 打开标签', { label: tab.label, inputKind: inputKind(tab.input), viewColumn: tab.group.viewColumn });
     const options: vscode.TextDocumentShowOptions = { viewColumn: tab.group.viewColumn, preserveFocus: false };
     if (tab.input instanceof vscode.TabInputText) {
       await vscode.window.showTextDocument(tab.input.uri, options);
@@ -541,14 +673,21 @@ export class VerticalTabsPanel {
     }
     if (tab.input instanceof vscode.TabInputNotebook) {
       await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
+      return;
     }
+    logWarn('标签类型不支持通过公开 API 激活', { label: tab.label, inputKind: inputKind(tab.input) });
   }
 
   private postMessage(message: ExtensionMessage): void {
-    void this.panel.webview.postMessage(message);
+    void this.panel.webview.postMessage(message).then((delivered) => {
+      if (!delivered) {
+        logWarn('向 Webview 发送消息未送达', { type: message.type });
+      }
+    }, (error) => logError('向 Webview 发送消息失败', { type: message.type, error }));
   }
 
   private configureWebview(): void {
+    logDebug('配置垂直标签 Webview HTML 与 CSP');
     this.panel.webview.html = this.createHtml();
   }
 
@@ -600,11 +739,16 @@ function hasVerticalTabsPanel(): boolean {
 async function openWelcomePage(): Promise<void> {
   const commands = await vscode.commands.getCommands(true);
   if (commands.includes('workbench.action.openWelcomePage')) {
+    logDebug('通过 openWelcomePage 命令打开欢迎页');
     await vscode.commands.executeCommand('workbench.action.openWelcomePage');
   } else if (commands.includes('workbench.action.openWalkthrough')) {
+    logDebug('通过 openWalkthrough 命令打开欢迎页');
     await vscode.commands.executeCommand('workbench.action.openWalkthrough', 'vscode.gettingStarted');
   } else if (commands.includes('workbench.action.openAgentSessionsWelcome')) {
+    logDebug('通过 openAgentSessionsWelcome 命令打开欢迎页');
     await vscode.commands.executeCommand('workbench.action.openAgentSessionsWelcome');
+  } else {
+    logWarn('没有找到可用的 VS Code 欢迎页命令');
   }
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
@@ -612,18 +756,27 @@ async function openWelcomePage(): Promise<void> {
 async function getEditorLayout(): Promise<EditorLayout | undefined> {
   try {
     const layout = await vscode.commands.executeCommand<unknown>('vscode.getEditorLayout');
-    return isEditorLayout(layout) ? layout : undefined;
-  } catch {
+    if (!isEditorLayout(layout)) {
+      logWarn('vscode.getEditorLayout 返回了无效布局', { layout });
+      return undefined;
+    }
+    logDebug('读取编辑器布局', { layout });
+    return layout;
+  } catch (error) {
+    logError('读取编辑器布局失败', error);
     return undefined;
   }
 }
 
 async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   try {
+    logDebug('应用编辑器布局', { layout });
     await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
+    logDebug('编辑器布局命令执行完成');
     return true;
-  } catch {
+  } catch (error) {
     // The rail remains usable at VS Code's native split size when unavailable.
+    logError('应用编辑器布局失败', { layout, error });
     return false;
   }
 }
@@ -632,6 +785,13 @@ async function applyTwoColumnLayout(ratio: number, observedGroupWidth?: number):
   const layout = await getEditorLayout();
   const totalWidth = getEditorAreaWidth(layout, observedGroupWidth);
   const railWidth = Math.max(1, Math.round(totalWidth * normalizeRailRatio(ratio)));
+  logDebug('计算双列编辑器布局尺寸', {
+    requestedRatio: ratio,
+    observedGroupWidth,
+    totalWidth,
+    railWidth,
+    editorWidth: totalWidth - railWidth,
+  });
   return applyEditorLayout({
     orientation: 0,
     groups: [

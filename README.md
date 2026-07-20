@@ -6,6 +6,8 @@
 
 使用 `Vertical Tabs: Focus` 或 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd>（macOS：<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd>）聚焦标签栏。活动栏的 Vertical Tabs 图标会打开一个启动器，可显示或关闭标签栏。首次宽度为编辑器区域的 20%，可通过 `verticalTabs.defaultRailWidthRatio` 调整；之后会恢复上次拖动后的宽度比例。终端和其他扩展的 Webview 会显示在列表中，但受 VS Code 公开 API 限制，不能从该列表跳转。
 
+扩展会将启动、布局、标签迁移、分组锁定和 Webview 消息等关键事件写入 `Vertical Tabs` 输出通道。当前代码中的 `ACTIVE_LOG_LEVEL` 固定为 `Debug`；发生问题时可从命令面板执行 `Vertical Tabs: Show Logs` 查看日志。
+
 ## 开发
 
 ```bash

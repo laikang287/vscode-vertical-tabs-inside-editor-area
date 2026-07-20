@@ -18,6 +18,7 @@ suite('Vertical Tabs extension', () => {
     assert.ok(commands.includes('verticalTabs.focus'), 'The focus command should be registered.');
     assert.ok(commands.includes('verticalTabs.previous'), 'The previous command should be registered.');
     assert.ok(commands.includes('verticalTabs.next'), 'The next command should be registered.');
+    assert.ok(commands.includes('verticalTabs.showLogs'), 'The show logs command should be registered.');
 
   });
 
