@@ -1,4 +1,5 @@
 import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
@@ -36,6 +37,8 @@ const MAX_EMPTY_RAIL_RESTORE_RATIO = 0.4;
 const SNAPSHOT_REFRESH_TIMEOUT_MS = 2000;
 const WEBVIEW_POST_RETRY_DELAY_MS = 250;
 const WEBVIEW_POST_MAX_ATTEMPTS = 8;
+const RENDER_ACK_TIMEOUT_MS = 1200;
+const RENDER_ACK_MAX_ATTEMPTS = 6;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -50,6 +53,9 @@ export class VerticalTabsPanel {
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private renderAckTimer: ReturnType<typeof setTimeout> | undefined;
+  private renderAckRevision = 0;
+  private renderAckAttempts = 0;
   private disposed = false;
   // Ignore the Webview's initial ResizeObserver report until VS Code has
   // finished creating and sizing the dedicated editor group.
@@ -409,6 +415,9 @@ export class VerticalTabsPanel {
     if (this.initialHostRefreshTimer) {
       clearTimeout(this.initialHostRefreshTimer);
     }
+    if (this.renderAckTimer) {
+      clearTimeout(this.renderAckTimer);
+    }
     queueMicrotask(() => VerticalTabsPanel.syncVisibilityContext());
     while (this.disposables.length > 0) {
       this.disposables.pop()?.dispose();
@@ -486,6 +495,7 @@ export class VerticalTabsPanel {
         error,
       });
       this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
+      this.scheduleRenderAckWatch(this.currentSnapshot);
       return;
     }
     logDebug('完成刷新垂直标签快照', {
@@ -499,9 +509,34 @@ export class VerticalTabsPanel {
       durationMs: Date.now() - started,
     });
     this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
+    this.scheduleRenderAckWatch(this.currentSnapshot);
     if (options.ensureEmptyLayout !== false) {
       void this.ensureUsableEmptyRailLayout().catch((error) => logError('恢复空垂直标签栏布局失败', error));
     }
+  }
+
+  private scheduleRenderAckWatch(snapshot: VerticalTabsSnapshot): void {
+    if (this.renderAckTimer) {
+      clearTimeout(this.renderAckTimer);
+    }
+    this.renderAckAttempts = 0;
+    const revision = snapshot.revision;
+    const resend = () => {
+      if (this.disposed || VerticalTabsPanel.panels.current !== this || this.renderAckRevision >= revision) {
+        return;
+      }
+      this.renderAckAttempts += 1;
+      logWarn('等待 Webview 渲染确认超时，重新发送标签快照', {
+        revision,
+        attempt: this.renderAckAttempts,
+        tabCount: snapshot.tabs.length,
+      });
+      this.postMessage({ type: 'renderTabs', title: TITLE, snapshot });
+      if (this.renderAckAttempts < RENDER_ACK_MAX_ATTEMPTS) {
+        this.renderAckTimer = setTimeout(resend, RENDER_ACK_TIMEOUT_MS);
+      }
+    };
+    this.renderAckTimer = setTimeout(resend, RENDER_ACK_TIMEOUT_MS);
   }
 
   private async createSnapshot(): Promise<VerticalTabsSnapshot> {
@@ -576,6 +611,23 @@ export class VerticalTabsPanel {
       if (message.level === 'error') logError(`Webview: ${message.message}`, details);
       else if (message.level === 'warn') logWarn(`Webview: ${message.message}`, details);
       else logDebug(`Webview: ${message.message}`, details);
+      return;
+    }
+
+    if (message.type === 'renderAck') {
+      logDebug('收到 Webview 渲染确认', {
+        revision: message.revision,
+        currentRevision: this.currentSnapshot.revision,
+        attempts: this.renderAckAttempts,
+      });
+      if (message.revision >= this.renderAckRevision) {
+        this.renderAckRevision = message.revision;
+        this.renderAckAttempts = 0;
+        if (this.renderAckTimer) {
+          clearTimeout(this.renderAckTimer);
+          this.renderAckTimer = undefined;
+        }
+      }
       return;
     }
 
@@ -1057,10 +1109,10 @@ export class VerticalTabsPanel {
   }
 
   private createHtml(): string {
-    const scriptUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview.js'));
     const styleUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vertical-tabs.css'));
     const nonce = crypto.randomBytes(16).toString('base64');
     const cspSource = this.panel.webview.cspSource;
+    const scriptContent = this.readWebviewScript();
 
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1098,9 +1150,24 @@ export class VerticalTabsPanel {
     <p id="description">正在同步打开的标签…</p>
     <section id="groups" aria-label="打开的编辑器标签"></section>
   </main>
-  <script nonce="${nonce}" src="${scriptUri}"></script>
+  <script nonce="${nonce}">${scriptContent}</script>
 </body>
 </html>`;
+  }
+
+  private readWebviewScript(): string {
+    const scriptPath = vscode.Uri.joinPath(this.context.extensionUri, 'out', 'webview.js').fsPath;
+    try {
+      const source = fs.readFileSync(scriptPath, 'utf8').replace(/<\/script/gi, '<\\/script');
+      logDebug('已内联读取 Webview 脚本', { scriptPath, bytes: source.length });
+      return source;
+    } catch (error) {
+      logError('读取 Webview 脚本失败，将显示诊断错误', { scriptPath, error });
+      return [
+        "const description = document.querySelector('#description');",
+        "if (description) description.textContent = '垂直标签脚本加载失败，请查看 Vertical Tabs 输出日志。';",
+      ].join('\n');
+    }
   }
 
   private async ensureUsableEmptyRailLayout(): Promise<boolean> {

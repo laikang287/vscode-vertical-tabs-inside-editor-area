@@ -44,6 +44,8 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   if (sortModeSelect) sortModeSelect.value = sortMode;
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
+  vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
+  logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${tabs.length}, groups=${displayGroups.length}`);
 }
 
 function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {

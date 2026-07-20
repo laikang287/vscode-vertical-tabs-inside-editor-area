@@ -13,6 +13,10 @@ test('accepts refresh requests', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'requestRefresh' }), { type: 'requestRefresh' });
 });
 
+test('accepts render acknowledgement messages', () => {
+  assert.deepEqual(parseWebviewMessage({ type: 'renderAck', revision: 7 }), { type: 'renderAck', revision: 7 });
+});
+
 test('accepts bounded webview log messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'debug', message: 'started' }), { type: 'webviewLog', level: 'debug', message: 'started' });
   assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' }), { type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' });
@@ -51,6 +55,9 @@ test('rejects malformed and unknown messages', () => {
     { type: 'webviewLog', level: 'info', message: 'bad' },
     { type: 'webviewLog', level: 'debug', message: '' },
     { type: 'webviewLog', level: 'debug', message: 'x', details: 42 },
+    { type: 'renderAck', revision: -1 },
+    { type: 'renderAck', revision: 1.5 },
+    { type: 'renderAck', revision: '7' },
     { type: 'activateTab' },
     { type: 'activateTab', target, requestId: '' },
     { type: 'activateTab', target, requestId: 42 },

@@ -55,6 +55,8 @@ test('webview reports startup, render, and script failures to the extension log'
   assert.match(source, /window\.addEventListener\('error'/);
   assert.match(source, /window\.addEventListener\('unhandledrejection'/);
   assert.match(source, /收到标签渲染消息/);
+  assert.match(source, /type: 'renderAck', revision: message\.snapshot\.revision/);
+  assert.match(source, /标签渲染完成并发送确认/);
   assert.match(source, /等待标签快照超时/);
 });
 
@@ -89,11 +91,27 @@ test('extension retries undelivered render messages', () => {
 
   assert.match(source, /WEBVIEW_POST_RETRY_DELAY_MS = 250/);
   assert.match(source, /WEBVIEW_POST_MAX_ATTEMPTS = 8/);
+  assert.match(source, /RENDER_ACK_TIMEOUT_MS = 1200/);
+  assert.match(source, /RENDER_ACK_MAX_ATTEMPTS = 6/);
   assert.match(source, /private postMessage\(message: ExtensionMessage, attempt = 1\): void/);
+  assert.match(source, /private scheduleRenderAckWatch\(snapshot: VerticalTabsSnapshot\): void/);
+  assert.match(source, /等待 Webview 渲染确认超时，重新发送标签快照/);
+  assert.match(source, /message\.type === 'renderAck'/);
   assert.match(source, /private disposed = false/);
   assert.match(source, /this\.disposed = true/);
   assert.match(source, /this\.disposed \|\| VerticalTabsPanel\.panels\.current !== this/);
   assert.match(source, /this\.postMessage\(message, attempt \+ 1\)/);
+});
+
+test('extension inlines the webview script to avoid local resource load failures', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /import \* as fs from 'node:fs'/);
+  assert.match(source, /private readWebviewScript\(\): string/);
+  assert.match(source, /fs\.readFileSync\(scriptPath, 'utf8'\)/);
+  assert.match(source, /已内联读取 Webview 脚本/);
+  assert.match(source, new RegExp(String.raw`<script nonce="\$\{nonce\}">\$\{scriptContent\}<\/script>`));
+  assert.doesNotMatch(source, /src="\$\{scriptUri\}"/);
 });
 
 test('extension marks built-in welcome and settings webviews as activatable', () => {

@@ -23,6 +23,7 @@ export interface VerticalTabsSnapshot {
 }
 export type WebviewMessage =
   | { readonly type: 'ready' } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
+  | { readonly type: 'renderAck'; readonly revision: number }
   | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
   | { readonly type: 'closeAll' } | { readonly type: 'setGroupMode'; readonly groupMode: GroupMode }
   | { readonly type: 'setSortMode'; readonly sortMode: SortMode }
@@ -41,6 +42,7 @@ export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: st
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
   if (value.type === 'ready' || value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll') return { type: value.type };
+  if (value.type === 'renderAck' && isNonNegativeInteger(value.revision)) return { type: 'renderAck', revision: value.revision };
   if (value.type === 'webviewLog' && isWebviewLogLevel(value.level) && isLogMessage(value.message) && (value.details === undefined || isLogDetails(value.details))) {
     return { type: 'webviewLog', level: value.level, message: value.message, ...(value.details === undefined ? {} : { details: value.details }) };
   }
