@@ -9,6 +9,11 @@ export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
 const WIDTH_STORAGE_KEY = 'verticalTabs.railWidthPx';
 const RAIL_SETTLE_DELAY_MS = 400;
+const RAIL_RETRY_DELAY_MS = 100;
+const RAIL_ARRANGE_ATTEMPTS = 3;
+const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
+const GROUP_ACTIVATE_WAIT_ATTEMPTS = 30;
+const GROUP_WAIT_INTERVAL_MS = 10;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -22,7 +27,9 @@ export class VerticalTabsPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
-  private arrangingRail = false;
+  // Ignore the Webview's initial ResizeObserver report until VS Code has
+  // finished creating, moving and sizing the dedicated editor group.
+  private arrangingRail = true;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, tabs: [], manualGroups: [] };
   private readonly manualGroups: ManualTabGroup[] = [];
   private readonly manualGroupByTab = new WeakMap<vscode.Tab, string>();
@@ -73,7 +80,9 @@ export class VerticalTabsPanel {
     if (existing) {
       const previousEditor = vscode.window.activeTextEditor;
       existing.reveal(false);
-      await existing.settleAndEnsureRail(undefined, previousEditor);
+      if (!existing.hasSettledRail()) {
+        await existing.settleAndEnsureRail(undefined, previousEditor);
+      }
       return existing;
     }
 
@@ -194,70 +203,76 @@ export class VerticalTabsPanel {
   }
 
   private async settleAndEnsureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
+    this.arrangingRail = true;
     await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
     if (VerticalTabsPanel.panels.current !== this) {
       return;
     }
-    await this.ensureRail(layoutBeforeRail, previousEditor);
+
+    for (let attempt = 0; attempt < RAIL_ARRANGE_ATTEMPTS; attempt += 1) {
+      if (await this.ensureRail(layoutBeforeRail, previousEditor)) {
+        this.arrangingRail = false;
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, RAIL_RETRY_DELAY_MS));
+    }
   }
 
-  private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
-    this.arrangingRail = true;
-    try {
-      let ownGroupIndex = await this.waitForOwnGroup();
-      if (ownGroupIndex < 0) {
-        return;
-      }
-
-      if (!await this.activateOwnGroup()) {
-        return;
-      }
-      let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
-      if (ownGroup.tabs.length > 1) {
-        await vscode.commands.executeCommand('workbench.action.newGroupLeft');
-        if (!await this.activateOwnGroup()) {
-          return;
-        }
-        await vscode.commands.executeCommand('workbench.action.moveEditorToLeftGroup');
-        ownGroupIndex = await this.waitForOwnGroup();
-        if (ownGroupIndex < 0) {
-          return;
-        }
-        ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
-      }
-
-      if (!await this.moveOwnGroupToFarLeft()) {
-        return;
-      }
-
-      const width = this.preferredWidth();
-      if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
-        await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
-      }
-
-      // setEditorLayout can remap existing groups while rebuilding a nested layout.
-      // Move the webview again afterwards so opening from the launcher always
-      // completes with the rail in the physical left-most editor group.
-      if (!await this.moveOwnGroupToFarLeft()) {
-        return;
-      }
-      await this.applyRailWidth(width);
-
-      if (!await this.activateOwnGroup()) {
-        return;
-      }
-      await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
-      if (previousEditor) {
-        await vscode.window.showTextDocument(previousEditor.document, {
-          viewColumn: previousEditor.viewColumn,
-          preserveFocus: false,
-          selection: previousEditor.selection,
-        });
-      }
-      this.refresh();
-    } finally {
-      this.arrangingRail = false;
+  private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<boolean> {
+    let ownGroupIndex = await this.waitForOwnGroup();
+    if (ownGroupIndex < 0) {
+      return false;
     }
+
+    if (!await this.activateOwnGroup()) {
+      return false;
+    }
+    let ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+    if (ownGroup.tabs.length > 1) {
+      await vscode.commands.executeCommand('workbench.action.newGroupLeft');
+      if (!await this.activateOwnGroup()) {
+        return false;
+      }
+      await vscode.commands.executeCommand('workbench.action.moveEditorToLeftGroup');
+      ownGroupIndex = await this.waitForOwnGroup();
+      if (ownGroupIndex < 0) {
+        return false;
+      }
+      ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+    }
+
+    if (!await this.moveOwnGroupToFarLeft()) {
+      return false;
+    }
+
+    const width = this.preferredWidth();
+    if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
+      await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
+    }
+
+    // setEditorLayout can remap existing groups while rebuilding a nested layout.
+    // Move the webview again afterwards so opening from the launcher always
+    // completes with the rail in the physical left-most editor group.
+    if (!await this.moveOwnGroupToFarLeft()) {
+      return false;
+    }
+    if (!await this.applyRailWidth(width)) {
+      return false;
+    }
+
+    if (!await this.activateOwnGroup()) {
+      return false;
+    }
+    await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+    if (previousEditor) {
+      await vscode.window.showTextDocument(previousEditor.document, {
+        viewColumn: previousEditor.viewColumn,
+        preserveFocus: false,
+        selection: previousEditor.selection,
+      });
+    }
+    this.refresh();
+    return true;
   }
 
   private preferredWidth(): number {
@@ -269,12 +284,21 @@ export class VerticalTabsPanel {
     return normalizeRailWidth(configured);
   }
 
-  private async applyRailWidth(width: number): Promise<void> {
+  private async applyRailWidth(width: number): Promise<boolean> {
     const layout = await getEditorLayout();
     if (!layout || countLayoutLeaves(layout) !== vscode.window.tabGroups.all.length) {
-      return;
+      return false;
     }
-    await applyEditorLayout(setLeadingRailWidth(layout, width));
+    return applyEditorLayout(setLeadingRailWidth(layout, width));
+  }
+
+  private hasSettledRail(): boolean {
+    const ownGroupIndex = this.findOwnGroupIndex();
+    const ownGroup = vscode.window.tabGroups.all[ownGroupIndex];
+    return !this.arrangingRail
+      && ownGroupIndex === 0
+      && ownGroup?.tabs.length === 1
+      && isVerticalTabsPanel(ownGroup.tabs[0]);
   }
 
   private findOwnGroupIndex(): number {
@@ -282,12 +306,12 @@ export class VerticalTabsPanel {
   }
 
   private async waitForOwnGroup(): Promise<number> {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
+    for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
       const index = this.findOwnGroupIndex();
       if (index >= 0) {
         return index;
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     }
     return -1;
   }
@@ -322,11 +346,11 @@ export class VerticalTabsPanel {
 
   private async activateOwnGroup(): Promise<boolean> {
     this.panel.reveal(this.panel.viewColumn ?? vscode.ViewColumn.One, false);
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
       if (vscode.window.tabGroups.activeTabGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
         return true;
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     }
     return false;
   }
@@ -597,11 +621,13 @@ async function getEditorLayout(): Promise<EditorLayout | undefined> {
   }
 }
 
-async function applyEditorLayout(layout: EditorLayout): Promise<void> {
+async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   try {
     await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
+    return true;
   } catch {
     // The rail remains usable at VS Code's native split size when unavailable.
+    return false;
   }
 }
 
