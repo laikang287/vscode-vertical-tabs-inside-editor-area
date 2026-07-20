@@ -12,8 +12,12 @@ const RAIL_SETTLE_DELAY_MS = 400;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
+  private static readonly visibilityEmitter = new vscode.EventEmitter<boolean>();
   private static serializerRegistered = false;
   private static operations: Promise<void> = Promise.resolve();
+  private static visibilityOperations: Promise<void> = Promise.resolve();
+
+  static readonly onDidChangeVisibility = VerticalTabsPanel.visibilityEmitter.event;
 
   private readonly disposables: vscode.Disposable[] = [];
   private revision = 0;
@@ -90,7 +94,7 @@ export class VerticalTabsPanel {
   }
 
   static isOpen(): boolean {
-    return hasVerticalTabsPanel();
+    return VerticalTabsPanel.panels.current !== undefined || hasVerticalTabsPanel();
   }
 
   static async focus(context: vscode.ExtensionContext): Promise<void> {
@@ -177,11 +181,16 @@ export class VerticalTabsPanel {
   }
 
   private static syncVisibilityContext(): void {
-    void VerticalTabsPanel.setVisibilityContext(hasVerticalTabsPanel());
+    void VerticalTabsPanel.setVisibilityContext(VerticalTabsPanel.isOpen());
   }
 
-  private static async setVisibilityContext(visible: boolean): Promise<void> {
-    await vscode.commands.executeCommand('setContext', 'verticalTabs.visible', visible);
+  private static setVisibilityContext(visible: boolean): Promise<void> {
+    const update = VerticalTabsPanel.visibilityOperations.then(async () => {
+      await vscode.commands.executeCommand('setContext', 'verticalTabs.visible', visible);
+      VerticalTabsPanel.visibilityEmitter.fire(visible);
+    });
+    VerticalTabsPanel.visibilityOperations = update.catch(() => undefined);
+    return update;
   }
 
   private async settleAndEnsureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
