@@ -1126,7 +1126,6 @@ export class VerticalTabsPanel {
 <body>
   <main class="vertical-tabs" aria-live="polite">
     <header class="toolbar">
-      <h1>${TITLE}</h1>
       <div class="toolbar-actions">
         <label title="切换分组模式">分组
           <select id="group-mode">
@@ -1145,6 +1144,8 @@ export class VerticalTabsPanel {
             <option value="nameDesc">文件名逆序</option>
           </select>
         </label>
+        <button id="expand-all" type="button" title="展开所有分组">全部展开</button>
+        <button id="collapse-all" type="button" title="折叠所有分组">全部折叠</button>
       </div>
     </header>
     <p id="description">正在同步打开的标签…</p>

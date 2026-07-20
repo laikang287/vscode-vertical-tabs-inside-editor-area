@@ -1,6 +1,10 @@
 import type { ExtensionMessage, GroupMode, ManualTabGroup, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 
-declare const acquireVsCodeApi: () => { postMessage(message: unknown): void };
+declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
+
+interface WebviewState {
+  readonly collapsedGroups?: readonly string[];
+}
 
 const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
@@ -8,6 +12,9 @@ const groups = document.querySelector<HTMLElement>('#groups');
 const verticalTabs = document.querySelector<HTMLElement>('.vertical-tabs');
 const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
 const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
+const expandAllButton = document.querySelector<HTMLButtonElement>('#expand-all');
+const collapseAllButton = document.querySelector<HTMLButtonElement>('#collapse-all');
+const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 let contextMenu: HTMLElement | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let draggedTarget: TabTarget | undefined;
@@ -25,6 +32,8 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
 groupModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setGroupMode', groupMode: groupModeSelect.value }));
 sortModeSelect?.addEventListener('change', () => vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value }));
+expandAllButton?.addEventListener('click', () => setAllGroupsCollapsed(false));
+collapseAllButton?.addEventListener('click', () => setAllGroupsCollapsed(true));
 document.addEventListener('click', () => dismissContextMenu());
 window.addEventListener('blur', () => dismissContextMenu());
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(); });
@@ -44,6 +53,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   if (sortModeSelect) sortModeSelect.value = sortMode;
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
+  updateTreeActionState();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${tabs.length}, groups=${displayGroups.length}`);
 }
@@ -81,18 +91,32 @@ function stringifyDetails(value: unknown): string {
 
 function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup): void {
   const section = document.createElement('section');
-  section.className = ['tab-group', group.isManual ? 'is-manual' : '', group.showHeader ? '' : 'without-header'].filter(Boolean).join(' ');
+  const collapsed = isGroupCollapsed(group);
+  section.className = ['tab-group', group.showHeader ? 'with-header' : 'without-header', collapsed ? 'is-collapsed' : ''].filter(Boolean).join(' ');
   section.dataset.groupId = group.id;
   section.addEventListener('dragover', (event) => handleGroupDragOver(event, group));
   section.addEventListener('drop', (event) => handleGroupDrop(event, group));
   if (group.showHeader) {
     const header = document.createElement('header');
     header.className = 'group-header';
-    if (group.isManual) {
-      const toggle = button(group.collapsed ? '▶' : '▼', `${group.collapsed ? '展开' : '折叠'}分组`);
-      toggle.addEventListener('click', () => vscode.postMessage({ type: 'toggleGroup', groupId: group.id }));
-      header.append(toggle);
-    }
+    header.tabIndex = 0;
+    header.setAttribute('role', 'button');
+    header.setAttribute('aria-expanded', String(!collapsed));
+    header.title = `${collapsed ? '展开' : '折叠'}分组`;
+    header.addEventListener('click', () => toggleDisplayGroup(group));
+    header.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      toggleDisplayGroup(group);
+    });
+    const toggle = button(collapsed ? '▶' : '▼', `${collapsed ? '展开' : '折叠'}分组`);
+    toggle.className = 'group-toggle';
+    toggle.tabIndex = -1;
+    toggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleDisplayGroup(group);
+    });
+    header.append(toggle);
     const name = document.createElement('span');
     name.className = 'group-name';
     name.textContent = group.title;
@@ -105,27 +129,33 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     }
     if (group.isManual && group.id !== '__ungrouped') {
       const rename = button('重命名', '重命名分组');
-      rename.addEventListener('click', () => {
+      rename.className = 'group-action';
+      rename.addEventListener('click', (event) => {
+        event.stopPropagation();
         const value = window.prompt('分组名称', group.title);
         if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() });
       });
       const remove = button('删除', '删除分组');
-      remove.addEventListener('click', () => vscode.postMessage({ type: 'deleteGroup', groupId: group.id }));
+      remove.className = 'group-action';
+      remove.addEventListener('click', (event) => {
+        event.stopPropagation();
+        vscode.postMessage({ type: 'deleteGroup', groupId: group.id });
+      });
       header.append(rename, remove);
     }
     section.append(header);
   }
-  appendTabList(section, group.tabs, group);
+  if (!collapsed) appendTabList(section, group.tabs, group, group.showHeader ? 1 : 0);
   parent.append(section);
 }
 
-function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], group: VerticalTabDisplayGroup): void {
-  for (const tab of tabs) parent.append(createTab(tab, group));
+function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], group: VerticalTabDisplayGroup, level: 0 | 1): void {
+  for (const tab of tabs) parent.append(createTab(tab, group, level));
 }
 
-function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLElement {
+function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 0 | 1): HTMLElement {
   const row = document.createElement('article');
-  row.className = ['tab-row', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
+  row.className = ['tab-row', `tree-level-${level}`, tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
   row.draggable = true;
   row.dataset.groupId = group.id;
   row.addEventListener('dragstart', (event) => {
@@ -168,6 +198,54 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup): HTMLEl
   actions.append(actionButton('×', '关闭标签', 'closeTab', tab.target));
   row.append(activate, actions);
   return row;
+}
+
+function toggleDisplayGroup(group: VerticalTabDisplayGroup): void {
+  setDisplayGroupCollapsed(group, !isGroupCollapsed(group));
+}
+
+function setAllGroupsCollapsed(collapsed: boolean): void {
+  const snapshot = latestSnapshot;
+  if (!snapshot) return;
+  for (const group of snapshot.displayGroups) {
+    if (group.showHeader) setDisplayGroupCollapsed(group, collapsed, false);
+  }
+  saveCollapsedGroups();
+  render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot });
+}
+
+function setDisplayGroupCollapsed(group: VerticalTabDisplayGroup, collapsed: boolean, rerender = true): void {
+  const closedKey = groupCollapseKey(group);
+  const openKey = openGroupCollapseKey(group);
+  collapsedGroups.delete(collapsed ? openKey : closedKey);
+  collapsedGroups.add(collapsed ? closedKey : openKey);
+  saveCollapsedGroups();
+  if (rerender && latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
+}
+
+function isGroupCollapsed(group: VerticalTabDisplayGroup): boolean {
+  if (collapsedGroups.has(groupCollapseKey(group))) return true;
+  if (collapsedGroups.has(openGroupCollapseKey(group))) return false;
+  return group.collapsed;
+}
+
+function groupCollapseKey(group: VerticalTabDisplayGroup): string {
+  return `${group.mode}:${group.id}:closed`;
+}
+
+function openGroupCollapseKey(group: VerticalTabDisplayGroup): string {
+  return `${group.mode}:${group.id}:open`;
+}
+
+function saveCollapsedGroups(): void {
+  vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
+}
+
+function updateTreeActionState(): void {
+  const groupsWithHeaders = latestSnapshot?.displayGroups.filter((group) => group.showHeader) ?? [];
+  const hasGroups = groupsWithHeaders.length > 0;
+  if (expandAllButton) expandAllButton.disabled = !hasGroups;
+  if (collapseAllButton) collapseAllButton.disabled = !hasGroups;
 }
 
 function activationTitle(tab: VerticalTabItem): string {

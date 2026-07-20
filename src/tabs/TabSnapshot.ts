@@ -182,7 +182,7 @@ function buildManualGroups(
       title: group.name,
       collapsed: group.collapsed,
       mode: 'manual',
-      tabs: group.collapsed ? [] : sortTabs(groupTabs, sortMode),
+      tabs: sortTabs(groupTabs, sortMode),
       showHeader: true,
       isManual: true,
     });
