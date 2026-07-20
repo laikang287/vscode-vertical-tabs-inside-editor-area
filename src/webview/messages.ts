@@ -10,7 +10,7 @@ export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
 export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean;
   readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly activationKind: TabActivationKind; readonly manualGroupId?: string;
-  readonly groupId?: string; readonly isFile: boolean; readonly resourcePath?: string; readonly mtime?: number;
+  readonly groupId?: string; readonly isFile: boolean; readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number;
 }
 export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }
 export interface VerticalTabDisplayGroup {

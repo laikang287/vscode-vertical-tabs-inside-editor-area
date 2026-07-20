@@ -20,6 +20,7 @@ export interface SnapshotSourceTab {
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
   readonly path?: string;
+  readonly tooltipPath?: string;
   readonly uri?: string;
   readonly mtime?: number;
   readonly targetIdentity: TabTargetIdentity;
@@ -51,17 +52,12 @@ export function buildSnapshot(
 ): VerticalTabsSnapshot {
   const groupMode = options.groupMode ?? 'vscode';
   const sortMode = options.sortMode ?? 'none';
-  const visibleTabs = groups.flatMap((group) => group.tabs.filter((tab) => !tab.isVerticalTabsPanel));
-  const labelCounts = new Map<string, number>();
-  for (const tab of visibleTabs) labelCounts.set(tab.label, (labelCounts.get(tab.label) ?? 0) + 1);
-  const tabDescriptions = buildDuplicateTabDescriptions(visibleTabs, labelCounts);
 
   const tabs: VerticalTabItem[] = groups.flatMap((group, groupIndex) => group.tabs.flatMap((tab, tabIndex) => {
     if (tab.isVerticalTabsPanel) return [];
     return [{
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
-      description: tabDescriptions.get(tab),
       isActive: tab.isActive,
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
@@ -72,6 +68,7 @@ export function buildSnapshot(
       groupId: tab.manualGroupId,
       isFile: isFileTab(tab),
       resourcePath: tab.path,
+      tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
     }];
   }));
@@ -221,27 +218,6 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
       isManual: false,
     };
   });
-}
-
-function buildDuplicateTabDescriptions(tabs: readonly SnapshotSourceTab[], labelCounts: ReadonlyMap<string, number>): ReadonlyMap<SnapshotSourceTab, string> {
-  const descriptions = new Map<SnapshotSourceTab, string>();
-  for (const [label, count] of labelCounts.entries()) {
-    if (count === 1) continue;
-    const duplicateTabs = tabs.filter((tab) => tab.label === label);
-    const duplicateDescriptions = shortestUniquePathSuffixes(duplicateTabs.map((tab) => ({ key: tab, path: parentDirPath(tab.path) })));
-    for (const tab of duplicateTabs) {
-      const description = duplicateDescriptions.get(tab);
-      if (description) descriptions.set(tab, description);
-    }
-  }
-  return descriptions;
-}
-
-function parentDirPath(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  const normalized = path.posix.normalize(value);
-  const dirname = path.posix.dirname(normalized);
-  return dirname === '.' ? undefined : dirname;
 }
 
 function shortestUniquePathSuffixes<Key>(items: readonly { readonly key: Key; readonly path: string | undefined }[]): Map<Key, string> {

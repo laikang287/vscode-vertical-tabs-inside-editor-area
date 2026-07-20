@@ -589,6 +589,7 @@ export class VerticalTabsPanel {
       isPreview: tab.isPreview,
       inputKind: inputKind(tab.input),
       path,
+      tooltipPath: inputTooltipPath(tab.input),
       uri: inputUri(tab.input)?.toString(),
       mtime: await inputMtime(tab.input),
       targetIdentity: targetIdentity(tab),
@@ -1531,6 +1532,14 @@ function inputPath(input: vscode.Tab['input']): string | undefined {
   }
   const relative = vscode.workspace.asRelativePath(uri, false);
   return relative === uri.fsPath ? uri.path : relative;
+}
+
+function inputTooltipPath(input: vscode.Tab['input']): string | undefined {
+  const uri = inputUri(input);
+  if (!uri) {
+    return undefined;
+  }
+  return uri.scheme === 'file' ? uri.fsPath : uri.toString();
 }
 
 function inputUri(input: vscode.Tab['input']): vscode.Uri | undefined {

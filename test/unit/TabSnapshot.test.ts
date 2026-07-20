@@ -17,8 +17,8 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.tabs[0].target.tabIndex, 1);
   assert.deepEqual(snapshot.tabs[0].target.identity, { kind: 'text', uri: 'file:///workspace/src/index.ts' });
   assert.equal(snapshot.tabs[0].manualGroupId, 'work');
-  assert.equal(snapshot.tabs[0].description, 'src');
-  assert.equal(snapshot.tabs[1].description, 'test');
+  assert.equal(snapshot.tabs[0].description, undefined);
+  assert.equal(snapshot.tabs[1].description, undefined);
   assert.equal(snapshot.tabs[0].activationKind, 'reliable');
   assert.equal(snapshot.tabs[2].activationKind, 'bestEffort');
   assert.equal(snapshot.tabs[2].isActivatable, true);
@@ -118,5 +118,5 @@ test('orders manual tabs from persisted identity order', () => {
   ]]]);
   const snapshot = buildSnapshot(manualSource, 13, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual', manualOrderByGroup: order });
   const workGroup = snapshot.displayGroups.find((group) => group.id === 'work');
-  assert.deepEqual(workGroup?.tabs.map((tab) => tab.description), ['test', 'src']);
+  assert.deepEqual(workGroup?.tabs.map((tab) => tab.description), [undefined, undefined]);
 });

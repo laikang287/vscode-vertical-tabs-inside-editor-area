@@ -249,9 +249,10 @@ function updateTreeActionState(): void {
 }
 
 function activationTitle(tab: VerticalTabItem): string {
-  if (tab.activationKind === 'reliable') return tab.label;
-  if (tab.activationKind === 'bestEffort') return `${tab.label}：使用 VS Code 内置导航命令尝试跳转`;
-  return `${tab.label} 无法由扩展跳转`;
+  const title = tab.tooltipPath ?? tab.label;
+  if (tab.activationKind === 'reliable') return title;
+  if (tab.activationKind === 'bestEffort') return `${title}：使用 VS Code 内置导航命令尝试跳转`;
+  return `${title} 无法由扩展跳转`;
 }
 
 function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
