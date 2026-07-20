@@ -27,7 +27,10 @@ export class VerticalTabsPanel {
     private readonly context: vscode.ExtensionContext,
   ) {
     this.configureWebview();
-    VerticalTabsPanel.syncVisibilityContext();
+    // The panel can exist before VS Code publishes its tab through tabGroups.
+    // Mark it visible from the instance itself so the launcher switches to its
+    // close action immediately after the user clicks Open.
+    void VerticalTabsPanel.setVisibilityContext(true);
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: unknown) => void this.handleMessage(message)),
@@ -138,6 +141,7 @@ export class VerticalTabsPanel {
       () => new VerticalTabsPanel(panel, context),
       (existing) => existing.reveal(false),
     );
+    await VerticalTabsPanel.setVisibilityContext(true);
     await instance.ensureRail(layoutBeforeRail, previouslyActiveEditor);
     return instance;
   }
@@ -172,7 +176,11 @@ export class VerticalTabsPanel {
   }
 
   private static syncVisibilityContext(): void {
-    void vscode.commands.executeCommand('setContext', 'verticalTabs.visible', hasVerticalTabsPanel());
+    void VerticalTabsPanel.setVisibilityContext(hasVerticalTabsPanel());
+  }
+
+  private static async setVisibilityContext(visible: boolean): Promise<void> {
+    await vscode.commands.executeCommand('setContext', 'verticalTabs.visible', visible);
   }
 
   private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
