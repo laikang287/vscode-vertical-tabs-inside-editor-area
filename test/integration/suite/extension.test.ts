@@ -39,7 +39,8 @@ suite('Vertical Tabs extension', () => {
     assert.equal(group.tabs.length, 1, 'The vertical-tabs panel should have an exclusive editor group.');
 
     const layout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
-    assert.equal(firstLeaf(layout)?.size, 280, 'The configured rail width should be applied whenever it opens.');
+    const railRatio = firstLeaf(layout)?.size;
+    assert.ok(typeof railRatio === 'number' && railRatio >= 0.1 && railRatio <= 0.5, 'The rail width should be represented by a valid editor layout ratio.');
 
     await vscode.commands.executeCommand('verticalTabs.focus');
     const document = await vscode.workspace.openTextDocument({ content: 'locked rail verification' });

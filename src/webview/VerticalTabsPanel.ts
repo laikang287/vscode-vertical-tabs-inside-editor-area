@@ -1,6 +1,6 @@
 import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
-import { countLayoutLeaves, isEditorLayout, normalizeRailWidth, prependRailToLayout, setLeadingRailWidth, type EditorLayout } from '../layout/RailLayout';
+import { isEditorLayout, normalizeRailWidth, type EditorLayout } from '../layout/RailLayout';
 import { buildSnapshot, selectCloseTargets, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
@@ -8,12 +8,16 @@ import { type ExtensionMessage, type ManualTabGroup, type TabTarget, type Vertic
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
 const WIDTH_STORAGE_KEY = 'verticalTabs.railWidthPx';
+const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
 const RAIL_SETTLE_DELAY_MS = 400;
 const RAIL_RETRY_DELAY_MS = 100;
 const RAIL_ARRANGE_ATTEMPTS = 3;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_ACTIVATE_WAIT_ATTEMPTS = 30;
 const GROUP_WAIT_INTERVAL_MS = 10;
+const DEFAULT_RAIL_RATIO = 0.25;
+const MIN_RAIL_RATIO = 0.1;
+const MAX_RAIL_RATIO = 0.5;
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -30,6 +34,8 @@ export class VerticalTabsPanel {
   // Ignore the Webview's initial ResizeObserver report until VS Code has
   // finished creating, moving and sizing the dedicated editor group.
   private arrangingRail = true;
+  private lastObservedRailWidth: number | undefined;
+  private railWidthRevision = 0;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, tabs: [], manualGroups: [] };
   private readonly manualGroups: ManualTabGroup[] = [];
   private readonly manualGroupByTab = new WeakMap<vscode.Tab, string>();
@@ -81,7 +87,7 @@ export class VerticalTabsPanel {
       const previousEditor = vscode.window.activeTextEditor;
       existing.reveal(false);
       if (!existing.hasSettledRail()) {
-        await existing.settleAndEnsureRail(undefined, previousEditor);
+        await existing.settleAndEnsureRail(previousEditor);
       }
       return existing;
     }
@@ -94,7 +100,7 @@ export class VerticalTabsPanel {
       if (restored) {
         const previousEditor = vscode.window.activeTextEditor;
         restored.reveal(false);
-        await restored.settleAndEnsureRail(undefined, previousEditor);
+        await restored.settleAndEnsureRail(previousEditor);
       }
       return restored;
     }
@@ -139,12 +145,11 @@ export class VerticalTabsPanel {
     if (!hasUserTabs()) {
       await openWelcomePage();
     }
-    const layoutBeforeRail = await getEditorLayout();
     const previouslyActiveEditor = vscode.window.activeTextEditor;
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
       TITLE,
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      { viewColumn: vscode.ViewColumn.One, preserveFocus: true },
       {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out'), vscode.Uri.joinPath(context.extensionUri, 'media')],
@@ -156,7 +161,7 @@ export class VerticalTabsPanel {
       (existing) => existing.reveal(false),
     );
     await VerticalTabsPanel.setVisibilityContext(true);
-    await instance.settleAndEnsureRail(layoutBeforeRail, previouslyActiveEditor);
+    await instance.settleAndEnsureRail(previouslyActiveEditor);
     return instance;
   }
 
@@ -202,7 +207,7 @@ export class VerticalTabsPanel {
     return update;
   }
 
-  private async settleAndEnsureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<void> {
+  private async settleAndEnsureRail(previousEditor?: vscode.TextEditor): Promise<void> {
     this.arrangingRail = true;
     await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
     if (VerticalTabsPanel.panels.current !== this) {
@@ -210,7 +215,7 @@ export class VerticalTabsPanel {
     }
 
     for (let attempt = 0; attempt < RAIL_ARRANGE_ATTEMPTS; attempt += 1) {
-      if (await this.ensureRail(layoutBeforeRail, previousEditor)) {
+      if (await this.ensureRail(previousEditor)) {
         this.arrangingRail = false;
         return;
       }
@@ -218,43 +223,40 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async ensureRail(layoutBeforeRail?: EditorLayout, previousEditor?: vscode.TextEditor): Promise<boolean> {
+  private async ensureRail(previousEditor?: vscode.TextEditor): Promise<boolean> {
     if (await this.waitForOwnGroup() < 0) {
       return false;
     }
 
-    // WebviewPanel.reveal is the supported VS Code API for moving a Webview
-    // into a specific editor column. Move it to column one before creating its
-    // dedicated group so the rail does not depend on the active-group command.
     if (!await this.revealInFirstGroup()) {
       return false;
     }
 
-    let ownGroup = vscode.window.tabGroups.all[0];
-    if (ownGroup.tabs.length > 1) {
-      await vscode.commands.executeCommand('workbench.action.newGroupLeft');
-      if (!await this.revealInFirstGroup()) {
-        return false;
+    const savedRatio = this.context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
+    let ratio = normalizeRailRatio(savedRatio);
+    let measurementRevision = this.railWidthRevision;
+    if (!await applyTwoColumnLayout(ratio)) {
+      return false;
+    }
+
+    if (!await this.keepOnlyPanelInLeftGroup()) {
+      return false;
+    }
+
+    if (typeof savedRatio !== 'number') {
+      const measuredWidth = await this.waitForRailWidthAfter(measurementRevision);
+      if (typeof measuredWidth === 'number') {
+        const correctedRatio = normalizeRailRatio(ratio * this.preferredWidth() / measuredWidth);
+        if (Math.abs(correctedRatio - ratio) >= 0.005) {
+          ratio = correctedRatio;
+          measurementRevision = this.railWidthRevision;
+          if (!await applyTwoColumnLayout(ratio) || !await this.keepOnlyPanelInLeftGroup()) {
+            return false;
+          }
+          await this.waitForRailWidthAfter(measurementRevision);
+        }
       }
-      ownGroup = vscode.window.tabGroups.all[0];
-    }
-
-    if (ownGroup.tabs.length !== 1 || !isVerticalTabsPanel(ownGroup.tabs[0])) {
-      return false;
-    }
-
-    const width = this.preferredWidth();
-    if (layoutBeforeRail && countLayoutLeaves(layoutBeforeRail) + 1 === vscode.window.tabGroups.all.length) {
-      await applyEditorLayout(prependRailToLayout(layoutBeforeRail, width));
-    }
-
-    // setEditorLayout can remap groups while rebuilding a nested layout. Use
-    // the supported reveal API again to keep the Webview in the first column.
-    if (!await this.revealInFirstGroup()) {
-      return false;
-    }
-    if (!await this.applyRailWidth(width)) {
-      return false;
+      await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, ratio);
     }
 
     if (!await this.revealInFirstGroup()) {
@@ -285,12 +287,56 @@ export class VerticalTabsPanel {
     return normalizeRailWidth(configured);
   }
 
-  private async applyRailWidth(width: number): Promise<boolean> {
-    const layout = await getEditorLayout();
-    if (!layout || countLayoutLeaves(layout) !== vscode.window.tabGroups.all.length) {
+  private async keepOnlyPanelInLeftGroup(): Promise<boolean> {
+    for (let moves = 0; moves < 100; moves += 1) {
+      const group = vscode.window.tabGroups.all[0];
+      const tab = group?.tabs.find((candidate) => !isVerticalTabsPanel(candidate));
+      if (!tab) {
+        return group?.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0]);
+      }
+      if (!await this.activateTabInLeftGroup(tab)) {
+        return false;
+      }
+      await vscode.commands.executeCommand('workbench.action.moveEditorToRightGroup');
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    }
+    return false;
+  }
+
+  private async activateTabInLeftGroup(tab: vscode.Tab): Promise<boolean> {
+    if (!await this.revealInFirstGroup()) {
       return false;
     }
-    return applyEditorLayout(setLeadingRailWidth(layout, width));
+    const index = vscode.window.tabGroups.all[0]?.tabs.indexOf(tab) ?? -1;
+    if (index < 0 || index >= 9) {
+      return false;
+    }
+    await vscode.commands.executeCommand(`workbench.action.openEditorAtIndex${index + 1}`);
+    for (let attempt = 0; attempt < GROUP_ACTIVATE_WAIT_ATTEMPTS; attempt += 1) {
+      if (tab.isActive) {
+        return true;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    }
+    return false;
+  }
+
+  private async waitForRailWidthAfter(revision: number): Promise<number | undefined> {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      if (this.railWidthRevision > revision) {
+        return this.lastObservedRailWidth;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    }
+    return undefined;
+  }
+
+  private async saveEditorWidthRatio(): Promise<void> {
+    const layout = await getEditorLayout();
+    const ratio = layout?.groups[0]?.size;
+    if (typeof ratio === 'number') {
+      await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, normalizeRailRatio(ratio));
+    }
   }
 
   private hasSettledRail(): boolean {
@@ -345,6 +391,7 @@ export class VerticalTabsPanel {
   }
 
   private async close(): Promise<void> {
+    await this.saveEditorWidthRatio();
     const group = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
     if (group && group.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0])) {
       try {
@@ -400,10 +447,13 @@ export class VerticalTabsPanel {
     }
 
     if (message.type === 'railWidth') {
+      this.lastObservedRailWidth = message.width;
+      this.railWidthRevision += 1;
       if (this.arrangingRail) {
         return;
       }
       await this.context.globalState.update(WIDTH_STORAGE_KEY, normalizeRailWidth(message.width));
+      await this.saveEditorWidthRatio();
       return;
     }
 
@@ -603,6 +653,23 @@ async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
     // The rail remains usable at VS Code's native split size when unavailable.
     return false;
   }
+}
+
+async function applyTwoColumnLayout(ratio: number): Promise<boolean> {
+  return applyEditorLayout({
+    orientation: 0,
+    groups: [
+      { size: normalizeRailRatio(ratio) },
+      { size: 1 - normalizeRailRatio(ratio) },
+    ],
+  });
+}
+
+function normalizeRailRatio(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_RAIL_RATIO;
+  }
+  return Math.min(MAX_RAIL_RATIO, Math.max(MIN_RAIL_RATIO, value));
 }
 
 function isVerticalTabsPanel(tab: vscode.Tab): boolean {
