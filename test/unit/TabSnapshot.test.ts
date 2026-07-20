@@ -120,3 +120,15 @@ test('orders manual tabs from persisted identity order', () => {
   const workGroup = snapshot.displayGroups.find((group) => group.id === 'work');
   assert.deepEqual(workGroup?.tabs.map((tab) => tab.description), [undefined, undefined]);
 });
+
+test('renders manual ungrouped tabs at the tree root without an ungrouped header', () => {
+  const snapshot = buildSnapshot(source, 16, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual' });
+  const ungrouped = snapshot.displayGroups.find((group) => group.id === '__ungrouped');
+  const workGroup = snapshot.displayGroups.find((group) => group.id === 'work');
+
+  assert.equal(ungrouped?.title, '未分组');
+  assert.equal(ungrouped?.showHeader, false);
+  assert.deepEqual(ungrouped?.tabs.map((tab) => tab.label), ['index.ts', 'Terminal', 'README.md']);
+  assert.equal(workGroup?.showHeader, true);
+  assert.deepEqual(workGroup?.tabs.map((tab) => tab.label), ['index.ts']);
+});

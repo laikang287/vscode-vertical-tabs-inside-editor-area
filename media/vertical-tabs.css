@@ -79,7 +79,9 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-header:hover { background: var(--vscode-list-hoverBackground); }
 .group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 4px; }
 .group-toggle { color: var(--vscode-descriptionForeground); flex: 0 0 18px; line-height: 18px; min-width: 18px; }
-.group-action { color: var(--vscode-textLink-foreground); }
+.group-actions { align-items: center; display: flex; padding-right: 3px; }
+.group-action { color: inherit; }
+.group-header .tab-action { line-height: 20px; min-width: 20px; padding: 0; }
 .group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

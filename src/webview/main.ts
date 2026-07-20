@@ -104,6 +104,11 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     header.setAttribute('aria-expanded', String(!collapsed));
     header.title = `${collapsed ? '展开' : '折叠'}分组`;
     header.addEventListener('click', () => toggleDisplayGroup(group));
+    header.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showContextMenu(event.clientX, event.clientY, undefined, group);
+    });
     header.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
       event.preventDefault();
@@ -128,20 +133,16 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
       header.append(detail);
     }
     if (group.isManual && group.id !== '__ungrouped') {
-      const rename = button('重命名', '重命名分组');
-      rename.className = 'group-action';
-      rename.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const value = window.prompt('分组名称', group.title);
-        if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() });
-      });
-      const remove = button('删除', '删除分组');
-      remove.className = 'group-action';
+      const actions = document.createElement('div');
+      actions.className = 'group-actions';
+      const remove = button('×', '删除分组');
+      remove.className = 'group-action tab-action';
       remove.addEventListener('click', (event) => {
         event.stopPropagation();
         vscode.postMessage({ type: 'deleteGroup', groupId: group.id });
       });
-      header.append(rename, remove);
+      actions.append(remove);
+      header.append(actions);
     }
     section.append(header);
   }
@@ -341,12 +342,15 @@ function suspendRowDrag(row: HTMLElement): void {
   window.addEventListener('blur', restore, { once: true });
 }
 
-function showContextMenu(x: number, y: number, tab?: VerticalTabItem): void {
+function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: VerticalTabDisplayGroup): void {
   dismissContextMenu();
   const menu = document.createElement('div');
   menu.className = 'tab-context-menu';
   menu.setAttribute('role', 'menu');
   menu.addEventListener('click', (event) => event.stopPropagation());
+  if (group?.isManual && group.id !== '__ungrouped') {
+    menu.append(renameGroupButton(group));
+  }
   if (tab) {
     menu.append(
       actionButton('关闭其他标签', '关闭其他标签', 'closeOthers', tab.target, true),
@@ -376,6 +380,16 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem): void {
   menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
   menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
   contextMenu = menu;
+}
+
+function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
+  const result = button('重命名', '重命名分组');
+  result.addEventListener('click', () => {
+    const value = window.prompt('分组名称', group.title);
+    if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() });
+    dismissContextMenu();
+  });
+  return result;
 }
 
 function appendManualGroupActions(menu: HTMLElement, tab: VerticalTabItem, manualGroups: readonly ManualTabGroup[]): void {

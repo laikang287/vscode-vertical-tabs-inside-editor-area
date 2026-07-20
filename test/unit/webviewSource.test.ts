@@ -19,11 +19,24 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.doesNotMatch(panelSource, /id="close-saved"/);
   assert.doesNotMatch(panelSource, /id="close-all"/);
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
-  assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem\)/);
+  assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
   assert.match(webviewSource, /if \(tab\) \{\s*menu\.append\(\s*actionButton\('关闭其他标签'/);
   assert.match(webviewSource, /createGroupButton\(\)/);
   assert.match(webviewSource, /globalActionButton\('关闭已保存'/);
   assert.match(webviewSource, /globalActionButton\('关闭全部'/);
+});
+
+test('manual group rename is exposed from the group context menu and group delete uses the close icon column', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
+  assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
+  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
+  assert.match(source, /const remove = button\('×', '删除分组'\)/);
+  assert.match(source, /remove\.className = 'group-action tab-action'/);
+  assert.match(style, /\.group-actions \{ align-items: center; display: flex; padding-right: 3px; \}/);
+  assert.match(style, /\.group-header \.tab-action \{ line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {

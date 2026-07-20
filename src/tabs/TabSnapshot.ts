@@ -168,7 +168,7 @@ function buildManualGroups(
       collapsed: false,
       mode: 'manual',
       tabs: sortTabs(ungrouped, sortMode),
-      showHeader: manualGroups.length > 0,
+      showHeader: false,
       isManual: true,
     });
   }
