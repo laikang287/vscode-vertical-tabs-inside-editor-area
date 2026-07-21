@@ -93,6 +93,67 @@ suite('Vertical Tabs extension', () => {
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
   });
+
+  test('rapid empty-state open requests restore one welcome editor area', async function () {
+    this.timeout(15_000);
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+    await closeNonVerticalTabs();
+    await waitFor(() => vscode.window.tabGroups.all.every((group) => group.tabs.length === 0 || group.tabs.every((tab) => isVerticalTabsTab(tab))));
+
+    await Promise.all([
+      vscode.commands.executeCommand('verticalTabs.open'),
+      vscode.commands.executeCommand('verticalTabs.focus'),
+      vscode.commands.executeCommand('verticalTabs.open'),
+      vscode.commands.executeCommand('verticalTabs.open'),
+    ]);
+
+    await waitFor(() => verticalTabs().length === 1);
+    await waitFor(() => nonVerticalTabs().length > 0);
+
+    const rails = verticalTabs();
+    assert.equal(rails.length, 1, 'Only one vertical-tabs panel should exist after rapid empty-state opens.');
+    assert.equal(rails[0]?.group.viewColumn, vscode.ViewColumn.One, 'The vertical-tabs panel should be in the left-most group.');
+    assert.equal(rails[0]?.group.tabs.length, 1, 'The rail group should contain only the vertical-tabs panel.');
+    assert.equal(vscode.window.tabGroups.all.filter((group) => group.tabs.length === 0).length, 0, 'Rapid empty-state opens should not leave extra empty editor groups.');
+    assert.ok(nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')), 'The restored right editor area should contain the welcome editor.');
+  });
+
+  test('minimum rail width persists without expanding the rail on reopen', async function () {
+    this.timeout(15_000);
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+    await closeNonVerticalTabs();
+
+    const document = await vscode.workspace.openTextDocument({ content: 'minimum rail width persistence' });
+    await vscode.window.showTextDocument(document, { preserveFocus: false });
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1);
+    await waitFor(() => verticalTabs()[0]?.group.viewColumn === vscode.ViewColumn.One && verticalTabs()[0]?.group.tabs.length === 1);
+    await waitFor(() => nonVerticalTabs().some(({ tab }) => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === document.uri.toString()));
+
+    await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 180 }, { size: 1420 }] });
+    const minimizedLayout = await waitForEditorLayout((candidate) => {
+      const ratios = rootGroupRatios(candidate);
+      return Math.min(...ratios) <= 0.3 && Math.max(...ratios) >= 0.65;
+    });
+    const minimizedRatios = rootGroupRatios(minimizedLayout);
+    assert.ok(Math.min(...minimizedRatios) <= 0.3, `The rail should be minimized before closing; received ${JSON.stringify(minimizedLayout)}.`);
+
+    await vscode.commands.executeCommand('verticalTabs.next');
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1);
+
+    const reopenedLayout = await waitForEditorLayout((candidate) => {
+      const ratios = rootGroupRatios(candidate);
+      return Math.min(...ratios) <= 0.3 && Math.max(...ratios) >= 0.65;
+    });
+    const reopenedRatios = rootGroupRatios(reopenedLayout);
+    assert.ok(Math.min(...reopenedRatios) <= 0.3, `The rail should not reopen near its maximum width; received ${JSON.stringify(reopenedLayout)}.`);
+    assert.ok(Math.max(...reopenedRatios) >= 0.65, `The right editor area should remain usable; received ${JSON.stringify(reopenedLayout)}.`);
+  });
 });
 
 interface EditorLayoutGroup {
@@ -117,6 +178,18 @@ function verticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
   return result;
 }
 
+function nonVerticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
+  const result: Array<{ tab: vscode.Tab; group: vscode.TabGroup }> = [];
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (!isVerticalTabsTab(tab)) {
+        result.push({ tab, group });
+      }
+    }
+  }
+  return result;
+}
+
 function rootGroupRatios(layout: EditorLayout): number[] {
   const sizes = layout.groups.map((group) => group.size);
   if (!sizes.every((size): size is number => typeof size === 'number' && size > 0)) {
@@ -127,7 +200,7 @@ function rootGroupRatios(layout: EditorLayout): number[] {
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
     if (predicate()) {
       return;
     }
@@ -138,7 +211,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 async function waitForEditorLayout(predicate: (layout: EditorLayout) => boolean): Promise<EditorLayout> {
   let latest: EditorLayout | undefined;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
     latest = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
     if (predicate(latest)) {
       return latest;
@@ -165,6 +238,8 @@ async function verifyBuiltInWebviewNavigation(kind: 'settings' | 'welcome'): Pro
   await waitFor(() => activeTextDocumentUri() === document.uri.toString());
   await vscode.commands.executeCommand('verticalTabs.open');
   await waitFor(() => verticalTabs().length === 1);
+  await vscode.window.showTextDocument(document, { preserveFocus: false });
+  await waitFor(() => activeTextDocumentUri() === document.uri.toString());
 
   await vscode.commands.executeCommand('verticalTabs.next');
   await waitFor(() => matchingBuiltInWebviewTabs(kind).some(({ tab, group }) => group.isActive && group.activeTab === tab));
@@ -199,9 +274,13 @@ function activeTextDocumentUri(): string | undefined {
 }
 
 async function closeNonVerticalTabs(): Promise<void> {
-  const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => !isVerticalTabsTab(tab));
-  if (tabs.length > 0) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((tab) => !isVerticalTabsTab(tab));
+    if (tabs.length === 0) {
+      return;
+    }
     await vscode.window.tabGroups.close(tabs, true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
   }
 }
 

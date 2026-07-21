@@ -4,6 +4,7 @@ export const DEFAULT_RAIL_RATIO = 0.2;
 export const MIN_RAIL_RATIO = 0.1;
 export const MAX_RAIL_RATIO = 0.5;
 export const FULL_WIDTH_RAIL_RATIO = 0.9;
+export const MAX_PERSISTED_RAIL_RATIO = 0.3;
 
 export interface EditorLayoutGroup {
   readonly size?: number;
@@ -113,19 +114,19 @@ export function getRailGroupRatio(layout: EditorLayout): number | undefined {
 }
 
 export function shouldPersistObservedRailWidth(layout: EditorLayout | undefined, railWidth: number | undefined): boolean {
-  if (!hasSeparateEditorArea(layout)) {
+  if (!hasUsableRightEditorArea(layout)) {
     return false;
   }
   const ratio = getObservedRailRatio(layout, railWidth);
-  return typeof ratio === 'number' && ratio > 0 && ratio < FULL_WIDTH_RAIL_RATIO;
+  return isPersistableRailRatio(ratio);
 }
 
 export function shouldPersistRailGroupRatio(layout: EditorLayout | undefined): boolean {
-  if (!hasSeparateEditorArea(layout)) {
+  if (!hasUsableRightEditorArea(layout)) {
     return false;
   }
   const ratio = getRailGroupRatio(layout);
-  return typeof ratio === 'number' && ratio > 0 && ratio < FULL_WIDTH_RAIL_RATIO;
+  return isPersistableRailRatio(ratio);
 }
 
 export function isEditorLayout(value: unknown): value is EditorLayout {
@@ -140,4 +141,15 @@ function copyGroup(group: EditorLayoutGroup): EditorLayoutGroup {
     ...(typeof group.size === 'number' ? { size: group.size } : {}),
     ...(group.groups ? { groups: group.groups.map(copyGroup) } : {}),
   };
+}
+
+function hasUsableRightEditorArea(layout: EditorLayout | undefined): layout is EditorLayout {
+  if (!hasSeparateEditorArea(layout)) {
+    return false;
+  }
+  return layout.groups.slice(1).some((group) => typeof group.size === 'number' && Number.isFinite(group.size) && group.size >= MIN_RAIL_WIDTH);
+}
+
+function isPersistableRailRatio(ratio: number | undefined): boolean {
+  return typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0 && ratio <= MAX_PERSISTED_RAIL_RATIO;
 }

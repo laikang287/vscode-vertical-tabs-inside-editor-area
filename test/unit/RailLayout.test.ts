@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   countLayoutLeaves,
   isEditorLayout,
+  MAX_PERSISTED_RAIL_RATIO,
   MIN_RAIL_WIDTH,
   normalizeRailWidth,
   prependRailToLayout,
@@ -56,8 +57,15 @@ test('does not persist rail width when the rail is the only editor group or effe
   assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 1000 }] }), false);
   assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 950 }, { size: 50 }] }, 950), false);
   assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 950 }, { size: 50 }] }), false);
+  assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 500 }, { size: 500 }] }, 500), false);
+  assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 500 }, { size: 500 }] }), false);
+  assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 350 }, { size: 650 }] }, 350), false);
+  assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 350 }, { size: 650 }] }), false);
+  assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 240 }, { size: 80 }] }, 240), false);
+  assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 240 }, { size: 80 }] }), false);
   assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 240 }, { size: 760 }] }, 240), true);
   assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 240 }, { size: 760 }] }), true);
+  assert.equal(MAX_PERSISTED_RAIL_RATIO, 0.3);
 });
 
 test('resolves saved rail ratio before falling back to the configured default', () => {
