@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -27,8 +27,8 @@ test('bulk close and create group actions are only exposed from context menus', 
  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\(i18n\.close/);
   assert.match(webviewSource, /messageButton\(i18n\.close, i18n\.closeGroup, \{ type: 'closeGroup', groupId: group\.id \}\)/);
  assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
-  assert.match(webviewSource, /globalActionButton\(i18n\.closeSaved, i18n\.closeSavedTabs, 'closeSaved'/);
-  assert.match(webviewSource, /globalActionButton\(i18n\.closeAll, i18n\.closeAllUnpinned, 'closeAll'/);
+  assert.match(webviewSource, /groupActionButton\(i18n\.closeSaved, i18n\.closeSavedTabs, 'closeSaved'/);
+  assert.match(webviewSource, /groupActionButton\(i18n\.closeAll, i18n\.closeAllUnpinned, 'closeAll'/);
 });
 
 test('every visible group header has a close icon and manual rename stays in the context menu', () => {

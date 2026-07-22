@@ -40,8 +40,8 @@ const EN_DEFAULTS: Record<string, string> = {
   expandGroup: 'Expand group', collapseGroup: 'Collapse group', pinnedGroup: 'Pinned group',
   closeGroupAndDelete: 'Close all tabs in group and delete group', closeTab: 'Close tab', close: 'Close',
   closeOthers: 'Close others', closeBelow: 'Close below', closeGroup: 'Close all tabs in group',
-  closeSaved: 'Close saved', closeAll: 'Close all', closeSavedTabs: 'Close saved tabs',
-  closeAllUnpinned: 'Close all unpinned tabs', pinTab: 'Pin tab', unpinTab: 'Unpin tab',
+  closeSaved: 'Close saved', closeAll: 'Close all', closeSavedTabs: 'Close saved tabs in group',
+  closeAllUnpinned: 'Close all unpinned tabs in group', pinTab: 'Pin tab', unpinTab: 'Unpin tab',
   pinGroup: 'Pin group', unpinGroup: 'Unpin group', cannotPinVscodeGroup: 'Cannot pin group when following VS Code groups',
   rename: 'Rename', renameGroup: 'Rename group', groupName: 'Group name',
   newGroup: 'New group', newGroupOnlyManual: 'Only manual grouping mode can create groups',
@@ -833,8 +833,8 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
   const snapshot = latestSnapshot;
   menu.append(
     createGroupButton(snapshot?.groupMode === 'manual'),
-    globalActionButton(i18n.closeSaved, i18n.closeSavedTabs, 'closeSaved'),
-    globalActionButton(i18n.closeAll, i18n.closeAllUnpinned, 'closeAll'),
+    groupActionButton(i18n.closeSaved, i18n.closeSavedTabs, 'closeSaved'),
+    groupActionButton(i18n.closeAll, i18n.closeAllUnpinned, 'closeAll'),
   );
   menu.querySelectorAll('button').forEach((item) => item.classList.add('tab-context-action'));
   document.body.append(menu);
@@ -861,7 +861,7 @@ function groupPinButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
   return result;
 }
 
-function globalActionButton(label: string, title: string, type: 'closeSaved' | 'closeAll'): HTMLButtonElement {
+function groupActionButton(label: string, title: string, type: 'closeSaved' | 'closeAll'): HTMLButtonElement {
   return messageButton(label, title, { type });
 }
 

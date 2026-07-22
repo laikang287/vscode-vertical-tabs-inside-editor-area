@@ -118,11 +118,37 @@ test('selects close targets within the same manual display bucket and preserves 
   assert.deepEqual(selectCloseTargets(snapshot, 'close', work), [work]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeOthers', work), []);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeBelow', topLevel), [snapshot.tabs[2].target, snapshot.tabs[3].target]);
-  assert.deepEqual(selectCloseTargets(snapshot, 'closeSaved'), [snapshot.tabs[2].target, snapshot.tabs[3].target]);
-  assert.deepEqual(selectCloseTargets(snapshot, 'closeAll'), [snapshot.tabs[0].target, snapshot.tabs[2].target, snapshot.tabs[3].target]);
+  assert.deepEqual(selectCloseTargets(snapshot, 'closeSaved'), []);
+  assert.deepEqual(selectCloseTargets(snapshot, 'closeAll'), [snapshot.tabs[0].target]);
 });
 
-test('applies multi-select close-other and close-below rules independently in every selected group', () => {
+
+test('scopes closeAll and closeSaved to the focused display group and falls back globally', () => {
+  const snapshot = buildSnapshot(source, 5, [{ id: 'work', name: '宸ヤ綔', collapsed: false }], { groupMode: 'manual' });
+  // No tab is focused in the source fixture, so the active tab (index.ts src)
+  // in the 'work' group drives the scope. The 'work' group has one dirty tab.
+  assert.deepEqual(selectCloseTargets(snapshot, 'closeSaved'), []);
+  assert.deepEqual(selectCloseTargets(snapshot, 'closeAll'), [snapshot.tabs[0].target]);
+
+  // Build a snapshot where the README tab is focused (ungrouped bucket).
+  const focusedSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
+    { label: 'main.ts', path: 'src/main.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/main.ts' } },
+  ] }, { tabs: [
+    { label: 'README.md', path: 'README.md', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
+    { label: 'CHANGELOG.md', path: 'CHANGELOG.md', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/CHANGELOG.md' } },
+    { label: 'todo.md', path: 'todo.md', isActive: false, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/todo.md' } },
+  ] }];
+  const focusedSnapshot = buildSnapshot(focusedSource, 6, [], { groupMode: 'vscode' });
+  const readmeTarget = focusedSnapshot.tabs.find((t) => t.label === 'README.md')!.target;
+  const changelogTarget = focusedSnapshot.tabs.find((t) => t.label === 'CHANGELOG.md')!.target;
+  const todoTarget = focusedSnapshot.tabs.find((t) => t.label === 'todo.md')!.target;
+  assert.equal(Boolean(readmeTarget), true);
+  // closeSaved: README.md and CHANGELOG.md are not dirty and not pinned in the second group
+  assert.deepEqual(selectCloseTargets(focusedSnapshot, 'closeSaved'), [readmeTarget, changelogTarget]);
+  // closeAll: all non-pinned tabs in the second group (README.md, CHANGELOG.md, todo.md)
+  assert.deepEqual(selectCloseTargets(focusedSnapshot, 'closeAll'), [readmeTarget, changelogTarget, todoTarget]);
+});test('applies multi-select close-other and close-below rules independently in every selected group', () => {
   const groups: SnapshotSourceGroup[] = [{ tabs: [
     { label: 'a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///a.ts' } },
     { label: 'b.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///b.ts' } },

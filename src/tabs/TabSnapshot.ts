@@ -1,4 +1,4 @@
-﻿import * as path from 'node:path';
+import * as path from 'node:path';
 import { format, type LocaleStrings } from '../i18n';
 import type {
   GroupMode,
@@ -85,8 +85,19 @@ export function buildSnapshot(
 }
 
 export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: CloseAction, target?: VerticalTabItem['target']): VerticalTabItem['target'][] {
-  if (action === 'closeSaved') return snapshot.tabs.filter((tab) => !tab.isDirty && !tab.isPinned).map((tab) => tab.target);
-  if (action === 'closeAll') return snapshot.tabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
+  if (action === 'closeSaved' || action === 'closeAll') {
+    const activeTab = snapshot.tabs.find((tab) => tab.isFocused) ?? snapshot.tabs.find((tab) => tab.isActive);
+    if (activeTab) {
+      const bucket = findDisplayBucket(snapshot, activeTab);
+      if (bucket) {
+        const candidates = action === 'closeSaved'
+          ? bucket.filter((tab) => !tab.isDirty && !tab.isPinned)
+          : bucket.filter((tab) => !tab.isPinned);
+        return candidates.map((tab) => tab.target);
+      }
+    }
+    return action === 'closeSaved' ? snapshot.tabs.filter((tab) => !tab.isDirty && !tab.isPinned).map((tab) => tab.target) : snapshot.tabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
+  }
   if (!target) return [];
   const selected = resolveSnapshotTarget(snapshot, target);
   if (!selected) return [];
