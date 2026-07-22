@@ -6,3 +6,4 @@ dist/*.vsix
 .DS_Store
 .obsidian
 tmp
+.decks-kk
