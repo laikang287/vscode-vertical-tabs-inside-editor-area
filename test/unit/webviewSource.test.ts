@@ -53,18 +53,20 @@ test('webview exposes grouping, sorting, bulk close, pinning, and drag messages'
   assert.doesNotMatch(source, /vscode\.postMessage\(\{ type: 'createGroupFromTabs'/);
 });
 
-test('grouping and sorting selectors are exposed as context submenus instead of toolbar controls', () => {
+test('toolbar exposes labeled grouping and sorting selectors plus icon tree actions', () => {
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.doesNotMatch(panelSource, /id="group-mode"/);
-  assert.doesNotMatch(panelSource, /id="sort-mode"/);
-  assert.doesNotMatch(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
-  assert.doesNotMatch(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
-  assert.match(webviewSource, /appendGroupSubmenu\(menu, '分组方式', '切换分组方式'/);
-  assert.match(webviewSource, /appendGroupSubmenu\(menu, '排序方式', '切换排序方式'/);
-  assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'setGroupMode', groupMode: option\.value \}\)/);
-  assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'setSortMode', sortMode: option\.value \}\)/);
+  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="展开所有分组">⊞<\/button>/);
+  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="折叠所有分组">⊟<\/button>/);
+  assert.match(panelSource, /<span>分组方式<\/span><select id="group-mode">/);
+  assert.match(panelSource, /<span>排序方式<\/span><select id="sort-mode">/);
+  assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
+  assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
+  assert.match(webviewSource, /type: 'setGroupMode', groupMode: groupModeSelect\.value as GroupMode/);
+  assert.match(webviewSource, /type: 'setSortMode', sortMode: sortModeSelect\.value as SortMode/);
+  assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '分组方式'/);
+  assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
 });
 
 test('manual group creation is disabled outside manual mode and accepted only in manual mode', () => {
@@ -83,28 +85,23 @@ test('manual group creation is disabled outside manual mode and accepted only in
   assert.match(style, /\.tab-context-action:disabled/);
 });
 
-test('manual move group actions are grouped under a hover submenu', () => {
+test('context menu hides manual move-to-group actions', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
-  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(source, /appendGroupSubmenu\(menu, '移至分组', '移动到手动分组'/);
-  assert.match(source, /trigger\.className = 'tab-context-submenu-trigger'/);
-  assert.match(source, /submenu\.className = 'tab-context-submenu-list'/);
-  assert.match(source, /const item = button\(group\.name, `移至 \$\{group\.name\}`\)/);
-  assert.doesNotMatch(source, /button\('移动分组'/);
-  assert.doesNotMatch(source, /button\(`移至：\$\{group\.name\}`/);
-  assert.match(style, /\.tab-context-submenu:hover \.tab-context-submenu-list/);
-  assert.match(style, /\.tab-context-submenu-trigger::after/);
+  assert.doesNotMatch(source, /appendManualGroupActions/);
+  assert.doesNotMatch(source, /移动到手动分组/);
+  assert.doesNotMatch(source, /type: 'assignGroup'/);
 });
 
-test('vscode mode context menu moves to existing groups without exposing new group', () => {
+test('vscode mode context menu keeps adjacent group moves but hides move-to-group submenu', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.doesNotMatch(source, /messageButton\('移至新组'/);
-  assert.match(source, /function appendVsCodeGroupActions\(menu: HTMLElement, tab: VerticalTabItem, displayGroups: readonly VerticalTabDisplayGroup\[\]\): void/);
-  assert.match(source, /appendGroupSubmenu\(menu, '移至分组', '移动到 VS Code 编辑器组'/);
-  assert.match(source, /type: 'moveToGroup', target: tab\.target, groupIndex: firstTarget\.groupIndex/);
+  assert.doesNotMatch(source, /appendVsCodeGroupActions/);
+  assert.doesNotMatch(source, /移动到 VS Code 编辑器组/);
+  assert.match(source, /messageButton\('移至上一组'/);
+  assert.match(source, /messageButton\('移至下一组'/);
   assert.match(panelSource, /message\.type === 'moveToGroup'/);
   assert.match(panelSource, /private async moveEditorToVsCodeGroup\(target: TabTarget, targetGroupIndex: number\): Promise<void>/);
   assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceIdentity: TabTargetIdentity, destination: vscode\.TabGroup\): Promise<void>/);
@@ -185,6 +182,9 @@ test('extension logs and skips width application when a rail-sized root group al
   assert.match(source, /function findExistingRailLikeRootGroup\(layout: EditorLayout, ratio: number\)/);
   assert.match(source, /准备调整左侧标签栏宽度/);
   assert.match(source, /existingRailLikeGroup/);
+  assert.match(source, /const leading = sizedGroups\.find\(\(group\) => group\.index === 0\)/);
+  assert.match(source, /if \(leadingRatio > MAX_EMPTY_RAIL_RESTORE_RATIO\) return undefined/);
+  assert.doesNotMatch(source, /candidate\.ratio >= 0\.6/);
   assert.match(source, /跳过调整左侧标签栏宽度：当前布局中已有匹配目标比例的小宽度编辑器组/);
   assert.match(source, /应用左侧标签栏宽度布局/);
 });
@@ -251,7 +251,7 @@ test('webview enables best-effort activation with a distinct tooltip', () => {
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
 });
 
-test('webview logs activation clicks with request ids and drags from the full tab row', () => {
+test('webview activates once on pointerdown while retaining full-row dragging and keyboard activation', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
   assert.match(source, /let activateRequestSequence = 0/);
@@ -268,8 +268,10 @@ test('webview logs activation clicks with request ids and drags from the full ta
   assert.doesNotMatch(source, /const relativeY = /);
   assert.doesNotMatch(source, /const dragHandle = document\.createElement/);
   assert.match(source, /activate\.addEventListener\('pointerdown'/);
-  assert.match(source, /标签激活按钮 pointerdown/);
+  assert.match(source, /if \(event\.button !== 0\) return/);
+  assert.match(source, /标签激活按钮发送单次激活请求/);
   assert.match(source, /activate\.addEventListener\('click'/);
+  assert.match(source, /if \(event\.detail === 0\) requestActivation\(\)/);
   assert.match(source, /const requestId = nextActivateRequestId\(\)/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
   assert.doesNotMatch(source, /function suspendRowDrag/);
@@ -285,16 +287,28 @@ test('webview styles the full tab row as draggable', () => {
   assert.doesNotMatch(style, /\.tab-drag-handle/);
 });
 
-test('extension selects existing tabs via bounded workbench navigation commands', () => {
+test('extension selects existing tabs without cycling through intermediate tabs', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab, requestId\?: string\): Promise<boolean>/);
   assert.match(source, /workbench\.action\.openEditorAtIndex\$\{target\.tabIndex \+ 1\}/);
-  assert.match(source, /workbench\.action\.nextEditorInGroup/);
-  assert.match(source, /step < target\.group\.tabs\.length/);
+  assert.doesNotMatch(source, /workbench\.action\.nextEditorInGroup/);
+  assert.doesNotMatch(source, /step < target\.group\.tabs\.length/);
+  assert.match(source, /避免循环切换中间标签/);
   assert.match(source, /function activeTabMatches\(target: TabPosition, tab: vscode\.Tab\): boolean/);
   assert.match(source, /group\.tabs\.indexOf\(activeTab\) === target\.tabIndex/);
   assert.match(source, /sameIdentity\(targetIdentity\(activeTab\), targetIdentity\(tab\)\)/);
+});
+
+test('extension resolves close targets by stable identity and retries failed bulk closes individually', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /同一快照版本内按索引解析标签目标/);
+  assert.match(source, /sameIdentity\(targetIdentity\(indexedTab\), target\.identity\)/);
+  assert.match(source, /const closed = await vscode\.window\.tabGroups\.close\(tabs, true\)/);
+  assert.match(source, /批量关闭未全部成功，按稳定标签标识逐项重试/);
+  assert.match(source, /const retryTab = this\.resolveTab\(target\)/);
+  assert.match(source, /retryTab && !retryTab\.isDirty/);
 });
 
 test('extension restores the active tab after syncing sorted VS Code tab order', () => {

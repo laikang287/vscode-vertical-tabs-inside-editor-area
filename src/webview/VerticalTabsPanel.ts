@@ -865,7 +865,17 @@ export class VerticalTabsPanel {
     const tabs = targets.map((target) => this.resolveTab(target)).filter((tab): tab is vscode.Tab => tab !== undefined);
     logInfo('执行标签关闭操作', { action, selectedTargets: targets.length, resolvedTabs: tabs.length });
     if (tabs.length > 0) {
-      await vscode.window.tabGroups.close(tabs, true);
+      const closed = await vscode.window.tabGroups.close(tabs, true);
+      if (!closed && tabs.length > 1) {
+        logWarn('批量关闭未全部成功，按稳定标签标识逐项重试', { action, selectedTargets: targets.length });
+        for (const target of targets) {
+          const retryTab = this.resolveTab(target);
+          // A false bulk result can mean the user cancelled a dirty-editor
+          // prompt. Never prompt for that tab a second time; only retry tabs
+          // that can close without another confirmation.
+          if (retryTab && !retryTab.isDirty) await vscode.window.tabGroups.close(retryTab, true);
+        }
+      }
     }
     await this.refresh({ reason: 'navigate' });
   }
@@ -1147,12 +1157,14 @@ export class VerticalTabsPanel {
       }
       return indexedTab;
     }
-    if (indexedTab && !isVerticalTabsPanel(indexedTab) && target.revision === this.currentSnapshot.revision) {
-      logDebug('同一快照版本内按索引解析标签目标', { label: indexedTab.label });
-      return indexedTab;
-    }
     if (target.revision !== this.currentSnapshot.revision) {
       logDebug('标签目标快照版本已变化，按稳定标识重新查找', { targetRevision: target.revision, currentRevision: this.currentSnapshot.revision });
+    }
+    const indexedGroup = vscode.window.tabGroups.all[target.groupIndex];
+    for (const tab of indexedGroup?.tabs ?? []) {
+      if (!isVerticalTabsPanel(tab) && sameIdentity(targetIdentity(tab), target.identity)) {
+        return tab;
+      }
     }
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
@@ -1267,21 +1279,7 @@ export class VerticalTabsPanel {
       }
     }
 
-    for (let step = 0; step < target.group.tabs.length; step += 1) {
-      try {
-        logDebug('尝试通过组内循环命令选择已有标签', { requestId, target: describeTab(tab), step });
-        await vscode.commands.executeCommand('workbench.action.nextEditorInGroup');
-      } catch (error) {
-        logDebug('组内循环选择已有标签失败', { requestId, target: describeTab(tab), step, error });
-        return false;
-      }
-      if (activeTabMatches(target, tab)) {
-        logDebug('通过组内循环命令选择已有标签', { requestId, target: describeTab(tab), step });
-        return true;
-      }
-    }
-
-    logDebug('内置导航命令未能选择目标已有标签', { requestId, target: describeTab(tab), tabIndex: target.tabIndex, groupIndex: target.groupIndex, active: describeActiveTab() });
+    logDebug('单次内置导航命令未能选择目标已有标签，将改用对应编辑器 API，避免循环切换中间标签', { requestId, target: describeTab(tab), tabIndex: target.tabIndex, groupIndex: target.groupIndex, active: describeActiveTab() });
     return false;
   }
 
@@ -1353,8 +1351,12 @@ export class VerticalTabsPanel {
   <main class="vertical-tabs" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
-        <button id="expand-all" type="button" title="展开所有分组">全部展开</button>
-        <button id="collapse-all" type="button" title="折叠所有分组">全部折叠</button>
+        <button id="expand-all" class="toolbar-icon" type="button" title="展开所有分组" aria-label="展开所有分组">⊞</button>
+        <button id="collapse-all" class="toolbar-icon" type="button" title="折叠所有分组" aria-label="折叠所有分组">⊟</button>
+      </div>
+      <div class="toolbar-selects">
+        <label class="toolbar-field" for="group-mode"><span>分组方式</span><select id="group-mode"><option value="vscode">跟随 VS Code</option><option value="manual">手动分组</option><option value="parentDir">按父目录</option><option value="fileType">按文件类型</option></select></label>
+        <label class="toolbar-field" for="sort-mode"><span>排序方式</span><select id="sort-mode"><option value="none">不排序</option><option value="modifiedAsc">修改时间正序</option><option value="modifiedDesc">修改时间逆序</option><option value="nameAsc">文件名正序</option><option value="nameDesc">文件名逆序</option></select></label>
       </div>
     </header>
     <p id="description">正在同步打开的标签…</p>
@@ -1803,14 +1805,15 @@ function findExistingRailLikeRootGroup(layout: EditorLayout, ratio: number): { r
   if (sizedGroups.length < 2) {
     return undefined;
   }
-  const candidates = sizedGroups.map((group) => ({ ...group, ratio: group.size / totalWidth }));
-  const hasUsableSibling = (index: number) => candidates.some((candidate) => candidate.index !== index && candidate.ratio >= 0.6);
-  const match = candidates.find((candidate) => (
-    candidate.ratio <= MAX_EMPTY_RAIL_RESTORE_RATIO
-    && hasUsableSibling(candidate.index)
-    && (Math.abs(candidate.ratio - ratio) <= 0.06 || (ratio <= 0.3 && candidate.ratio <= 0.3))
-  ));
-  return match ? { index: match.index, size: match.size, ratio: match.ratio } : undefined;
+  const leading = sizedGroups.find((group) => group.index === 0);
+  if (!leading) return undefined;
+  const leadingRatio = leading.size / totalWidth;
+  // The rail is always the leading root group. Once the user has already made
+  // it narrow, preserve that native divider width regardless of how many
+  // editor groups share the right side. Requiring one right sibling to occupy
+  // most of the window caused multi-column layouts to be reapplied globally.
+  if (leadingRatio > MAX_EMPTY_RAIL_RESTORE_RATIO) return undefined;
+  return { index: leading.index, size: leading.size, ratio: leadingRatio };
 }
 
 function isVerticalTabsPanel(tab: vscode.Tab): boolean {

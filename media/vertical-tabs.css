@@ -22,8 +22,32 @@ body { margin: 0; }
 .toolbar-actions {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.toolbar-selects {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.toolbar-field {
+  color: var(--vscode-descriptionForeground);
+  display: grid;
+  font-size: 11px;
+  gap: 3px;
+  min-width: 0;
+}
+
+.toolbar-field select {
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  color: var(--vscode-dropdown-foreground);
+  font: inherit;
+  min-width: 0;
+  padding: 3px 4px;
 }
 
 h1, h2 { margin: 0; font-weight: 600; }
@@ -47,6 +71,7 @@ button {
 }
 
 .toolbar button { color: var(--vscode-textLink-foreground); font-size: 11px; padding: 3px 5px; }
+.toolbar .toolbar-icon { font-size: 15px; line-height: 18px; min-width: 24px; padding: 1px 4px; }
 .toolbar button:disabled { color: var(--vscode-disabledForeground); cursor: default; }
 button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
 button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
