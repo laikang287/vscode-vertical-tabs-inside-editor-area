@@ -1,4 +1,4 @@
-﻿import type { ExtensionMessage, GroupMode, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import type { ExtensionMessage, GroupMode, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { TabSelection } from './TabSelection';
  import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
  import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -304,8 +304,16 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       logToExtension("debug", "MULTI_CLICK_DEBUG dragend -> preserve branch, calling selectSingle+requestActivation");
       preserveMultiSelectionOnPointerDown = false;
       draggedAfterPreservePointerDown = false;
-      selectSingle(tab);
-      requestActivation();
+      const currentTab = findCurrentTabByIdentity(tab.target.identity);
+      if (currentTab) {
+        logToExtension("debug", "MULTI_CLICK_DEBUG dragend using snapshot tab", targetDetails(currentTab.target, currentTab.label));
+        selectSingle(currentTab);
+        requestActivation(currentTab.target);
+      } else {
+        logToExtension("debug", "MULTI_CLICK_DEBUG dragend fallback to closure tab", targetDetails(tab.target, tab.label));
+        selectSingle(tab);
+        requestActivation();
+      }
     }
     event.preventDefault();
   });
@@ -327,8 +335,16 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
     if (!preserveMultiSelectionOnPointerDown || draggedAfterPreservePointerDown) { logToExtension("debug", "MULTI_CLICK_DEBUG collapsePreservedMultiSelection early return", JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown, draggedAfter: draggedAfterPreservePointerDown })); return; }
     logToExtension("debug", "MULTI_CLICK_DEBUG collapsePreservedMultiSelection executing", targetDetails(tab.target, tab.label));
     preserveMultiSelectionOnPointerDown = false;
-    selectSingle(tab);
-    requestActivation();
+    const currentTab = findCurrentTabByIdentity(tab.target.identity);
+    if (currentTab) {
+      logToExtension("debug", "MULTI_CLICK_DEBUG collapsePreservedMultiSelection using snapshot tab", targetDetails(currentTab.target, currentTab.label));
+      selectSingle(currentTab);
+      requestActivation(currentTab.target);
+    } else {
+      logToExtension("debug", "MULTI_CLICK_DEBUG collapsePreservedMultiSelection fallback to closure tab", targetDetails(tab.target, tab.label));
+      selectSingle(tab);
+      requestActivation();
+    }
   };
   activate.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
@@ -385,13 +401,14 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture -> activating");
       preserveMultiSelectionOnPointerDown = false;
       draggedAfterPreservePointerDown = false;
-      const identity = tab.target.identity;
-      const currentTab = latestSnapshot?.displayGroups
-        .flatMap(g => g.tabs)
-        .find(t => JSON.stringify(t.target.identity) === JSON.stringify(identity));
+      const currentTab = findCurrentTabByIdentity(tab.target.identity);
       if (currentTab) {
         selectSingle(currentTab);
         requestActivation(currentTab.target);
+      } else {
+        logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture fallback to closure tab", targetDetails(tab.target, tab.label));
+        selectSingle(tab);
+        requestActivation();
       }
     }
   });
@@ -921,6 +938,13 @@ function findTabRow(target: TabTarget): HTMLElement | undefined {
     const candidateTarget = parseTargetDataset(candidate.dataset.target);
     return candidateTarget !== undefined && sameTarget(candidateTarget, target);
   });
+
+}
+
+function findCurrentTabByIdentity(identity: TabTargetIdentity): VerticalTabItem | undefined {
+  return latestSnapshot?.displayGroups
+    .flatMap(g => g.tabs)
+    .find(t => JSON.stringify(t.target.identity) === JSON.stringify(identity));
 }
 
 function parseTargetDataset(value: string | undefined): TabTarget | undefined {

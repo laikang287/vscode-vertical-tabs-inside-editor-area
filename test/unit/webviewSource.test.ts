@@ -384,6 +384,8 @@ test('webview collapses an existing multi-selection on click while retaining blo
  assert.doesNotMatch(source, /function suspendRowDrag/);
   assert.doesNotMatch(source, /suspendRowDrag\(row\)/);
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
+  assert.match(source, /findCurrentTabByIdentity/);
+  assert.match(source, /findCurrentTabByIdentity\(tab\.target\.identity\)/);
 });
 
 test('webview only shows the drag cursor on draggable tab rows', () => {
