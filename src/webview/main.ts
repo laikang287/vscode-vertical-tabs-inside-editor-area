@@ -120,7 +120,13 @@ function stringifyDetails(value: unknown): string {
 function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup): void {
   const section = document.createElement('section');
   const collapsed = isGroupCollapsed(group);
-  section.className = ['tab-group', group.showHeader ? 'with-header' : 'without-header', group.isPinned ? 'is-pinned-group' : '', collapsed ? 'is-collapsed' : ''].filter(Boolean).join(' ');
+  section.className = [
+    'tab-group',
+    group.showHeader ? 'with-header' : 'without-header',
+    isEmptyManualRootGroup(group) ? 'empty-manual-root' : '',
+    group.isPinned ? 'is-pinned-group' : '',
+    collapsed ? 'is-collapsed' : '',
+  ].filter(Boolean).join(' ');
   section.dataset.groupId = group.id;
   section.addEventListener('dragover', (event) => handleGroupDragOver(event, group));
   section.addEventListener('drop', (event) => handleGroupDrop(event, group));
@@ -322,6 +328,10 @@ function isGroupCollapsed(group: VerticalTabDisplayGroup): boolean {
   if (collapsedGroups.has(groupCollapseKey(group))) return true;
   if (collapsedGroups.has(openGroupCollapseKey(group))) return false;
   return group.collapsed;
+}
+
+function isEmptyManualRootGroup(group: VerticalTabDisplayGroup): boolean {
+  return group.mode === 'manual' && group.id === '__ungrouped' && group.tabs.length === 0;
 }
 
 function groupCollapseKey(group: VerticalTabDisplayGroup): string {

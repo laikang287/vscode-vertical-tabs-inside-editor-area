@@ -207,8 +207,7 @@ function buildManualGroups(
   const knownGroups = new Set(manualGroups.map((group) => group.id));
   const ungrouped = orderManualTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), '__ungrouped', manualOrderByGroup);
   const displayGroups: VerticalTabDisplayGroup[] = [];
-  if (ungrouped.length > 0 || manualGroups.length === 0) {
-    displayGroups.push({
+  displayGroups.push({
       id: '__ungrouped',
       title: '未分组',
       collapsed: false,
@@ -217,8 +216,7 @@ function buildManualGroups(
       showHeader: false,
       isManual: true,
       isPinned: false,
-    });
-  }
+  });
   for (const group of manualGroups) {
     const groupTabs = orderManualTabs(tabs.filter((tab) => tab.manualGroupId === group.id), group.id, manualOrderByGroup);
     displayGroups.push({
@@ -273,10 +271,15 @@ function orderDisplayGroups(groups: VerticalTabDisplayGroup[]): VerticalTabDispl
   return groups
     .map((group, index) => ({ group, index }))
     .sort((left, right) => {
+      if (isManualRootDisplayGroup(left.group) !== isManualRootDisplayGroup(right.group)) return isManualRootDisplayGroup(left.group) ? -1 : 1;
       if (left.group.isPinned !== right.group.isPinned) return left.group.isPinned ? -1 : 1;
       return left.index - right.index;
     })
     .map((entry) => entry.group);
+}
+
+function isManualRootDisplayGroup(group: VerticalTabDisplayGroup): boolean {
+  return group.mode === 'manual' && group.id === '__ungrouped';
 }
 
 function shortestUniquePathSuffixes<Key>(items: readonly { readonly key: Key; readonly path: string | undefined }[]): Map<Key, string> {

@@ -80,6 +80,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 
 .tab-group { margin-top: 1px; }
 .tab-group.without-header { margin-top: 0; }
+.tab-group.empty-manual-root { min-height: 28px; }
 .group-header {
   align-items: center;
   border-radius: 3px;

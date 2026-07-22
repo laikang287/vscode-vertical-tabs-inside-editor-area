@@ -18,6 +18,20 @@ test('moves single and non-contiguous selected keys to the exact before-target p
   assert.deepEqual(moveItemsBefore(['a', 'b', 'c'], ['a', 'c'], undefined), ['b', 'a', 'c']);
 });
 
+test('keeps an empty manual root drop target when every tab belongs to a group', () => {
+  const groupedSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'a.ts', path: 'src/a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/a.ts' }, manualGroupId: 'work' },
+    { label: 'b.ts', path: 'src/b.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/b.ts' }, manualGroupId: 'work' },
+  ] }];
+
+  const snapshot = buildSnapshot(groupedSource, 24, [{ id: 'work', name: 'Work', collapsed: false }], { groupMode: 'manual' });
+
+  assert.equal(snapshot.displayGroups[0]?.id, '__ungrouped');
+  assert.equal(snapshot.displayGroups[0]?.showHeader, false);
+  assert.deepEqual(snapshot.displayGroups[0]?.tabs, []);
+  assert.deepEqual(snapshot.displayGroups[1]?.tabs.map((tab) => tab.label), ['a.ts', 'b.ts']);
+});
+
 test('keeps order unchanged when the before-target is part of the moved selection', () => {
   assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd'], ['b', 'd'], 'd'), ['a', 'b', 'c', 'd']);
 });
@@ -199,7 +213,7 @@ test('orders pinned manual and automatic groups first while retaining their rela
     { id: 'alpha', name: 'Alpha', collapsed: false },
     { id: 'beta', name: 'Beta', collapsed: false },
   ], { groupMode: 'manual', pinnedGroupIds: pinned });
-  assert.deepEqual(manual.displayGroups.map((group) => [group.id, group.isPinned]), [['beta', true], ['alpha', false]]);
+  assert.deepEqual(manual.displayGroups.filter((group) => group.showHeader).map((group) => [group.id, group.isPinned]), [['beta', true], ['alpha', false]]);
 
   const automatic = buildSnapshot(grouped, 22, [], { groupMode: 'parentDir', pinnedGroupIds: new Set(['beta']) });
   assert.deepEqual(automatic.displayGroups.map((group) => [group.id, group.isPinned]), [['beta', true], ['alpha', false]]);
