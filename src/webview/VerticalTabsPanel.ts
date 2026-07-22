@@ -18,6 +18,7 @@ import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/exten
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type SortMode, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
@@ -794,21 +795,28 @@ export class VerticalTabsPanel {
     }
 
     if (message.type === 'moveTab' || message.type === 'reorderManualTab') {
+      const dragCapability = tabDragCapability(this.groupMode, this.sortMode);
+      if (dragCapability === 'disabled') {
+        logWarn('拒绝当前分组方式下的标签拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode });
+        return;
+      }
+      const beforeTarget = dragCapability === 'reorder' ? message.beforeTarget : undefined;
       if (this.groupMode === 'manual') {
-        await this.moveManualTab(message.target, message.groupId, message.beforeTarget);
-      } else if (this.groupMode === 'vscode') {
-        await this.moveEditorWithinVsCode(message.target, message.groupId, message.beforeTarget);
+        await this.moveManualTab(message.target, message.groupId, beforeTarget);
       } else {
-        this.groupMode = 'manual';
-        await this.persistGroupMode();
-        await this.moveManualTab(message.target, message.groupId, message.beforeTarget);
+        await this.moveEditorWithinVsCode(message.target, message.groupId, beforeTarget);
       }
       await this.refresh({ reason: 'operation' });
       return;
     }
 
     if (message.type === 'moveTabs') {
-      await this.moveTabs(message.targets, message.groupId, message.beforeTarget);
+      const dragCapability = tabDragCapability(this.groupMode, this.sortMode);
+      if (dragCapability === 'disabled') {
+        logWarn('拒绝当前分组方式下的批量标签拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode, count: message.targets.length });
+        return;
+      }
+      await this.moveTabs(message.targets, message.groupId, dragCapability === 'reorder' ? message.beforeTarget : undefined);
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -1032,26 +1040,31 @@ export class VerticalTabsPanel {
     }
     const key = identityKey(targetIdentity(tab));
     this.setManualGroup(targetIdentity(tab), groupId);
-    const beforeKey = beforeTarget ? identityKey(beforeTarget.identity) : undefined;
-    this.insertManualOrder(destinationGroupId, key, beforeKey);
+    if (this.sortMode === 'none') {
+      const beforeKey = beforeTarget ? identityKey(beforeTarget.identity) : undefined;
+      this.insertManualOrder(destinationGroupId, key, beforeKey);
+    }
     await this.persistManualState();
-    logInfo('手动移动标签完成', { label: tab.label, groupId });
+    logInfo('手动移动标签完成', { label: tab.label, groupId, reordered: this.sortMode === 'none' });
   }
 
   private async moveTabs(targets: readonly TabTarget[], groupId: string | undefined, beforeTarget: TabTarget | undefined): Promise<void> {
     if (targets.length === 0) return;
-    if (this.groupMode === 'manual' || this.groupMode === 'parentDir' || this.groupMode === 'fileType') {
-      if (this.groupMode !== 'manual') {
-        this.groupMode = 'manual';
-        await this.persistGroupMode();
-      }
+    if (this.groupMode === 'manual') {
       const destinationGroupId = groupId ?? '__ungrouped';
       if (groupId !== undefined && !this.manualGroups.some((group) => group.id === groupId)) {
         logWarn('Multi-select manual move failed: group does not exist', { groupId });
         return;
       }
       const resolvedTabs = targets.map((target) => this.resolveTab(target)).filter((tab): tab is vscode.Tab => tab !== undefined);
-      const movedKeys = resolvedTabs.map((tab) => identityKey(targetIdentity(tab)));
+      const tabsToMove = this.sortMode === 'none'
+        ? resolvedTabs
+        : resolvedTabs.filter((tab) => this.currentSnapshot.tabs.find((item) => sameIdentity(item.target.identity, targetIdentity(tab)))?.manualGroupId !== groupId);
+      if (tabsToMove.length === 0) {
+        logDebug('自动排序下忽略未改变分组的批量标签拖拽', { count: resolvedTabs.length, groupId });
+        return;
+      }
+      const movedKeys = tabsToMove.map((tab) => identityKey(targetIdentity(tab)));
       const movedKeySet = new Set(movedKeys);
       const beforeKey = beforeTarget ? identityKey(beforeTarget.identity) : undefined;
       if (beforeKey && movedKeySet.has(beforeKey)) {
@@ -1061,15 +1074,17 @@ export class VerticalTabsPanel {
       for (const [storedGroupId, order] of this.manualOrderByGroup) {
         this.manualOrderByGroup.set(storedGroupId, order.filter((key) => !movedKeySet.has(key)));
       }
-      for (const tab of resolvedTabs) {
+      for (const tab of tabsToMove) {
         this.setManualGroup(targetIdentity(tab), groupId);
       }
-      const destinationTabs = this.currentSnapshot.displayGroups
-        .find((group) => group.id === destinationGroupId)?.tabs
-        .map((tab) => identityKey(tab.target.identity)) ?? [];
-      this.manualOrderByGroup.set(destinationGroupId, moveItemsBefore(destinationTabs, movedKeys, beforeKey));
+      if (this.sortMode === 'none') {
+        const destinationTabs = this.currentSnapshot.displayGroups
+          .find((group) => group.id === destinationGroupId)?.tabs
+          .map((tab) => identityKey(tab.target.identity)) ?? [];
+        this.manualOrderByGroup.set(destinationGroupId, moveItemsBefore(destinationTabs, movedKeys, beforeKey));
+      }
       await this.persistManualState();
-      logInfo('Moved selected tabs in manual grouping', { count: resolvedTabs.length, groupId });
+      logInfo('Moved selected tabs in manual grouping', { count: tabsToMove.length, groupId, reordered: this.sortMode === 'none' });
       return;
     }
     if (beforeTarget && targets.some((target) => sameIdentity(target.identity, beforeTarget.identity) && target.groupIndex === beforeTarget.groupIndex)) {
@@ -1096,6 +1111,10 @@ export class VerticalTabsPanel {
           await this.activateTab(tab);
           await this.moveActiveEditorToGroup(tab, stableDestination);
         }
+      }
+      if (this.sortMode !== 'none') {
+        logInfo('跟随 VS Code 模式批量标签仅更改分组', { count: resolvedTabs.length, groupId });
+        return;
       }
       const destinationTabs = stableDestination.tabs.filter((tab) => !isVerticalTabsPanel(tab));
       const movedTabsInDestination = resolvedTabs.filter((tab) => destinationTabs.includes(tab));
@@ -1168,6 +1187,10 @@ export class VerticalTabsPanel {
     await this.activateTab(tab);
     if (tab.group !== destination) {
       await this.moveActiveEditorToGroup(tab, destination);
+    }
+    if (this.sortMode !== 'none') {
+      logInfo('跟随 VS Code 模式标签仅更改分组', { destinationGroupId });
+      return;
     }
     if (!beforeTab) {
       await this.moveActiveEditorToEndOfGroup(targetIdentity(tab));
@@ -1625,7 +1648,7 @@ export class VerticalTabsPanel {
       </div>
       <div class="toolbar-selects">
         <label class="toolbar-field" for="group-mode"><span>分组方式</span><select id="group-mode"><option value="vscode">跟随 VS Code</option><option value="manual">手动分组</option><option value="parentDir">按父目录</option><option value="fileType">按文件类型</option></select></label>
-        <label class="toolbar-field" for="sort-mode"><span>排序方式</span><select id="sort-mode"><option value="none">不排序</option><option value="modifiedAsc">修改时间正序</option><option value="modifiedDesc">修改时间逆序</option><option value="nameAsc">文件名正序</option><option value="nameDesc">文件名逆序</option></select></label>
+        <label class="toolbar-field" for="sort-mode"><span>排序方式</span><select id="sort-mode"><option value="none">手工排序</option><option value="modifiedAsc">修改时间正序</option><option value="modifiedDesc">修改时间逆序</option><option value="nameAsc">文件名正序</option><option value="nameDesc">文件名逆序</option></select></label>
       </div>
     </header>
     <p id="description">正在同步打开的标签…</p>

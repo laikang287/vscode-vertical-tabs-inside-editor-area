@@ -1,5 +1,6 @@
 import type { ExtensionMessage, GroupMode, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { TabSelection } from './TabSelection';
+import { tabDragCapability } from './dragPolicy';
 
 declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
 
@@ -184,7 +185,7 @@ function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], gr
 function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 0 | 1): HTMLElement {
   const row = document.createElement('article');
   row.className = ['tab-row', `tree-level-${level}`, isSelected(tab) ? 'is-selected' : '', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
-  row.draggable = true;
+  row.draggable = currentDragCapability() !== 'disabled';
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
   let dragImageOffset: DragImageOffset | undefined;
@@ -350,38 +351,59 @@ function clamp(value: number, minimum: number, maximum: number): number {
 }
 
 function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
-  if (!draggedTarget || latestSnapshot?.groupMode === 'parentDir' || latestSnapshot?.groupMode === 'fileType') return;
+  if (!draggedTarget || currentDragCapability() === 'disabled' || targetsForDrop(group).length === 0) return;
   event.preventDefault();
   event.dataTransfer!.dropEffect = 'move';
-  group;
 }
 
 function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void {
-  if (!draggedTarget) return;
+  if (!draggedTarget || currentDragCapability() === 'disabled') return;
   event.preventDefault();
+  const targets = targetsForDrop(group);
+  if (targets.length === 0) return;
   const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
   logToExtension('debug', '标签拖拽投放到分组', dropDetails(event, draggedTarget, group.id));
-  vscode.postMessage(draggedTargets.length > 1 ? { type: 'moveTabs', targets: draggedTargets, groupId } : { type: 'moveTab', target: draggedTarget, groupId });
+  postTabMove(targets, groupId);
 }
 
 function handleTabDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
-  if (!draggedTarget || latestSnapshot?.groupMode === 'parentDir' || latestSnapshot?.groupMode === 'fileType') return;
+  if (!draggedTarget || currentDragCapability() === 'disabled' || targetsForDrop(group).length === 0) return;
   event.preventDefault();
   event.stopPropagation();
-  event.dataTransfer!.dropEffect = group.mode === 'manual' || group.mode === 'vscode' ? 'move' : 'none';
+  event.dataTransfer!.dropEffect = 'move';
 }
 
 function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
-  if (!draggedTarget) return;
+  const capability = currentDragCapability();
+  if (!draggedTarget || capability === 'disabled') return;
   event.preventDefault();
   // The tab row lives inside the group drop zone. Without stopping this event,
   // one gesture emits both a positioned move and a second append-to-group move,
   // so the latter can overwrite the requested position and send the tab to the end.
   event.stopPropagation();
-  if (draggedTargets.some((target) => sameTarget(target, tab.target))) return;
+  const targets = targetsForDrop(group);
+  if (targets.length === 0 || targets.some((target) => sameTarget(target, tab.target))) return;
   const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
-  logToExtension('debug', '标签拖拽排序请求', dropDetails(event, draggedTarget, group.id, tab.target));
-  vscode.postMessage(draggedTargets.length > 1 ? { type: 'moveTabs', targets: draggedTargets, groupId, beforeTarget: tab.target } : { type: 'moveTab', target: draggedTarget, groupId, beforeTarget: tab.target });
+  const beforeTarget = capability === 'reorder' ? tab.target : undefined;
+  logToExtension('debug', beforeTarget ? '标签拖拽排序请求' : '标签拖拽改分组请求', dropDetails(event, draggedTarget, group.id, beforeTarget));
+  postTabMove(targets, groupId, beforeTarget);
+}
+
+function currentDragCapability(): ReturnType<typeof tabDragCapability> {
+  return latestSnapshot ? tabDragCapability(latestSnapshot.groupMode, latestSnapshot.sortMode) : 'disabled';
+}
+
+function targetsForDrop(group: VerticalTabDisplayGroup): readonly TabTarget[] {
+  if (currentDragCapability() === 'reorder') return draggedTargets;
+  return draggedTargets.filter((target) => !group.tabs.some((tab) => sameTarget(tab.target, target)));
+}
+
+function postTabMove(targets: readonly TabTarget[], groupId: string | undefined, beforeTarget?: TabTarget): void {
+  if (targets.length === 1) {
+    vscode.postMessage({ type: 'moveTab', target: targets[0], groupId, ...(beforeTarget ? { beforeTarget } : {}) });
+    return;
+  }
+  vscode.postMessage({ type: 'moveTabs', targets, groupId, ...(beforeTarget ? { beforeTarget } : {}) });
 }
 
 function button(label: string, title: string): HTMLButtonElement {

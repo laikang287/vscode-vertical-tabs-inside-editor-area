@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.59",
+  "version": "0.1.60",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -105,14 +105,14 @@
             "nameDesc"
           ],
           "enumDescriptions": [
-            "不排序，跟随当前标签顺序。",
+            "手工排序，可通过拖拽调整标签顺序。",
             "按修改时间升序。",
             "按修改时间降序。",
             "按名称升序。",
             "按名称降序。"
           ],
           "scope": "window",
-          "markdownDescription": "默认排序方式。默认不排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。"
+          "markdownDescription": "默认排序方式。默认为手工排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。"
         }
       }
     },

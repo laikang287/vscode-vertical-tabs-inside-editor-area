@@ -85,7 +85,7 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(source, /dragstart[\s\S]+draggedTargets = selectedTargetsFor\(tab\)/);
   assert.match(source, /type: 'closeTabs', targets/);
   assert.match(source, /type: pinned \? 'unpinTabs' : 'pinTabs', targets/);
-  assert.match(source, /type: 'moveTabs', targets: draggedTargets, groupId/);
+  assert.match(source, /postTabMove\(targets, groupId/);
   assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
   assert.match(panelSource, /await this\.moveActiveEditorToGroup\(tab, destination\)/);
   assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedKeys, beforeKey\)/);
@@ -128,6 +128,7 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="折叠所有分组">⊟<\/button>/);
   assert.match(panelSource, /<span>分组方式<\/span><select id="group-mode">/);
   assert.match(panelSource, /<span>排序方式<\/span><select id="sort-mode">/);
+  assert.match(panelSource, /<option value="none">手工排序<\/option>/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
   assert.match(webviewSource, /type: 'setGroupMode', groupMode: groupModeSelect\.value as GroupMode/);
@@ -327,7 +328,7 @@ test('webview activates once on pointerdown while retaining full-row dragging an
 
   assert.match(source, /let activateRequestSequence = 0/);
   assert.match(source, /let dragRequestSequence = 0/);
-  assert.match(source, /row\.draggable = true/);
+  assert.match(source, /row\.draggable = currentDragCapability\(\) !== 'disabled'/);
   assert.match(source, /row\.addEventListener\('dragstart'/);
   assert.match(source, /row\.addEventListener\('dragend'/);
   assert.match(source, /row\.dataset\.target = JSON\.stringify\(tab\.target\)/);
@@ -351,12 +352,26 @@ test('webview activates once on pointerdown while retaining full-row dragging an
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
 });
 
-test('webview styles the full tab row as draggable', () => {
+test('webview only shows the drag cursor on draggable tab rows', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(style, /\.tab-row \{ cursor: grab;/);
-  assert.match(style, /\.tab-row:active \{ cursor: grabbing; \}/);
+  assert.match(style, /\.tab-row\[draggable="true"\] \{ cursor: grab; \}/);
+  assert.match(style, /\.tab-row\[draggable="true"\]:active \{ cursor: grabbing; \}/);
   assert.doesNotMatch(style, /\.tab-drag-handle/);
+});
+
+test('webview and host enforce drag capabilities for grouping and sorting modes', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(webviewSource, /const beforeTarget = capability === 'reorder' \? tab\.target : undefined/);
+  assert.match(webviewSource, /targetsForDrop\(group\)/);
+  assert.match(webviewSource, /!group\.tabs\.some\(\(tab\) => sameTarget\(tab\.target, target\)\)/);
+  assert.match(panelSource, /const dragCapability = tabDragCapability\(this\.groupMode, this\.sortMode\)/);
+  assert.match(panelSource, /if \(dragCapability === 'disabled'\)/);
+  assert.match(panelSource, /dragCapability === 'reorder' \? message\.beforeTarget : undefined/);
+  assert.match(panelSource, /if \(this\.sortMode !== 'none'\) \{\s*logInfo\('跟随 VS Code 模式标签仅更改分组'/);
+  assert.doesNotMatch(panelSource, /this\.groupMode = 'manual';\s*await this\.persistGroupMode\(\);\s*await this\.moveManualTab/);
 });
 
 test('webview keeps the grabbed point aligned with the pointer while dragging', () => {
@@ -450,6 +465,6 @@ test('extension reorders a multi-select VS Code drag as one stable block', () =>
 test('tab-row drop stops before the outer group can append the same drag to the end', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?beforeTarget: tab\.target/);
+  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?const beforeTarget = capability === 'reorder' \? tab\.target : undefined/);
   assert.match(source, /function handleTabDragOver[\s\S]+?event\.preventDefault\(\);\s*event\.stopPropagation\(\)/);
 });
