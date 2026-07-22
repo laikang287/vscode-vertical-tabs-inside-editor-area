@@ -1,6 +1,6 @@
 {
   "verticalTabs.config.rememberState": "是否自动记忆垂直标签栏状态。开启时按工作区记忆分组方式、排序方式、手动分组和固定分组，并按用户记忆调整后的宽度；关闭时不读取或写入这些状态，始终使用默认值。",
-  "verticalTabs.config.tabWidthRatio": "标签页宽度百分比。控制垂直标签栏首次显示或关闭自动记忆时占编辑器区域的宽度比例，默认 20%。",
+  "verticalTabs.config.tabWidthRatio": "标签页宽度百分比。控制垂直标签栏首次显示或关闭自动记忆时占编辑器区域的宽度比例，默认 25%。",
   "verticalTabs.config.defaultGroupMode": "默认分组方式。关闭自动记忆时始终使用该值；开启自动记忆时仅在没有已记忆值时使用。",
   "verticalTabs.config.defaultGroupMode.vscode": "跟随 VS Code 编辑器组。",
   "verticalTabs.config.defaultGroupMode.manual": "使用手动分组。",
@@ -12,9 +12,18 @@
   "verticalTabs.config.defaultSortMode.modifiedDesc": "按修改时间降序。",
   "verticalTabs.config.defaultSortMode.nameAsc": "按名称升序。",
   "verticalTabs.config.defaultSortMode.nameDesc": "按名称降序。",
-  "verticalTabs.config.language": "垂直标签栏的显示语言。\u0007uto 表示自动跟随 VS Code 的显示语言。",
- "verticalTabs.command.open": "显示垂直标签页",
+  "verticalTabs.config.language": "垂直标签栏的显示语言。auto 表示自动跟随 VS Code 的显示语言。",
+  "verticalTabs.command.open": "显示垂直标签页",
   "verticalTabs.command.close": "关闭垂直标签页",
-
- "verticalTabs.config.language.auto": "自动（跟随 VS Code 显示语言）"
+  "verticalTabs.config.language.auto": "自动（跟随 VS Code 显示语言）",
+  "verticalTabs.config.language.en": "English",
+  "verticalTabs.config.language.zh-cn": "简体中文",
+  "verticalTabs.config.language.zh-tw": "繁體中文",
+  "verticalTabs.config.language.ja": "日本語",
+  "verticalTabs.config.language.ko": "한국어",
+  "verticalTabs.config.language.de": "Deutsch",
+  "verticalTabs.config.language.fr": "Français",
+  "verticalTabs.config.language.es": "Español",
+  "verticalTabs.config.language.pt-br": "Português (Brasil)",
+  "verticalTabs.config.language.ru": "Русский"
 }

@@ -12,9 +12,18 @@
   "verticalTabs.config.defaultSortMode.modifiedDesc": "Sort by modification time descending.",
   "verticalTabs.config.defaultSortMode.nameAsc": "Sort by name ascending.",
   "verticalTabs.config.defaultSortMode.nameDesc": "Sort by name descending.",
-  "verticalTabs.config.language": "Display language for the vertical tab bar UI. `auto` follows VS Code's display language.",
+  "verticalTabs.config.language": "Display language for the vertical tab bar UI. auto follows VS Code display language.",
   "verticalTabs.command.open": "Show Vertical Tabs",
- "verticalTabs.command.close": "Close Vertical Tabs",
-
-  "verticalTabs.config.language.auto": "Auto (follow VS Code display language)"
+  "verticalTabs.command.close": "Close Vertical Tabs",
+  "verticalTabs.config.language.auto": "Auto (follow VS Code display language)",
+  "verticalTabs.config.language.en": "English",
+  "verticalTabs.config.language.zh-cn": "简体中文 (Simplified Chinese)",
+  "verticalTabs.config.language.zh-tw": "繁體中文 (Traditional Chinese)",
+  "verticalTabs.config.language.ja": "日本語 (Japanese)",
+  "verticalTabs.config.language.ko": "한국어 (Korean)",
+  "verticalTabs.config.language.de": "Deutsch (German)",
+  "verticalTabs.config.language.fr": "Français (French)",
+  "verticalTabs.config.language.es": "Español (Spanish)",
+  "verticalTabs.config.language.pt-br": "Português (Brasil)",
+  "verticalTabs.config.language.ru": "Русский (Russian)"
 }

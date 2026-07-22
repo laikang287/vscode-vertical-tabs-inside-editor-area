@@ -4,3 +4,4 @@ out/
 dist/*.vsix
 *.log
 .DS_Store
+.obsidian
