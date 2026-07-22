@@ -1081,9 +1081,27 @@ export class VerticalTabsPanel {
       return;
     }
     const stableDestination = (beforeTarget ? this.resolveTab(beforeTarget)?.group : undefined) ?? this.resolveVsCodeDisplayGroup(groupId);
-    for (const target of targets) {
-      await this.moveEditorWithinVsCode(target, groupId, beforeTarget, stableDestination);
+    if (!stableDestination) {
+      logWarn('跟随 VS Code 模式批量移动失败：目标编辑器组已失效', { count: targets.length, groupId, beforeTarget });
+      return;
     }
+
+    // 多选拖拽只负责跨组转移。若复用单标签排序路径，每个标签抵达目标组后
+    // 还会执行额外的原生移动命令；VS Code 在这些命令间重排编辑器组时，可能
+    // 让每个选中编辑器新建独立分组。全程固定同一个目标组，只移动尚未在其中的标签。
+    for (const target of targets) {
+      const tab = this.resolveTab(target);
+      if (!tab || !isActivatableTabForCommands(tab)) {
+        logWarn('跟随 VS Code 模式批量移动跳过不可可靠激活的标签', { target });
+        continue;
+      }
+      if (tab.group === stableDestination) {
+        continue;
+      }
+      await this.activateTab(tab);
+      await this.moveActiveEditorToGroup(targetIdentity(tab), stableDestination);
+    }
+    logInfo('跟随 VS Code 模式批量移动完成：仅移动至目标编辑器组', { count: targets.length, groupId });
   }
 
   private async setPinnedTabs(targets: readonly TabTarget[], pinned: boolean): Promise<void> {

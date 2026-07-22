@@ -419,3 +419,12 @@ test('extension moves VS Code tabs repeatedly until the dropped position is reac
   assert.match(source, /跟随 VS Code 模式移动到末尾完成/);
   assert.match(source, /function describeTabPosition\(position: TabPosition \| undefined\): Record<string, unknown> \| undefined/);
 });
+
+test('extension treats a multi-select VS Code drag as a group transfer only', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /跟随 VS Code 模式批量移动失败：目标编辑器组已失效/);
+  assert.match(source, /for \(const target of targets\) \{\s*const tab = this\.resolveTab\(target\);[\s\S]*?await this\.moveActiveEditorToGroup\(targetIdentity\(tab\), stableDestination\);/);
+  assert.match(source, /跟随 VS Code 模式批量移动完成：仅移动至目标编辑器组/);
+  assert.doesNotMatch(source, /for \(const target of targets\) \{\s*await this\.moveEditorWithinVsCode\(target, groupId, beforeTarget, stableDestination\);/);
+});
