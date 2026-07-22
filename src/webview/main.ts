@@ -206,11 +206,14 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
   let dragImageOffset: DragImageOffset | undefined;
+  let preserveMultiSelectionOnPointerDown = false;
+  let draggedAfterPreservePointerDown = false;
   row.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
     dragImageOffset = dragImageOffsetWithin(row, event.clientX, event.clientY);
   }, { capture: true });
   row.addEventListener('dragstart', (event) => {
+    if (preserveMultiSelectionOnPointerDown) draggedAfterPreservePointerDown = true;
     draggedTarget = tab.target;
     draggedTargets = selectedTargetsFor(tab);
     const requestId = nextDragRequestId();
@@ -224,10 +227,23 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   });
   row.addEventListener('dragend', (event) => {
     logToExtension('debug', '标签拖拽结束', targetDetails(tab.target, tab.label, row.dataset.dragRequestId));
+    const cancelledPreservedDrag = preserveMultiSelectionOnPointerDown
+      && draggedAfterPreservePointerDown
+      && (event.dataTransfer?.dropEffect ?? 'none') === 'none';
     draggedTarget = undefined;
     draggedTargets = [];
     dragImageOffset = undefined;
     delete row.dataset.dragRequestId;
+    if (cancelledPreservedDrag) {
+      // Chromium suppresses click (and may omit pointerup on the button) once a
+      // tiny pointer movement starts native dragging. If that drag was never
+      // dropped, treat the gesture as the original click instead of leaving a
+      // stale multi-selection and inactive target behind.
+      draggedAfterPreservePointerDown = false;
+      collapsePreservedMultiSelection();
+    } else {
+      preserveMultiSelectionOnPointerDown = false;
+    }
     event.preventDefault();
   });
   row.addEventListener('dragover', (event) => handleTabDragOver(event, row, tab, group));
@@ -237,12 +253,17 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   activate.type = 'button';
   activate.disabled = !tab.isActivatable;
   activate.title = activationTitle(tab);
-  let preserveMultiSelectionOnPointerDown = false;
   const requestActivation = () => {
     const requestId = nextActivateRequestId();
     logToExtension('debug', '标签激活按钮发送单次激活请求', targetDetails(tab.target, tab.label, requestId));
     markActiveTab(tab.target);
     vscode.postMessage({ type: 'activateTab', target: tab.target, requestId });
+  };
+  const collapsePreservedMultiSelection = () => {
+    if (!preserveMultiSelectionOnPointerDown || draggedAfterPreservePointerDown) return;
+    preserveMultiSelectionOnPointerDown = false;
+    selectSingle(tab);
+    requestActivation();
   };
   activate.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
@@ -250,6 +271,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
     // left this flag set. Every new pointer gesture must decide preservation
     // from its own current selection state.
     preserveMultiSelectionOnPointerDown = false;
+    draggedAfterPreservePointerDown = false;
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       event.preventDefault();
       updateSelection(tab, { shiftKey: event.shiftKey, toggleKey: event.ctrlKey || event.metaKey });
@@ -260,10 +282,18 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       // than the beginning of a drag. Dragstart then carries every selected
       // target; an ordinary click collapses to one item below.
       preserveMultiSelectionOnPointerDown = true;
+      // Keep pointerup routed to this button when the pointer drifts a few
+      // pixels outside it. Without capture neither pointerup nor click is
+      // guaranteed, so the preserved multi-selection can otherwise get stuck.
+      activate.setPointerCapture(event.pointerId);
       return;
     }
     selectSingle(tab);
     requestActivation();
+  });
+  activate.addEventListener('pointerup', (event) => {
+    if (event.button !== 0) return;
+    window.setTimeout(collapsePreservedMultiSelection, 0);
   });
   activate.addEventListener('click', (event) => {
     // Most mouse and pen activation is handled on pointerdown. A click on an
@@ -273,9 +303,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       selectSingle(tab);
       requestActivation();
     } else if (preserveMultiSelectionOnPointerDown) {
-      preserveMultiSelectionOnPointerDown = false;
-      selectSingle(tab);
-      requestActivation();
+      collapsePreservedMultiSelection();
     }
   });
   const label = document.createElement('span');
