@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.79",
+  "version": "0.1.81",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -66,7 +66,7 @@
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "是否自动记忆垂直标签栏状态。开启时按工作区记忆分组方式、排序方式、手工分组和固定分组，并按用户记忆调整后的宽度；关闭时不读取或写入这些状态，始终使用默认值。"
+          "markdownDescription": "%verticalTabs.config.rememberState%"
         },
         "verticalTabs.tabWidthRatio": {
           "type": "number",
@@ -74,7 +74,7 @@
           "minimum": 0.1,
           "maximum": 0.5,
           "scope": "window",
-          "markdownDescription": "标签页宽度百分比。控制垂直标签栏首次显示或关闭自动记忆时占编辑器区域的宽度比例，默认 20%。"
+          "markdownDescription": "%verticalTabs.config.tabWidthRatio%"
         },
         "verticalTabs.defaultGroupMode": {
           "type": "string",
@@ -86,13 +86,13 @@
             "fileType"
           ],
           "enumDescriptions": [
-            "跟随 VS Code 编辑器组。",
-            "使用手工分组。",
-            "按父目录分组。",
-            "按文件类型分组。"
+            "%verticalTabs.config.defaultGroupMode.vscode%",
+            "%verticalTabs.config.defaultGroupMode.manual%",
+            "%verticalTabs.config.defaultGroupMode.parentDir%",
+            "%verticalTabs.config.defaultGroupMode.fileType%"
           ],
           "scope": "window",
-          "markdownDescription": "默认分组方式。关闭自动记忆时始终使用该值；开启自动记忆时仅在没有已记忆值时使用。"
+          "markdownDescription": "%verticalTabs.config.defaultGroupMode%"
         },
         "verticalTabs.defaultSortMode": {
           "type": "string",
@@ -105,20 +105,20 @@
             "nameDesc"
           ],
           "enumDescriptions": [
-            "手工排序，可通过拖拽调整标签顺序。",
-            "按修改时间升序。",
-            "按修改时间降序。",
-            "按名称升序。",
-            "按名称降序。"
+            "%verticalTabs.config.defaultSortMode.none%",
+            "%verticalTabs.config.defaultSortMode.modifiedAsc%",
+            "%verticalTabs.config.defaultSortMode.modifiedDesc%",
+            "%verticalTabs.config.defaultSortMode.nameAsc%",
+            "%verticalTabs.config.defaultSortMode.nameDesc%"
           ],
           "scope": "window",
-          "markdownDescription": "默认排序方式。默认为手工排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。"
+          "markdownDescription": "%verticalTabs.config.defaultSortMode%"
         },
         "verticalTabs.defaultToolbarControlsVisible": {
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "Default visibility for the grouping and sorting dropdown controls. When automatic memory is enabled, this is used only when no saved visibility exists; when automatic memory is disabled, this default is always used."
+          "markdownDescription": "%verticalTabs.config.defaultToolbarControlsVisible%"
         },
         "verticalTabs.language": {
           "type": "string",
@@ -176,12 +176,12 @@
       {
         "view": "verticalTabs.launcher",
         "when": "!verticalTabs.visible",
-        "contents": "[%verticalTabs.command.open%](command:verticalTabs.open)"
+        "contents": "[Show](command:verticalTabs.open)"
       },
       {
         "view": "verticalTabs.launcher",
         "when": "verticalTabs.visible",
-        "contents": "[%verticalTabs.command.close%](command:verticalTabs.close)"
+        "contents": "[Hide](command:verticalTabs.close)"
       }
     ]
   },

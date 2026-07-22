@@ -81,8 +81,8 @@ suite('Vertical Tabs extension', () => {
     assert.ok(manifest.activationEvents.includes('onWebviewPanel:verticalTabs.editorArea'));
     assert.ok(!('verticalTabs.defaultRailWidthRatio' in manifest.contributes.configuration.properties));
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.rememberState'].default, true);
-    assert.equal(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].default, 0.2);
-    assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /20%/);
+   assert.equal(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].default, 0.2);
+    assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultGroupMode'].default, 'vscode');
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultSortMode'].default, 'none');
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));

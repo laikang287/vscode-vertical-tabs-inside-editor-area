@@ -25,5 +25,6 @@
   "verticalTabs.config.language.fr": "Français",
   "verticalTabs.config.language.es": "Español",
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
-  "verticalTabs.config.language.ru": "Русский"
+  "verticalTabs.config.language.ru": "Русский",
+  "verticalTabs.config.defaultToolbarControlsVisible": "分组方式与排序方式下拉控件的默认可见性。开启自动记忆时仅在无已保存的可见性时使用该值；关闭自动记忆时始终使用该值。"
 }

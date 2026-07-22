@@ -1,7 +1,9 @@
 ﻿import type { ExtensionMessage, GroupMode, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { TabSelection } from './TabSelection';
-import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
-import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
+ import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
+ import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
+
+ declare var __i18n: Record<string, string> | undefined;
 
 declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
 
@@ -281,14 +283,17 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   });
   row.addEventListener('dragend', (event) => {
     logToExtension('debug', '标签拖拽结束', targetDetails(tab.target, tab.label, row.dataset.dragRequestId));
+    const dropEff = event.dataTransfer?.dropEffect ?? 'none';
     const cancelledPreservedDrag = preserveMultiSelectionOnPointerDown
       && draggedAfterPreservePointerDown
-      && (event.dataTransfer?.dropEffect ?? 'none') === 'none';
+      && dropEff === 'none';
+    logToExtension('debug', 'MULTI_CLICK_DEBUG dragend', JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown, draggedAfter: draggedAfterPreservePointerDown, dropEffect: dropEff, cancelled: cancelledPreservedDrag }));
     draggedTarget = undefined;
     draggedTargets = [];
     dragImageOffset = undefined;
     delete row.dataset.dragRequestId;
     if (cancelledPreservedDrag) {
+      logToExtension("debug", "MULTI_CLICK_DEBUG dragend -> cancelled, calling collapsePreservedMultiSelection");
       // Chromium suppresses click (and may omit pointerup on the button) once a
       // tiny pointer movement starts native dragging. If that drag was never
       // dropped, treat the gesture as the original click instead of leaving a
@@ -296,6 +301,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       draggedAfterPreservePointerDown = false;
       collapsePreservedMultiSelection();
     } else if (preserveMultiSelectionOnPointerDown) {
+      logToExtension("debug", "MULTI_CLICK_DEBUG dragend -> preserve branch, calling selectSingle+requestActivation");
       preserveMultiSelectionOnPointerDown = false;
       draggedAfterPreservePointerDown = false;
       selectSingle(tab);
@@ -309,15 +315,17 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   activate.className = 'tab-main';
   activate.type = 'button';
   activate.disabled = !tab.isActivatable;
-  activate.title = activationTitle(tab);
-  const requestActivation = () => {
+ activate.title = activationTitle(tab);
+  const requestActivation = (targetOverride?: TabTarget) => {
+    const target = targetOverride ?? tab.target;
     const requestId = nextActivateRequestId();
-    logToExtension('debug', '标签激活按钮发送单次激活请求', targetDetails(tab.target, tab.label, requestId));
-    markActiveTab(tab.target);
-    vscode.postMessage({ type: 'activateTab', target: tab.target, requestId });
+    logToExtension('debug', '标签激活按钮发送单次激活请求', targetDetails(target, tab.label, requestId));
+    markActiveTab(target);
+    vscode.postMessage({ type: 'activateTab', target, requestId });
   };
   const collapsePreservedMultiSelection = () => {
-    if (!preserveMultiSelectionOnPointerDown || draggedAfterPreservePointerDown) return;
+    if (!preserveMultiSelectionOnPointerDown || draggedAfterPreservePointerDown) { logToExtension("debug", "MULTI_CLICK_DEBUG collapsePreservedMultiSelection early return", JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown, draggedAfter: draggedAfterPreservePointerDown })); return; }
+    logToExtension("debug", "MULTI_CLICK_DEBUG collapsePreservedMultiSelection executing", targetDetails(tab.target, tab.label));
     preserveMultiSelectionOnPointerDown = false;
     selectSingle(tab);
     requestActivation();
@@ -338,6 +346,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       // Keep the selected block intact until we know this is a click rather
       // than the beginning of a drag. Dragstart then carries every selected
       // target; an ordinary click collapses to one item below.
+      logToExtension("debug", "MULTI_CLICK_DEBUG pointerdown -> preserve branch, calling setPointerCapture", targetDetails(tab.target, tab.label));
       preserveMultiSelectionOnPointerDown = true;
       // Keep pointerup routed to this button when the pointer drifts a few
       // pixels outside it. Without capture neither pointerup nor click is
@@ -350,9 +359,13 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   });
   activate.addEventListener('pointerup', (event) => {
     if (event.button !== 0) return;
-    window.setTimeout(collapsePreservedMultiSelection, 0);
+    logToExtension('debug', 'MULTI_CLICK_DEBUG pointerup fired', JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown, draggedAfter: draggedAfterPreservePointerDown }));
+    if (preserveMultiSelectionOnPointerDown && !draggedAfterPreservePointerDown) {
+      collapsePreservedMultiSelection();
+    }
   });
   activate.addEventListener('click', (event) => {
+    logToExtension('debug', 'MULTI_CLICK_DEBUG click fired', JSON.stringify({ label: tab.label, detail: event.detail, preserve: preserveMultiSelectionOnPointerDown, draggedAfter: draggedAfterPreservePointerDown }));
     // Most mouse and pen activation is handled on pointerdown. A click on an
     // existing multi-selection is intentionally deferred so dragstart can
     // still carry the whole block; keyboard-generated clicks use detail=0.
@@ -366,6 +379,22 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   const label = document.createElement('span');
   label.className = 'tab-label';
   label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? i18n.previewSuffix : ''}`;
+  activate.addEventListener("lostpointercapture", () => {
+    logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture", JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown }));
+    if (preserveMultiSelectionOnPointerDown) {
+      logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture -> activating");
+      preserveMultiSelectionOnPointerDown = false;
+      draggedAfterPreservePointerDown = false;
+      const identity = tab.target.identity;
+      const currentTab = latestSnapshot?.displayGroups
+        .flatMap(g => g.tabs)
+        .find(t => JSON.stringify(t.target.identity) === JSON.stringify(identity));
+      if (currentTab) {
+        selectSingle(currentTab);
+        requestActivation(currentTab.target);
+      }
+    }
+  });
   activate.append(label);
   if (tab.description) {
     const detail = document.createElement('span');

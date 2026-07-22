@@ -116,8 +116,8 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
   assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
   assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
-  assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
-  assert.match(properties['verticalTabs.tabWidthRatio']?.markdownDescription ?? '', /20%/);
+ assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
+  assert.match(properties['verticalTabs.tabWidthRatio']?.markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
   assert.match(panelSource, /vscode\.workspace\.onDidChangeConfiguration/);
   assert.match(panelSource, /this\.manualGroups\.splice\(0, this\.manualGroups\.length\)/);
   assert.match(panelSource, /this\.toolbarControlsVisible = readDefaultToolbarControlsVisible\(\)/);
@@ -209,8 +209,8 @@ test('activation updates the focused editor without clearing shown tabs in other
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /markActiveTab\(tab\.target\)/);
-  assert.match(source, /function markActiveTab\(target: TabTarget\): void/);
+ assert.match(source, /markActiveTab\(target\)/);
+ assert.match(source, /function markActiveTab\(target: TabTarget\): void/);
   assert.match(source, /parseTargetDataset\(candidate\.dataset\.target\)/);
   assert.match(source, /sameTarget\(candidateTarget, target\)/);
   assert.match(source, /\.tab-row\.is-active/);
@@ -372,17 +372,16 @@ test('webview collapses an existing multi-selection on click while retaining blo
   assert.match(source, /activate\.addEventListener\('click'/);
   assert.match(source, /if \(event\.detail === 0\) \{\s*selectSingle\(tab\);\s*requestActivation\(\);/);
   assert.match(source, /preserveMultiSelectionOnPointerDown = true;[\s\S]+?activate\.setPointerCapture\(event\.pointerId\);\s*return;/);
-  assert.match(source, /const collapsePreservedMultiSelection = \(\) => \{[\s\S]+?preserveMultiSelectionOnPointerDown = false;[\s\S]+?selectSingle\(tab\);[\s\S]+?requestActivation\(\);/);
-  assert.match(source, /window\.setTimeout\(collapsePreservedMultiSelection, 0\)/);
-  assert.match(source, /else if \(preserveMultiSelectionOnPointerDown\) \{\s*collapsePreservedMultiSelection\(\);/);
+ assert.match(source, /const collapsePreservedMultiSelection = \(\) => \{[\s\S]+?preserveMultiSelectionOnPointerDown = false;[\s\S]+?selectSingle\(tab\);[\s\S]+?requestActivation\(\);/);
+  assert.match(source, /if \(preserveMultiSelectionOnPointerDown && !draggedAfterPreservePointerDown\) \{\s*collapsePreservedMultiSelection\(\);/);
   assert.match(source, /if \(preserveMultiSelectionOnPointerDown\) draggedAfterPreservePointerDown = true/);
   assert.match(source, /activate\.setPointerCapture\(event\.pointerId\)/);
-  assert.match(source, /const cancelledPreservedDrag = preserveMultiSelectionOnPointerDown[\s\S]+?event\.dataTransfer\?\.dropEffect[\s\S]+?=== 'none'/);
+  assert.match(source, /const cancelledPreservedDrag = preserveMultiSelectionOnPointerDown[\s\S]+?dropEff === 'none'/);
   assert.match(source, /if \(cancelledPreservedDrag\) \{[\s\S]+?draggedAfterPreservePointerDown = false;[\s\S]+?collapsePreservedMultiSelection\(\);/);
   assert.match(source, /classList\.remove\('is-selected', 'is-multi-selected'\)/);
-  assert.match(source, /const requestId = nextActivateRequestId\(\)/);
-  assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
-  assert.doesNotMatch(source, /function suspendRowDrag/);
+ assert.match(source, /const requestId = nextActivateRequestId\(\)/);
+  assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target, requestId \}\)/);
+ assert.doesNotMatch(source, /function suspendRowDrag/);
   assert.doesNotMatch(source, /suspendRowDrag\(row\)/);
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
 });
