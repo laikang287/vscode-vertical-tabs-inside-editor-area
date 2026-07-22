@@ -1215,7 +1215,8 @@ export class VerticalTabsPanel {
     const groupsBefore = vscode.window.tabGroups.all;
     const groupCountBefore = groupsBefore.length;
     const targetGroupIndex = groupsBefore.indexOf(destination);
-    if (!source || targetGroupIndex < 0 || destination.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+    const targetViewColumn = destination.viewColumn;
+    if (!source || targetGroupIndex < 0 || targetViewColumn < vscode.ViewColumn.One || destination.tabs.some((tab) => isVerticalTabsPanel(tab))) {
       logWarn('跟随 VS Code 模式移至分组停止：源标签或目标分组位置已失效', { source: describeTabPosition(source), destination: describeTabGroup(destination, targetGroupIndex) });
       return;
     }
@@ -1224,12 +1225,13 @@ export class VerticalTabsPanel {
       return;
     }
 
-    // previous/next 在当前编辑器组位于边界时会创建新组。position 直接引用
-    // GRID_APPEARANCE 中已经存在的目标组，因此跨组移动不会扩展编辑器布局。
+    // moveActiveEditor 的 position 使用 VS Code 的一基 viewColumn，而不是
+    // tabGroups.all 的数组下标。两者顺序可能不同，尤其不能假设垂直栏组
+    // 一定是编辑器组 1；必须使用目标组自身的 viewColumn 才能保持身份一致。
     await vscode.commands.executeCommand('moveActiveEditor', {
       to: 'position',
       by: 'group',
-      value: targetGroupIndex + 1,
+      value: targetViewColumn,
     });
 
     const moved = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));

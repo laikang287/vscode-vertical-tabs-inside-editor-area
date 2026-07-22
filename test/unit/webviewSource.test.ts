@@ -173,7 +173,9 @@ test('vscode mode context menu hides adjacent group moves and move-to-group subm
   assert.match(panelSource, /private async moveEditorToVsCodeGroup\(target: TabTarget, targetGroupIndex: number\): Promise<void>/);
   assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceIdentity: TabTargetIdentity, destination: vscode\.TabGroup\): Promise<void>/);
   assert.match(panelSource, /groupsBefore\.indexOf\(destination\)/);
-  assert.match(panelSource, /vscode\.commands\.executeCommand\('moveActiveEditor', \{\s*to: 'position',\s*by: 'group',\s*value: targetGroupIndex \+ 1,/);
+  assert.match(panelSource, /const targetViewColumn = destination\.viewColumn/);
+  assert.match(panelSource, /vscode\.commands\.executeCommand\('moveActiveEditor', \{\s*to: 'position',\s*by: 'group',\s*value: targetViewColumn,/);
+  assert.doesNotMatch(panelSource, /value: targetGroupIndex \+ 1/);
   assert.match(panelSource, /if \(groupsAfter\.length > groupCountBefore\)/);
   const absoluteMoveMethod = panelSource.match(/private async moveActiveEditorToGroup[\s\S]+?\n  \}\n\n  private async moveActiveEditorBeforeTarget/)?.[0] ?? '';
   assert.doesNotMatch(absoluteMoveMethod, /moveEditorToNextGroup|moveEditorToPreviousGroup/);
