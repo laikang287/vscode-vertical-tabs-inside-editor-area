@@ -19,7 +19,7 @@ export interface VerticalTabDisplayGroup {
   readonly isPinned: boolean;
 }
 export interface VerticalTabsSnapshot {
-  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly rememberState: boolean;
+  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
 }
 export type WebviewMessage =
@@ -28,6 +28,7 @@ export type WebviewMessage =
   | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
   | { readonly type: 'closeAll' } | { readonly type: 'requestCreateGroup' } | { readonly type: 'setGroupMode'; readonly groupMode: GroupMode }
   | { readonly type: 'setSortMode'; readonly sortMode: SortMode }
+  | { readonly type: 'setToolbarControlsVisible'; readonly visible: boolean }
   | { readonly type: 'railWidth'; readonly width: number } | { readonly type: 'createGroup'; readonly name: string }
   | { readonly type: 'renameGroup'; readonly groupId: string; readonly name: string } | { readonly type: 'deleteGroup' | 'closeGroup'; readonly groupId: string }
   | { readonly type: 'toggleGroup'; readonly groupId: string } | { readonly type: 'assignGroup'; readonly target: TabTarget; readonly groupId?: string }
@@ -54,6 +55,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   }
   if (value.type === 'setGroupMode' && isGroupMode(value.groupMode)) return { type: 'setGroupMode', groupMode: value.groupMode };
   if (value.type === 'setSortMode' && isSortMode(value.sortMode)) return { type: 'setSortMode', sortMode: value.sortMode };
+  if (value.type === 'setToolbarControlsVisible' && typeof value.visible === 'boolean') return { type: 'setToolbarControlsVisible', visible: value.visible };
   if (value.type === 'railWidth' && isRailWidth(value.width)) return { type: 'railWidth', width: value.width };
   if (value.type === 'createGroup' && isName(value.name)) return { type: 'createGroup', name: value.name };
   if ((value.type === 'renameGroup') && isId(value.groupId) && isName(value.name)) return { type: 'renameGroup', groupId: value.groupId, name: value.name };

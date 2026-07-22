@@ -32,6 +32,7 @@ body { margin: 0; }
   gap: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.toolbar-selects[hidden] { display: none; }
 
 .toolbar-field {
   color: var(--vscode-descriptionForeground);
@@ -90,6 +91,16 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   padding: 2px 0;
 }
 .group-header:hover { background: var(--vscode-list-hoverBackground); }
+.tab-group.is-drop-target > .group-header {
+  background: var(--vscode-list-dropBackground, var(--vscode-list-hoverBackground));
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -1px;
+}
+.tab-group.is-drop-target.without-header {
+  background: var(--vscode-list-dropBackground, var(--vscode-list-hoverBackground));
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline-offset: -1px;
+}
 .is-pinned-group > .group-header { font-weight: 600; }
 .group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 4px; }
 .group-main {

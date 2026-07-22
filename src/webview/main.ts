@@ -18,6 +18,8 @@ const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
 const groups = document.querySelector<HTMLElement>('#groups');
 const verticalTabs = document.querySelector<HTMLElement>('.vertical-tabs');
+const toolbarControls = document.querySelector<HTMLElement>('#toolbar-controls');
+const toggleToolbarControlsButton = document.querySelector<HTMLButtonElement>('#toggle-toolbar-controls');
 const expandAllButton = document.querySelector<HTMLButtonElement>('#expand-all');
 const collapseAllButton = document.querySelector<HTMLButtonElement>('#collapse-all');
 const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
@@ -28,6 +30,7 @@ let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'
 let draggedTarget: TabTarget | undefined;
 let draggedTargets: readonly TabTarget[] = [];
 let dropIndicator: HTMLElement | undefined;
+let dropHighlightedGroup: HTMLElement | undefined;
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
@@ -42,6 +45,11 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
+toggleToolbarControlsButton?.addEventListener('click', () => {
+  const visible = toolbarControls?.hidden ?? false;
+  setToolbarControlsVisible(visible);
+  vscode.postMessage({ type: 'setToolbarControlsVisible', visible });
+});
 expandAllButton?.addEventListener('click', () => setAllGroupsCollapsed(false));
 collapseAllButton?.addEventListener('click', () => setAllGroupsCollapsed(true));
 groupModeSelect?.addEventListener('change', () => {
@@ -77,6 +85,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   pruneSelectedTabs(message.snapshot.tabs);
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
   if (sortModeSelect) sortModeSelect.value = message.snapshot.sortMode;
+  setToolbarControlsVisible(message.snapshot.toolbarControlsVisible);
   groups.replaceChildren();
   const { tabs, displayGroups } = message.snapshot;
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
@@ -382,6 +391,15 @@ function updateTreeActionState(): void {
   if (collapseAllButton) collapseAllButton.disabled = !hasGroups;
 }
 
+function setToolbarControlsVisible(visible: boolean): void {
+  if (toolbarControls) toolbarControls.hidden = !visible;
+  if (toggleToolbarControlsButton) {
+    toggleToolbarControlsButton.title = visible ? 'Hide grouping and sorting controls' : 'Show grouping and sorting controls';
+    toggleToolbarControlsButton.setAttribute('aria-label', toggleToolbarControlsButton.title);
+    toggleToolbarControlsButton.setAttribute('aria-pressed', String(!visible));
+  }
+}
+
 function activationTitle(tab: VerticalTabItem): string {
   const title = tab.tooltipPath ?? tab.label;
   if (tab.activationKind === 'reliable') return title;
@@ -409,7 +427,7 @@ function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): 
   }
   event.preventDefault();
   event.dataTransfer!.dropEffect = 'move';
-  showGroupEndDropIndicator(event.currentTarget as HTMLElement);
+  showGroupDropHighlight(event.currentTarget as HTMLElement);
 }
 
 function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void {
@@ -433,7 +451,7 @@ function handleTabDragOver(event: DragEvent, row: HTMLElement, tab: VerticalTabI
   event.stopPropagation();
   event.dataTransfer!.dropEffect = 'move';
   if (capability === 'moveGroup' || capability === 'moveDirectory') {
-    showGroupEndDropIndicator(row.closest<HTMLElement>('.tab-group') ?? row);
+    showGroupDropHighlight(row.closest<HTMLElement>('.tab-group') ?? row);
     return;
   }
   if (draggedTargets.some((target) => sameTarget(target, tab.target))) {
@@ -469,15 +487,17 @@ function beforeTargetForDrop(event: DragEvent, row: HTMLElement, tab: VerticalTa
 }
 
 function showTabDropIndicator(row: HTMLElement, edge: DragInsertionEdge): void {
+  clearGroupDropHighlight();
   const bounds = row.getBoundingClientRect();
   showDropIndicator(bounds.left, edge === 'before' ? bounds.top : bounds.bottom, bounds.width);
 }
 
-function showGroupEndDropIndicator(group: HTMLElement): void {
-  const rows = group.querySelectorAll<HTMLElement>(':scope > .tab-row');
-  const anchor = rows.item(rows.length - 1) ?? group.querySelector<HTMLElement>(':scope > .group-header') ?? group;
-  const bounds = anchor.getBoundingClientRect();
-  showDropIndicator(bounds.left, bounds.bottom, bounds.width);
+function showGroupDropHighlight(group: HTMLElement): void {
+  if (dropIndicator) dropIndicator.hidden = true;
+  if (dropHighlightedGroup === group) return;
+  clearGroupDropHighlight();
+  dropHighlightedGroup = group;
+  dropHighlightedGroup.classList.add('is-drop-target');
 }
 
 function showDropIndicator(left: number, top: number, width: number): void {
@@ -495,6 +515,13 @@ function showDropIndicator(left: number, top: number, width: number): void {
 
 function clearDropIndicator(): void {
   if (dropIndicator) dropIndicator.hidden = true;
+  clearGroupDropHighlight();
+}
+
+function clearGroupDropHighlight(): void {
+  if (!dropHighlightedGroup) return;
+  dropHighlightedGroup.classList.remove('is-drop-target');
+  dropHighlightedGroup = undefined;
 }
 
 function currentDragCapability(): ReturnType<typeof tabDragCapability> {
