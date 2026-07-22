@@ -16,6 +16,7 @@ export interface ManualTabGroup { readonly id: string; readonly name: string; re
 export interface VerticalTabDisplayGroup {
   readonly id: string; readonly title: string; readonly description?: string; readonly collapsed: boolean;
   readonly mode: GroupMode; readonly tabs: readonly VerticalTabItem[]; readonly showHeader: boolean; readonly isManual: boolean;
+  readonly isPinned: boolean;
 }
 export interface VerticalTabsSnapshot {
   readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode;
@@ -28,10 +29,13 @@ export type WebviewMessage =
   | { readonly type: 'closeAll' } | { readonly type: 'requestCreateGroup' } | { readonly type: 'setGroupMode'; readonly groupMode: GroupMode }
   | { readonly type: 'setSortMode'; readonly sortMode: SortMode }
   | { readonly type: 'railWidth'; readonly width: number } | { readonly type: 'createGroup'; readonly name: string }
-  | { readonly type: 'renameGroup'; readonly groupId: string; readonly name: string } | { readonly type: 'deleteGroup'; readonly groupId: string }
+  | { readonly type: 'renameGroup'; readonly groupId: string; readonly name: string } | { readonly type: 'deleteGroup' | 'closeGroup'; readonly groupId: string }
   | { readonly type: 'toggleGroup'; readonly groupId: string } | { readonly type: 'assignGroup'; readonly target: TabTarget; readonly groupId?: string }
   | { readonly type: 'pinTab' | 'unpinTab'; readonly target: TabTarget }
+  | { readonly type: 'pinTabs' | 'unpinTabs' | 'closeTabs' | 'closeOthersForTabs' | 'closeBelowForTabs'; readonly targets: readonly TabTarget[] }
+  | { readonly type: 'pinGroup' | 'unpinGroup'; readonly groupId: string }
   | { readonly type: 'moveTab'; readonly target: TabTarget; readonly groupId?: string; readonly beforeTarget?: TabTarget }
+  | { readonly type: 'moveTabs'; readonly targets: readonly TabTarget[]; readonly groupId?: string; readonly beforeTarget?: TabTarget }
   | { readonly type: 'reorderManualTab'; readonly target: TabTarget; readonly groupId?: string; readonly beforeTarget?: TabTarget }
   | { readonly type: 'createGroupFromTabs'; readonly source: TabTarget; readonly target: TabTarget }
   | { readonly type: 'moveToPreviousGroup' | 'moveToNextGroup' | 'moveToNewGroup'; readonly target: TabTarget }
@@ -52,11 +56,15 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if (value.type === 'railWidth' && isRailWidth(value.width)) return { type: 'railWidth', width: value.width };
   if (value.type === 'createGroup' && isName(value.name)) return { type: 'createGroup', name: value.name };
   if ((value.type === 'renameGroup') && isId(value.groupId) && isName(value.name)) return { type: 'renameGroup', groupId: value.groupId, name: value.name };
-  if ((value.type === 'deleteGroup' || value.type === 'toggleGroup') && isId(value.groupId)) return { type: value.type, groupId: value.groupId };
+  if ((value.type === 'deleteGroup' || value.type === 'closeGroup' || value.type === 'toggleGroup' || value.type === 'pinGroup' || value.type === 'unpinGroup') && isId(value.groupId)) return { type: value.type, groupId: value.groupId };
   if (value.type === 'assignGroup' && isTabTarget(value.target) && (value.groupId === undefined || isId(value.groupId))) return { type: 'assignGroup', target: value.target, ...(value.groupId === undefined ? {} : { groupId: value.groupId }) };
   if ((value.type === 'pinTab' || value.type === 'unpinTab') && isTabTarget(value.target)) return { type: value.type, target: value.target };
+  if ((value.type === 'pinTabs' || value.type === 'unpinTabs' || value.type === 'closeTabs' || value.type === 'closeOthersForTabs' || value.type === 'closeBelowForTabs') && isTabTargets(value.targets)) return { type: value.type, targets: value.targets };
   if ((value.type === 'moveTab' || value.type === 'reorderManualTab') && isTabTarget(value.target) && (value.groupId === undefined || isId(value.groupId)) && (value.beforeTarget === undefined || isTabTarget(value.beforeTarget))) {
     return { type: value.type, target: value.target, ...(value.groupId === undefined ? {} : { groupId: value.groupId }), ...(value.beforeTarget === undefined ? {} : { beforeTarget: value.beforeTarget }) };
+  }
+  if (value.type === 'moveTabs' && isTabTargets(value.targets) && (value.groupId === undefined || isId(value.groupId)) && (value.beforeTarget === undefined || isTabTarget(value.beforeTarget))) {
+    return { type: 'moveTabs', targets: value.targets, ...(value.groupId === undefined ? {} : { groupId: value.groupId }), ...(value.beforeTarget === undefined ? {} : { beforeTarget: value.beforeTarget }) };
   }
   if (value.type === 'createGroupFromTabs' && isTabTarget(value.source) && isTabTarget(value.target)) return { type: 'createGroupFromTabs', source: value.source, target: value.target };
   if ((value.type === 'moveToPreviousGroup' || value.type === 'moveToNextGroup' || value.type === 'moveToNewGroup') && isTabTarget(value.target)) return { type: value.type, target: value.target };
@@ -83,6 +91,9 @@ function isTabTarget(value: unknown): value is TabTarget {
     && isNonNegativeInteger(value.groupIndex)
     && isNonNegativeInteger(value.tabIndex)
     && isTabTargetIdentity(value.identity);
+}
+function isTabTargets(value: unknown): value is readonly TabTarget[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= 100 && value.every(isTabTarget);
 }
 function isTabTargetIdentity(value: unknown): value is TabTargetIdentity {
   if (!isRecord(value) || typeof value.kind !== 'string') return false;

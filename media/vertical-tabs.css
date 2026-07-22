@@ -89,6 +89,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   padding: 2px 0;
 }
 .group-header:hover { background: var(--vscode-list-hoverBackground); }
+.is-pinned-group > .group-header { font-weight: 600; }
 .group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 4px; }
 .group-main {
   align-items: center;
@@ -107,7 +108,9 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-row { cursor: grab; display: flex; align-items: stretch; min-width: 0; }
 .tab-row:active { cursor: grabbing; }
 .tab-row.tree-level-1 { padding-left: 18px; }
+.tab-row:hover,
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.tab-row.is-selected:not(.is-active) { background: var(--vscode-list-inactiveSelectionBackground); color: var(--vscode-list-inactiveSelectionForeground); }
 .tab-row.is-unavailable { opacity: .65; }
 
 .tab-main {
@@ -122,12 +125,12 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   text-align: left;
 }
 .tab-main:disabled { cursor: not-allowed; }
+.tab-row:hover .tab-main { background: transparent; }
 .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .is-active .tab-description { color: inherit; opacity: .8; }
 
-.tab-actions { opacity: 0; }
-.tab-row:hover .tab-actions, .tab-row.is-active .tab-actions { opacity: 1; }
+.tab-actions { opacity: 1; }
 .tab-action { font-size: 11px; line-height: 20px; min-width: 20px; padding: 0; }
 
 .tab-context-menu {

@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.43",
+  "version": "0.1.45",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -68,7 +68,59 @@
           "minimum": 0.1,
           "maximum": 0.5,
           "scope": "window",
-          "markdownDescription": "首次显示垂直标签栏时占编辑器区域的宽度比例。之后优先恢复用户上次拖动后的比例。"
+          "markdownDescription": "兼容旧版本的默认宽度比例。建议改用 `verticalTabs.tabWidthRatio`。"
+        },
+        "verticalTabs.rememberState": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "是否自动记忆垂直标签栏的手工分组、分组固定状态、排序方式和用户调整后的宽度。关闭后每次都使用设置中的默认值。"
+        },
+        "verticalTabs.tabWidthRatio": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0.1,
+          "maximum": 0.5,
+          "scope": "window",
+          "markdownDescription": "标签页宽度百分比。控制垂直标签栏首次显示或关闭自动记忆时占编辑器区域的宽度比例，默认 20%。"
+        },
+        "verticalTabs.defaultGroupMode": {
+          "type": "string",
+          "default": "vscode",
+          "enum": [
+            "vscode",
+            "manual",
+            "parentDir",
+            "fileType"
+          ],
+          "enumDescriptions": [
+            "跟随 VS Code 编辑器组。",
+            "使用手工分组。",
+            "按父目录分组。",
+            "按文件类型分组。"
+          ],
+          "scope": "window",
+          "markdownDescription": "默认分组方式。关闭自动记忆时始终使用该值；开启自动记忆时仅在没有已记忆值时使用。"
+        },
+        "verticalTabs.defaultSortMode": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "modifiedAsc",
+            "modifiedDesc",
+            "nameAsc",
+            "nameDesc"
+          ],
+          "enumDescriptions": [
+            "不排序，跟随当前标签顺序。",
+            "按修改时间升序。",
+            "按修改时间降序。",
+            "按名称升序。",
+            "按名称降序。"
+          ],
+          "scope": "window",
+          "markdownDescription": "默认排序方式。默认不排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。"
         }
       }
     },

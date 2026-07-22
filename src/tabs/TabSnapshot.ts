@@ -39,6 +39,7 @@ export interface SnapshotBuildOptions {
   readonly groupMode?: GroupMode;
   readonly sortMode?: SortMode;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
+  readonly pinnedGroupIds?: ReadonlySet<string>;
 }
 
 export type CloseAction = 'close' | 'closeOthers' | 'closeBelow' | 'closeSaved' | 'closeAll';
@@ -73,7 +74,7 @@ export function buildSnapshot(
     }];
   }));
 
-  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup);
+  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds);
   return { revision, groupMode, sortMode, tabs, manualGroups, displayGroups };
 }
 
@@ -88,6 +89,25 @@ export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: Close
   const index = bucket.findIndex((tab) => sameIdentity(tab.target.identity, selected.target.identity));
   const candidates = action === 'closeOthers' ? bucket.filter((tab) => !sameIdentity(tab.target.identity, selected.target.identity)) : bucket.slice(index + 1);
   return candidates.filter((tab) => !tab.isPinned).map((tab) => tab.target);
+}
+
+export function selectCloseTargetsForTabs(snapshot: VerticalTabsSnapshot, action: 'close' | 'closeOthers' | 'closeBelow', targets: readonly VerticalTabItem['target'][]): VerticalTabItem['target'][] {
+  const selectedTabs = resolveSnapshotTargets(snapshot, targets);
+  if (selectedTabs.length === 0) return [];
+  if (action === 'close') return selectedTabs.map((tab) => tab.target);
+  const selectedKeys = new Set(selectedTabs.map((tab) => identityKey(tab.target.identity)));
+  const result: VerticalTabItem[] = [];
+  for (const group of snapshot.displayGroups) {
+    const selectedIndexes = group.tabs
+      .map((tab, index) => selectedKeys.has(identityKey(tab.target.identity)) ? index : -1)
+      .filter((index) => index >= 0);
+    if (selectedIndexes.length === 0) continue;
+    const candidates = action === 'closeOthers'
+      ? group.tabs.filter((tab) => !selectedKeys.has(identityKey(tab.target.identity)))
+      : group.tabs.slice(Math.max(...selectedIndexes) + 1);
+    result.push(...candidates.filter((tab) => !tab.isPinned));
+  }
+  return uniqueTargets(result.map((tab) => tab.target));
 }
 
 export function sameTarget(left: VerticalTabItem['target'], right: VerticalTabItem['target']): boolean {
@@ -124,10 +144,11 @@ function buildDisplayGroups(
   groupMode: GroupMode,
   sortMode: SortMode,
   manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+  pinnedGroupIds: ReadonlySet<string> | undefined,
 ): VerticalTabDisplayGroup[] {
-  if (groupMode === 'manual') return buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup);
-  if (groupMode === 'parentDir') return buildAutoGroups(tabs, 'parentDir', sortMode);
-  if (groupMode === 'fileType') return buildAutoGroups(tabs, 'fileType', sortMode);
+  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup, pinnedGroupIds));
+  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, pinnedGroupIds));
+  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, pinnedGroupIds));
   return buildVsCodeGroups(sourceGroups, tabs, sortMode);
 }
 
@@ -144,6 +165,7 @@ function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: r
       tabs: sortTabs(groupTabs, sortMode),
       showHeader: true,
       isManual: false,
+      isPinned: false,
     });
   }
   if (groups.length === 1) {
@@ -157,6 +179,7 @@ function buildManualGroups(
   manualGroups: readonly ManualTabGroup[],
   sortMode: SortMode,
   manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+  pinnedGroupIds: ReadonlySet<string> | undefined,
 ): VerticalTabDisplayGroup[] {
   const knownGroups = new Set(manualGroups.map((group) => group.id));
   const ungrouped = orderManualTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), '__ungrouped', manualOrderByGroup);
@@ -170,6 +193,7 @@ function buildManualGroups(
       tabs: sortTabs(ungrouped, sortMode),
       showHeader: false,
       isManual: true,
+      isPinned: false,
     });
   }
   for (const group of manualGroups) {
@@ -182,12 +206,13 @@ function buildManualGroups(
       tabs: sortTabs(groupTabs, sortMode),
       showHeader: true,
       isManual: true,
+      isPinned: pinnedGroupIds?.has(group.id) ?? false,
     });
   }
   return displayGroups;
 }
 
-function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir' | 'fileType', sortMode: SortMode): VerticalTabDisplayGroup[] {
+function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir' | 'fileType', sortMode: SortMode, pinnedGroupIds: ReadonlySet<string> | undefined): VerticalTabDisplayGroup[] {
   const buckets = new Map<string, VerticalTabItem[]>();
   for (const tab of tabs) {
     const id = groupMode === 'parentDir' ? parentDirKey(tab) : fileTypeKey(tab);
@@ -216,8 +241,19 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
       tabs: sortTabs(groupTabs, sortMode),
       showHeader: true,
       isManual: false,
+      isPinned: pinnedGroupIds?.has(id) ?? false,
     };
   });
+}
+
+function orderDisplayGroups(groups: VerticalTabDisplayGroup[]): VerticalTabDisplayGroup[] {
+  return groups
+    .map((group, index) => ({ group, index }))
+    .sort((left, right) => {
+      if (left.group.isPinned !== right.group.isPinned) return left.group.isPinned ? -1 : 1;
+      return left.index - right.index;
+    })
+    .map((entry) => entry.group);
 }
 
 function shortestUniquePathSuffixes<Key>(items: readonly { readonly key: Key; readonly path: string | undefined }[]): Map<Key, string> {
@@ -278,6 +314,27 @@ function orderManualTabs(tabs: readonly VerticalTabItem[], groupId: string, manu
 
 function findDisplayBucket(snapshot: VerticalTabsSnapshot, selected: VerticalTabItem): readonly VerticalTabItem[] | undefined {
   return snapshot.displayGroups.find((group) => group.tabs.some((tab) => sameIdentity(tab.target.identity, selected.target.identity)))?.tabs;
+}
+
+function resolveSnapshotTargets(snapshot: VerticalTabsSnapshot, targets: readonly VerticalTabItem['target'][]): VerticalTabItem[] {
+  const result: VerticalTabItem[] = [];
+  for (const target of targets) {
+    const tab = snapshot.tabs.find((candidate) => sameIdentity(candidate.target.identity, target.identity));
+    if (tab && !result.some((candidate) => sameIdentity(candidate.target.identity, tab.target.identity))) {
+      result.push(tab);
+    }
+  }
+  return result;
+}
+
+function uniqueTargets(targets: readonly VerticalTabItem['target'][]): VerticalTabItem['target'][] {
+  const result: VerticalTabItem['target'][] = [];
+  for (const target of targets) {
+    if (!result.some((candidate) => sameIdentity(candidate.identity, target.identity))) {
+      result.push(target);
+    }
+  }
+  return result;
 }
 
 function activationKind(tab: SnapshotSourceTab): TabActivationKind {

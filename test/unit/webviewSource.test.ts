@@ -6,8 +6,10 @@ import test from 'node:test';
 test('context menu close actions dismiss the menu after posting', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /actionButton\('关闭其他标签', '关闭其他标签', 'closeOthers', tab\.target, true\)/);
-  assert.match(source, /actionButton\('关闭下侧标签', '关闭下侧标签', 'closeBelow', tab\.target, true\)/);
+  assert.match(source, /actionButton\('关闭其它', '关闭其它', 'closeOthers', tab\.target, true\)/);
+  assert.match(source, /actionButton\('关闭下侧', '关闭下侧', 'closeBelow', tab\.target, true\)/);
+  assert.match(source, /closeOthersForTabs/);
+  assert.match(source, /closeBelowForTabs/);
   assert.match(source, /if \(dismissAfterClick\) dismissContextMenu\(\)/);
 });
 
@@ -20,7 +22,8 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.doesNotMatch(panelSource, /id="close-all"/);
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
   assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
-  assert.match(webviewSource, /if \(tab\) \{\s*menu\.append\(\s*actionButton\('关闭其他标签'/);
+  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\('关闭其它'/);
+  assert.match(webviewSource, /messageButton\('关闭', '关闭分组内所有标签', \{ type: 'closeGroup', groupId: group\.id \}\)/);
   assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
   assert.match(webviewSource, /globalActionButton\('关闭已保存'/);
   assert.match(webviewSource, /globalActionButton\('关闭全部'/);
@@ -33,7 +36,7 @@ test('manual group rename is exposed from the group context menu and group delet
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
   assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
   assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
-  assert.match(source, /const remove = button\('×', '删除分组'\)/);
+  assert.match(source, /const remove = button\('×', '关闭分组内所有标签并删除分组'\)/);
   assert.match(source, /remove\.className = 'group-action tab-action'/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
@@ -93,15 +96,15 @@ test('context menu hides manual move-to-group actions', () => {
   assert.doesNotMatch(source, /type: 'assignGroup'/);
 });
 
-test('vscode mode context menu keeps adjacent group moves but hides move-to-group submenu', () => {
+test('vscode mode context menu hides adjacent group moves and move-to-group submenu', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.doesNotMatch(source, /messageButton\('移至新组'/);
   assert.doesNotMatch(source, /appendVsCodeGroupActions/);
   assert.doesNotMatch(source, /移动到 VS Code 编辑器组/);
-  assert.match(source, /messageButton\('移至上一组'/);
-  assert.match(source, /messageButton\('移至下一组'/);
+  assert.doesNotMatch(source, /messageButton\('移至上一组'/);
+  assert.doesNotMatch(source, /messageButton\('移至下一组'/);
   assert.match(panelSource, /message\.type === 'moveToGroup'/);
   assert.match(panelSource, /private async moveEditorToVsCodeGroup\(target: TabTarget, targetGroupIndex: number\): Promise<void>/);
   assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceIdentity: TabTargetIdentity, destination: vscode\.TabGroup\): Promise<void>/);
