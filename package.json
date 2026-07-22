@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.77",
+  "version": "0.1.78",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -167,13 +167,13 @@
     "viewsWelcome": [
       {
         "view": "verticalTabs.launcher",
-        "when": "!verticalTabs.visible",
-        "contents": "[显示垂直标签页](command:verticalTabs.open)"
-      },
-      {
-        "view": "verticalTabs.launcher",
-        "when": "verticalTabs.visible",
-        "contents": "[关闭垂直标签页](command:verticalTabs.close)"
+       "when": "!verticalTabs.visible",
+        "contents": "[Show Vertical Tabs](command:verticalTabs.open)"
+     },
+     {
+       "view": "verticalTabs.launcher",
+       "when": "verticalTabs.visible",
+        "contents": "[Close Vertical Tabs](command:verticalTabs.close)"
       }
     ]
   },
