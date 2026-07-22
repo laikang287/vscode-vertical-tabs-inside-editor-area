@@ -1212,30 +1212,46 @@ export class VerticalTabsPanel {
   }
 
   private async moveActiveEditorToGroup(sourceIdentity: TabTargetIdentity, destination: vscode.TabGroup): Promise<void> {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const source = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
-      const targetGroupIndex = vscode.window.tabGroups.all.indexOf(destination);
-      if (!source || targetGroupIndex < 0 || destination.tabs.some((tab) => isVerticalTabsPanel(tab))) {
-        logWarn('跟随 VS Code 模式移至分组停止：源标签或目标分组位置已失效', { attempt, source: describeTabPosition(source), destination: describeTabGroup(destination, targetGroupIndex) });
-        return;
-      }
-      if (source.group === destination) {
-        logDebug('跟随 VS Code 模式移至分组完成', { attempt, targetGroupIndex, source: describeTabPosition(source) });
-        return;
-      }
-      const command = source.groupIndex < targetGroupIndex
-        ? 'workbench.action.moveEditorToNextGroup'
-        : 'workbench.action.moveEditorToPreviousGroup';
-      const previousGroupIndex = source.groupIndex;
-      await vscode.commands.executeCommand(command);
-      const next = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
-      if (!next || next.groupIndex === previousGroupIndex) {
-        logWarn('跟随 VS Code 模式移至分组停止：移动命令未改变源标签分组', { command, previousGroupIndex, next: describeTabPosition(next), targetGroupIndex });
-        return;
-      }
-      logDebug('跟随 VS Code 模式移至分组移动一步', { command, previousGroupIndex, nextGroupIndex: next.groupIndex, targetGroupIndex, attempt });
+    const source = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+    const groupsBefore = vscode.window.tabGroups.all;
+    const groupCountBefore = groupsBefore.length;
+    const targetGroupIndex = groupsBefore.indexOf(destination);
+    if (!source || targetGroupIndex < 0 || destination.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+      logWarn('跟随 VS Code 模式移至分组停止：源标签或目标分组位置已失效', { source: describeTabPosition(source), destination: describeTabGroup(destination, targetGroupIndex) });
+      return;
     }
-    logWarn('跟随 VS Code 模式移至分组停止：超过最大移动步数', { sourceIdentity, destination: describeTabGroup(destination, vscode.window.tabGroups.all.indexOf(destination)) });
+    if (source.group === destination) {
+      logDebug('跟随 VS Code 模式移至分组完成', { targetGroupIndex, source: describeTabPosition(source) });
+      return;
+    }
+
+    // previous/next 在当前编辑器组位于边界时会创建新组。position 直接引用
+    // GRID_APPEARANCE 中已经存在的目标组，因此跨组移动不会扩展编辑器布局。
+    await vscode.commands.executeCommand('moveActiveEditor', {
+      to: 'position',
+      by: 'group',
+      value: targetGroupIndex + 1,
+    });
+
+    const moved = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+    const groupsAfter = vscode.window.tabGroups.all;
+    if (groupsAfter.length > groupCountBefore) {
+      logError('跟随 VS Code 模式移至分组异常：移动过程中创建了额外编辑器组', {
+        beforeGroupCount: groupCountBefore,
+        afterGroupCount: groupsAfter.length,
+        source: describeTabPosition(moved),
+        destination: describeTabGroup(destination, groupsAfter.indexOf(destination)),
+      });
+      return;
+    }
+    if (!moved || moved.group !== destination) {
+      logWarn('跟随 VS Code 模式移至分组停止：绝对位置移动未抵达目标分组', {
+        source: describeTabPosition(moved),
+        destination: describeTabGroup(destination, groupsAfter.indexOf(destination)),
+      });
+      return;
+    }
+    logDebug('跟随 VS Code 模式移至分组完成', { targetGroupIndex: groupsAfter.indexOf(destination), source: describeTabPosition(moved) });
   }
 
   private async moveActiveEditorBeforeTarget(sourceIdentity: TabTargetIdentity, beforeIdentity: TabTargetIdentity): Promise<void> {
