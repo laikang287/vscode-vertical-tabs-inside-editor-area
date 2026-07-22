@@ -78,7 +78,7 @@ suite('Vertical Tabs extension', () => {
     };
     assert.ok(manifest.activationEvents.includes('onStartupFinished'));
     assert.ok(manifest.activationEvents.includes('onWebviewPanel:verticalTabs.editorArea'));
-    assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultRailWidthRatio'].default, 0.2);
+    assert.ok(!('verticalTabs.defaultRailWidthRatio' in manifest.contributes.configuration.properties));
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.rememberState'].default, true);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].default, 0.2);
     assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /20%/);

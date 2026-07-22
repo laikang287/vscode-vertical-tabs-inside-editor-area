@@ -945,8 +945,7 @@ export class VerticalTabsPanel {
     }
 
     if (!rememberStateEnabled && (memoryChanged
-      || event.affectsConfiguration('verticalTabs.tabWidthRatio')
-      || event.affectsConfiguration('verticalTabs.defaultRailWidthRatio'))) {
+      || event.affectsConfiguration('verticalTabs.tabWidthRatio'))) {
       await applyLeadingRailRatio(getDefaultRailRatio());
     }
     await this.refresh({ reason: 'operation' });
@@ -2225,8 +2224,7 @@ function shouldRememberState(): boolean {
 
 function readConfiguredRailRatio(): number {
   const config = vscode.workspace.getConfiguration('verticalTabs');
-  const ratio = config.get<number>('tabWidthRatio');
-  return typeof ratio === 'number' ? ratio : config.get<number>('defaultRailWidthRatio', DEFAULT_RAIL_RATIO);
+  return config.get<number>('tabWidthRatio', DEFAULT_RAIL_RATIO);
 }
 
 function readDefaultGroupMode(): GroupMode {
