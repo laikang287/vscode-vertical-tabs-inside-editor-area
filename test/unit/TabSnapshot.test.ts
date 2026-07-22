@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSnapshot, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
+import { buildSnapshot, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
@@ -10,6 +10,24 @@ const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Terminal', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
   { label: 'README.md', path: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
 ] }];
+
+test('moves single and non-contiguous selected keys to the exact before-target position', () => {
+  assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd', 'e'], ['a'], 'd'), ['b', 'c', 'a', 'd', 'e']);
+  assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd', 'e'], ['b', 'd'], 'a'), ['b', 'd', 'a', 'c', 'e']);
+  assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd', 'e'], ['b', 'd'], 'e'), ['a', 'c', 'b', 'd', 'e']);
+  assert.deepEqual(moveItemsBefore(['a', 'b', 'c'], ['a', 'c'], undefined), ['b', 'a', 'c']);
+});
+
+test('keeps order unchanged when the before-target is part of the moved selection', () => {
+  assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd'], ['b', 'd'], 'd'), ['a', 'b', 'c', 'd']);
+});
+
+test('moves duplicate-looking items by object occurrence instead of collapsing their identities', () => {
+  const first = { label: 'same.ts' };
+  const second = { label: 'same.ts' };
+  const middle = { label: 'middle.ts' };
+  assert.deepEqual(moveItemsBefore([first, middle, second], [second], first), [second, first, middle]);
+});
 
 test('builds a flat snapshot, hides the extension panel, and retains manual membership', () => {
   const snapshot = buildSnapshot(source, 7, [{ id: 'work', name: '工作', collapsed: false }]);

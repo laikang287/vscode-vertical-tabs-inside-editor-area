@@ -87,8 +87,8 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(source, /type: pinned \? 'unpinTabs' : 'pinTabs', targets/);
   assert.match(source, /type: 'moveTabs', targets: draggedTargets, groupId/);
   assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
-  assert.match(panelSource, /await this\.moveActiveEditorToGroup\(targetIdentity\(tab\), destination\)/);
-  assert.match(panelSource, /destinationTabs\.splice\([^\n]+\.\.\.movedKeys\)/);
+  assert.match(panelSource, /await this\.moveActiveEditorToGroup\(tab, destination\)/);
+  assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedKeys, beforeKey\)/);
   assert.match(style, /\.tab-row\.is-active \{ background: var\(--vscode-list-activeSelectionBackground\)/);
   assert.match(style, /\.tab-row\.is-selected:not\(\.is-active\) \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 35%, var\(--vscode-editor-background\)\)/);
 });
@@ -171,7 +171,7 @@ test('vscode mode context menu hides adjacent group moves and move-to-group subm
   assert.doesNotMatch(source, /messageButton\('移至下一组'/);
   assert.match(panelSource, /message\.type === 'moveToGroup'/);
   assert.match(panelSource, /private async moveEditorToVsCodeGroup\(target: TabTarget, targetGroupIndex: number\): Promise<void>/);
-  assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceIdentity: TabTargetIdentity, destination: vscode\.TabGroup\): Promise<void>/);
+  assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceTab: vscode\.Tab, destination: vscode\.TabGroup\): Promise<void>/);
   assert.match(panelSource, /groupsBefore\.indexOf\(destination\)/);
   assert.match(panelSource, /const targetViewColumn = destination\.viewColumn/);
   assert.match(panelSource, /vscode\.commands\.executeCommand\('moveActiveEditor', \{\s*to: 'position',\s*by: 'group',\s*value: targetViewColumn,/);
@@ -437,11 +437,19 @@ test('extension moves VS Code tabs repeatedly until the dropped position is reac
   assert.match(source, /function describeTabPosition\(position: TabPosition \| undefined\): Record<string, unknown> \| undefined/);
 });
 
-test('extension treats a multi-select VS Code drag as a group transfer only', () => {
+test('extension reorders a multi-select VS Code drag as one stable block', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /跟随 VS Code 模式批量移动失败：目标编辑器组已失效/);
-  assert.match(source, /for \(const target of targets\) \{\s*const tab = this\.resolveTab\(target\);[\s\S]*?await this\.moveActiveEditorToGroup\(targetIdentity\(tab\), stableDestination\);/);
-  assert.match(source, /跟随 VS Code 模式批量移动完成：仅移动至目标编辑器组/);
-  assert.doesNotMatch(source, /for \(const target of targets\) \{\s*await this\.moveEditorWithinVsCode\(target, groupId, beforeTarget, stableDestination\);/);
+  assert.match(source, /const desiredTabs = moveItemsBefore\(destinationTabs, movedTabsInDestination, beforeTab\)/);
+  assert.match(source, /await this\.syncVsCodeGroupTabOrder\(stableDestination, desiredTabs\)/);
+  assert.match(source, /跟随 VS Code 模式批量移动完成并抵达投放位置/);
+  assert.doesNotMatch(source, /跟随 VS Code 模式批量移动完成：仅移动至目标编辑器组/);
+});
+
+test('tab-row drop stops before the outer group can append the same drag to the end', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?beforeTarget: tab\.target/);
+  assert.match(source, /function handleTabDragOver[\s\S]+?event\.preventDefault\(\);\s*event\.stopPropagation\(\)/);
 });

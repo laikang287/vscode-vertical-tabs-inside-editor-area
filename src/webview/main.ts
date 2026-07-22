@@ -367,12 +367,17 @@ function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void
 function handleTabDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
   if (!draggedTarget || latestSnapshot?.groupMode === 'parentDir' || latestSnapshot?.groupMode === 'fileType') return;
   event.preventDefault();
+  event.stopPropagation();
   event.dataTransfer!.dropEffect = group.mode === 'manual' || group.mode === 'vscode' ? 'move' : 'none';
 }
 
 function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
   if (!draggedTarget) return;
   event.preventDefault();
+  // The tab row lives inside the group drop zone. Without stopping this event,
+  // one gesture emits both a positioned move and a second append-to-group move,
+  // so the latter can overwrite the requested position and send the tab to the end.
+  event.stopPropagation();
   if (draggedTargets.some((target) => sameTarget(target, tab.target))) return;
   const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
   logToExtension('debug', '标签拖拽排序请求', dropDetails(event, draggedTarget, group.id, tab.target));

@@ -138,6 +138,21 @@ export function identityKey(identity: TabTargetIdentity): string {
   return JSON.stringify(identity);
 }
 
+export function moveItemsBefore<T>(
+  order: readonly T[],
+  movedItems: readonly T[],
+  beforeItem: T | undefined,
+): T[] {
+  const uniqueMovedItems = Array.from(new Set(movedItems));
+  const movedItemSet = new Set(uniqueMovedItems);
+  if (beforeItem !== undefined && movedItemSet.has(beforeItem)) return [...order];
+
+  const remaining = order.filter((item) => !movedItemSet.has(item));
+  const beforeIndex = beforeItem === undefined ? -1 : remaining.indexOf(beforeItem);
+  remaining.splice(beforeIndex >= 0 ? beforeIndex : remaining.length, 0, ...uniqueMovedItems);
+  return remaining;
+}
+
 function buildDisplayGroups(
   sourceGroups: readonly SnapshotSourceGroup[],
   tabs: readonly VerticalTabItem[],

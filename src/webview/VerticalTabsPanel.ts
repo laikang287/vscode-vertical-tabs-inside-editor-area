@@ -15,7 +15,7 @@ import {
   type EditorLayout,
 } from '../layout/RailLayout';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
-import { buildSnapshot, identityKey, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
+import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type SortMode, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 
@@ -1066,11 +1066,8 @@ export class VerticalTabsPanel {
       }
       const destinationTabs = this.currentSnapshot.displayGroups
         .find((group) => group.id === destinationGroupId)?.tabs
-        .map((tab) => identityKey(tab.target.identity))
-        .filter((key) => !movedKeySet.has(key)) ?? [];
-      const beforeIndex = beforeKey ? destinationTabs.indexOf(beforeKey) : -1;
-      destinationTabs.splice(beforeIndex >= 0 ? beforeIndex : destinationTabs.length, 0, ...movedKeys);
-      this.manualOrderByGroup.set(destinationGroupId, destinationTabs);
+        .map((tab) => identityKey(tab.target.identity)) ?? [];
+      this.manualOrderByGroup.set(destinationGroupId, moveItemsBefore(destinationTabs, movedKeys, beforeKey));
       await this.persistManualState();
       logInfo('Moved selected tabs in manual grouping', { count: resolvedTabs.length, groupId });
       return;
@@ -1085,22 +1082,29 @@ export class VerticalTabsPanel {
       return;
     }
 
-    // 多选拖拽只负责跨组转移。若复用单标签排序路径，每个标签抵达目标组后
-    // 还会执行额外的原生移动命令；VS Code 在这些命令间重排编辑器组时，可能
-    // 让每个选中编辑器新建独立分组。全程固定同一个目标组，只移动尚未在其中的标签。
-    for (const target of targets) {
-      const tab = this.resolveTab(target);
-      if (!tab || !isActivatableTabForCommands(tab)) {
-        logWarn('跟随 VS Code 模式批量移动跳过不可可靠激活的标签', { target });
-        continue;
+    const activeIdentity = activeUserTabIdentity();
+    const resolvedTabs = targets.map((target) => this.resolveTab(target))
+      .filter((tab): tab is vscode.Tab => tab !== undefined && isActivatableTabForCommands(tab));
+    const beforeTab = beforeTarget ? this.resolveTab(beforeTarget) : undefined;
+    try {
+      // Keep one stable destination while transferring every selected tab. Once
+      // they are in that group, calculate one final order and synchronize it as
+      // a block; issuing an independent before-target move per tab reverses or
+      // offsets non-contiguous selections as the earlier moves change indices.
+      for (const tab of resolvedTabs) {
+        if (tab.group !== stableDestination) {
+          await this.activateTab(tab);
+          await this.moveActiveEditorToGroup(tab, stableDestination);
+        }
       }
-      if (tab.group === stableDestination) {
-        continue;
-      }
-      await this.activateTab(tab);
-      await this.moveActiveEditorToGroup(targetIdentity(tab), stableDestination);
+      const destinationTabs = stableDestination.tabs.filter((tab) => !isVerticalTabsPanel(tab));
+      const movedTabsInDestination = resolvedTabs.filter((tab) => destinationTabs.includes(tab));
+      const desiredTabs = moveItemsBefore(destinationTabs, movedTabsInDestination, beforeTab);
+      await this.syncVsCodeGroupTabOrder(stableDestination, desiredTabs);
+      logInfo('跟随 VS Code 模式批量移动完成并抵达投放位置', { count: resolvedTabs.length, groupId, beforeTarget });
+    } finally {
+      await this.restoreActiveTabAfterOrderSync(activeIdentity);
     }
-    logInfo('跟随 VS Code 模式批量移动完成：仅移动至目标编辑器组', { count: targets.length, groupId });
   }
 
   private async setPinnedTabs(targets: readonly TabTarget[], pinned: boolean): Promise<void> {
@@ -1163,7 +1167,7 @@ export class VerticalTabsPanel {
     });
     await this.activateTab(tab);
     if (tab.group !== destination) {
-      await this.moveActiveEditorToGroup(targetIdentity(tab), destination);
+      await this.moveActiveEditorToGroup(tab, destination);
     }
     if (!beforeTab) {
       await this.moveActiveEditorToEndOfGroup(targetIdentity(tab));
@@ -1204,14 +1208,13 @@ export class VerticalTabsPanel {
       logWarn('跟随 VS Code 模式移至分组失败：标签不可可靠激活', { target });
       return;
     }
-    const sourceIdentity = targetIdentity(tab);
     logInfo('跟随 VS Code 模式移至分组', { source: describeTab(tab), destination: describeTabGroup(destination, targetGroupIndex) });
     await this.activateTab(tab);
-    await this.moveActiveEditorToGroup(sourceIdentity, destination);
+    await this.moveActiveEditorToGroup(tab, destination);
   }
 
-  private async moveActiveEditorToGroup(sourceIdentity: TabTargetIdentity, destination: vscode.TabGroup): Promise<void> {
-    const source = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+  private async moveActiveEditorToGroup(sourceTab: vscode.Tab, destination: vscode.TabGroup): Promise<void> {
+    const source = findTabPosition(sourceTab);
     const groupsBefore = vscode.window.tabGroups.all;
     const groupCountBefore = groupsBefore.length;
     const targetGroupIndex = groupsBefore.indexOf(destination);
@@ -1234,7 +1237,7 @@ export class VerticalTabsPanel {
       value: targetViewColumn,
     });
 
-    const moved = findTabPositionBy((candidate) => sameIdentity(targetIdentity(candidate), sourceIdentity));
+    const moved = findTabPosition(sourceTab);
     const groupsAfter = vscode.window.tabGroups.all;
     if (groupsAfter.length > groupCountBefore) {
       logError('跟随 VS Code 模式移至分组异常：移动过程中创建了额外编辑器组', {
@@ -1360,6 +1363,24 @@ export class VerticalTabsPanel {
         const nextIndex = group.tabs.findIndex((candidate) => sameIdentity(targetIdentity(candidate), identity));
         if (nextIndex < 0 || nextIndex >= currentIndex) {
           logWarn('同步 VS Code 横向标签顺序提前停止：左移命令未改变位置', { label: tab.label, currentIndex, nextIndex, desiredIndex });
+          break;
+        }
+        currentIndex = nextIndex;
+      }
+    }
+  }
+
+  private async syncVsCodeGroupTabOrder(group: vscode.TabGroup, desiredTabs: readonly vscode.Tab[]): Promise<void> {
+    for (let desiredIndex = 0; desiredIndex < desiredTabs.length; desiredIndex += 1) {
+      const tab = desiredTabs[desiredIndex];
+      if (!tab || !isActivatableTabForCommands(tab)) continue;
+      let currentIndex = group.tabs.indexOf(tab);
+      while (currentIndex > desiredIndex) {
+        await this.activateTab(tab);
+        await vscode.commands.executeCommand('workbench.action.moveEditorLeftInGroup');
+        const nextIndex = group.tabs.indexOf(tab);
+        if (nextIndex < 0 || nextIndex >= currentIndex) {
+          logWarn('批量拖拽同步 VS Code 标签顺序提前停止：左移命令未改变位置', { label: tab.label, currentIndex, nextIndex, desiredIndex });
           break;
         }
         currentIndex = nextIndex;

@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "publisher": "local",
   "license": "MIT",
   "repository": {
