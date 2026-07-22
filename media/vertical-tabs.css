@@ -151,6 +151,8 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-context-action {
   background: transparent;
   cursor: pointer;
+  font-size: var(--vscode-font-size);
+  line-height: normal;
   padding: 5px 8px;
   text-align: left;
   white-space: nowrap;

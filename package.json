@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.55",
+  "version": "0.1.56",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -66,7 +66,7 @@
           "type": "boolean",
           "default": true,
           "scope": "window",
-          "markdownDescription": "是否自动记忆垂直标签栏状态。开启时按工作区记忆分组方式、排序方式、手工分组和固定分组，并按用户记忆调整后的宽度；关闭时不读取或写入这些状态，始终从下方默认配置开始。"
+          "markdownDescription": "是否自动记忆垂直标签栏状态。开启时按工作区记忆分组方式、排序方式、手工分组和固定分组，并按用户记忆调整后的宽度；关闭时不读取或写入这些状态，始终使用默认值。"
         },
         "verticalTabs.tabWidthRatio": {
           "type": "number",
@@ -138,12 +138,12 @@
       {
         "view": "verticalTabs.launcher",
         "when": "!verticalTabs.visible",
-        "contents": "在编辑器区域左侧显示固定的垂直标签栏。\n\n[显示垂直标签页](command:verticalTabs.open)"
+        "contents": "[显示垂直标签页](command:verticalTabs.open)"
       },
       {
         "view": "verticalTabs.launcher",
         "when": "verticalTabs.visible",
-        "contents": "垂直标签栏当前已显示。\n\n[关闭垂直标签页](command:verticalTabs.close)"
+        "contents": "[关闭垂直标签页](command:verticalTabs.close)"
       }
     ]
   },
