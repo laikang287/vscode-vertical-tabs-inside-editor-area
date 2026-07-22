@@ -169,7 +169,15 @@ function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: r
       isPinned: false,
     });
   }
+  const flattenOnlyUserGroup = sourceGroups.length === 2 && groups.length === 1 && sourceGroups.some(isExtensionOnlyGroup);
+  if (flattenOnlyUserGroup) {
+    return groups.map((group) => ({ ...group, showHeader: false }));
+  }
   return groups;
+}
+
+function isExtensionOnlyGroup(group: SnapshotSourceGroup): boolean {
+  return group.tabs.length > 0 && group.tabs.every((tab) => tab.isVerticalTabsPanel);
 }
 
 function buildManualGroups(

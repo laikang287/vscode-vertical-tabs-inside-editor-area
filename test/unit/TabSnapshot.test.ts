@@ -50,6 +50,9 @@ test('keeps user tabs next to an extension panel and omits empty extension-only 
   const snapshot = buildSnapshot([{ tabs: [{ label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true }] }, { tabs: [{ label: 'main.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/main.ts' } }] }], 8, []);
   assert.equal(snapshot.tabs.length, 1);
   assert.equal(snapshot.tabs[0].label, 'main.ts');
+  assert.equal(snapshot.displayGroups.length, 1);
+  assert.equal(snapshot.displayGroups[0]!.showHeader, false);
+  assert.deepEqual(snapshot.displayGroups[0]!.tabs.map((tab) => tab.label), ['main.ts']);
 });
 
 test('matches stale snapshot targets by stable identity', () => {
