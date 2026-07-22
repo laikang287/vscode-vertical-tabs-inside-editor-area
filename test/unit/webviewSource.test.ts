@@ -90,7 +90,7 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(panelSource, /await this\.moveActiveEditorToGroup\(targetIdentity\(tab\), destination\)/);
   assert.match(panelSource, /destinationTabs\.splice\([^\n]+\.\.\.movedKeys\)/);
   assert.match(style, /\.tab-row\.is-active \{ background: var\(--vscode-list-activeSelectionBackground\)/);
-  assert.match(style, /\.tab-row\.is-selected:not\(\.is-active\) \{ background: var\(--vscode-list-inactiveSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-selected:not\(\.is-active\) \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 55%, var\(--vscode-editor-background\)\)/);
 });
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {

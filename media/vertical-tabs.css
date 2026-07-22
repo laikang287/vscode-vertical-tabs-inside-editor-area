@@ -111,7 +111,10 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-row.tree-level-1 { padding-left: 18px; }
 .tab-row:hover { background: var(--vscode-list-hoverBackground); }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
-.tab-row.is-selected:not(.is-active) { background: var(--vscode-list-inactiveSelectionBackground); color: var(--vscode-list-inactiveSelectionForeground); }
+.tab-row.is-selected:not(.is-active) {
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 55%, var(--vscode-editor-background));
+  color: var(--vscode-list-inactiveSelectionForeground);
+}
 .tab-row.is-unavailable { opacity: .65; }
 
 .tab-main {
