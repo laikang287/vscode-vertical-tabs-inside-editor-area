@@ -89,8 +89,8 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
   assert.match(panelSource, /await this\.moveActiveEditorToGroup\(tab, destination\)/);
   assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedKeys, beforeKey\)/);
-  assert.match(style, /\.tab-row\.is-active \{ background: var\(--vscode-list-activeSelectionBackground\)/);
-  assert.match(style, /\.tab-row\.is-selected:not\(\.is-active\) \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 35%, var\(--vscode-editor-background\)\)/);
+  assert.match(style, /\.tab-row\.is-active(?:\:not\(\.is-selected\))? \{ background: var\(--vscode-list-activeSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-selected(?:\:not\(\.is-active\))? \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 35%, var\(--vscode-editor-background\)\)/);
 });
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
@@ -364,12 +364,13 @@ test('webview and host enforce drag capabilities for grouping and sorting modes'
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(webviewSource, /const beforeTarget = capability === 'reorder' \? beforeTargetForDrop/);
+  assert.match(webviewSource, /const beforeTarget = canReorderTabs\(capability\) \? beforeTargetForDrop/);
   assert.match(webviewSource, /targetsForDrop\(group\)/);
   assert.match(webviewSource, /!group\.tabs\.some\(\(tab\) => sameTarget\(tab\.target, target\)\)/);
   assert.match(panelSource, /const dragCapability = tabDragCapability\(this\.groupMode, this\.sortMode\)/);
   assert.match(panelSource, /if \(dragCapability === 'disabled'\)/);
-  assert.match(panelSource, /dragCapability === 'reorder' \? message\.beforeTarget : undefined/);
+  assert.match(panelSource, /const beforeTarget = canReorderTabs\(dragCapability\) \? message\.beforeTarget : undefined/);
+  assert.match(panelSource, /moveParentDirectoryTabs/);
   assert.match(panelSource, /if \(this\.sortMode !== 'none'\) \{\s*logInfo\('跟随 VS Code 模式标签仅更改分组'/);
   assert.doesNotMatch(panelSource, /this\.groupMode = 'manual';\s*await this\.persistGroupMode\(\);\s*await this\.moveManualTab/);
 });
@@ -465,7 +466,7 @@ test('extension reorders a multi-select VS Code drag as one stable block', () =>
 test('tab-row drop stops before the outer group can append the same drag to the end', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?const beforeTarget = capability === 'reorder' \? beforeTargetForDrop/);
+  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?const beforeTarget = canReorderTabs\(capability\) \? beforeTargetForDrop/);
   assert.match(source, /function handleTabDragOver[\s\S]+?event\.preventDefault\(\);\s*event\.stopPropagation\(\)/);
 });
 

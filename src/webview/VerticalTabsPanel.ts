@@ -18,7 +18,7 @@ import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/exten
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type SortMode, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
-import { tabDragCapability } from './dragPolicy';
+import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
 const TITLE = 'Vertical Tabs';
@@ -800,8 +800,10 @@ export class VerticalTabsPanel {
         logWarn('拒绝当前分组方式下的标签拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode });
         return;
       }
-      const beforeTarget = dragCapability === 'reorder' ? message.beforeTarget : undefined;
-      if (this.groupMode === 'manual') {
+      const beforeTarget = canReorderTabs(dragCapability) ? message.beforeTarget : undefined;
+      if (canMoveFilesBetweenDirectories(dragCapability)) {
+        await this.moveParentDirectoryTabs([message.target], message.groupId, beforeTarget);
+      } else if (this.groupMode === 'manual') {
         await this.moveManualTab(message.target, message.groupId, beforeTarget);
       } else {
         await this.moveEditorWithinVsCode(message.target, message.groupId, beforeTarget);
@@ -816,7 +818,12 @@ export class VerticalTabsPanel {
         logWarn('拒绝当前分组方式下的批量标签拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode, count: message.targets.length });
         return;
       }
-      await this.moveTabs(message.targets, message.groupId, dragCapability === 'reorder' ? message.beforeTarget : undefined);
+      const beforeTarget = canReorderTabs(dragCapability) ? message.beforeTarget : undefined;
+      if (canMoveFilesBetweenDirectories(dragCapability)) {
+        await this.moveParentDirectoryTabs(message.targets, message.groupId, beforeTarget);
+      } else {
+        await this.moveTabs(message.targets, message.groupId, beforeTarget);
+      }
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -1091,7 +1098,9 @@ export class VerticalTabsPanel {
       logDebug('忽略投放到选中标签集合内部的 VS Code 批量移动', { count: targets.length, groupId });
       return;
     }
-    const stableDestination = (beforeTarget ? this.resolveTab(beforeTarget)?.group : undefined) ?? this.resolveVsCodeDisplayGroup(groupId);
+    const stableDestination = (beforeTarget ? this.resolveTab(beforeTarget)?.group : undefined)
+      ?? this.resolveVsCodeDisplayGroup(groupId)
+      ?? this.resolveTab(targets[0])?.group;
     if (!stableDestination) {
       logWarn('跟随 VS Code 模式批量移动失败：目标编辑器组已失效', { count: targets.length, groupId, beforeTarget });
       return;
@@ -1123,6 +1132,75 @@ export class VerticalTabsPanel {
       logInfo('跟随 VS Code 模式批量移动完成并抵达投放位置', { count: resolvedTabs.length, groupId, beforeTarget });
     } finally {
       await this.restoreActiveTabAfterOrderSync(activeIdentity);
+    }
+  }
+
+  private async moveParentDirectoryTabs(targets: readonly TabTarget[], destinationGroupId: string | undefined, beforeTarget: TabTarget | undefined): Promise<void> {
+    const destinationGroup = destinationGroupId === undefined
+      ? undefined
+      : this.currentSnapshot.displayGroups.find((group) => group.mode === 'parentDir' && group.id === destinationGroupId);
+    if (!destinationGroup) {
+      logWarn('父目录分组移动失败：目标目录分组不存在', { destinationGroupId, count: targets.length });
+      return;
+    }
+
+    const sourceGroups = targets.map((target) => this.findDisplayGroupForTarget(target));
+    const allRemainInDestination = sourceGroups.every((group) => group?.id === destinationGroup.id);
+    if (allRemainInDestination) {
+      // The display group is a folder, not a VS Code editor group. Resolve the
+      // real editor group from the selected tab and keep the native order there.
+      if (targets.length === 1) {
+        await this.moveEditorWithinVsCode(targets[0]!, undefined, beforeTarget);
+      } else {
+        await this.moveTabs(targets, undefined, beforeTarget);
+      }
+      return;
+    }
+
+    const destinationDirectory = this.parentDirectoryUri(destinationGroup, targets[0]);
+    if (!destinationDirectory) {
+      logWarn('父目录分组移动失败：无法解析目标目录', { destinationGroupId, count: targets.length });
+      return;
+    }
+
+    for (const target of targets) {
+      const sourceGroup = this.findDisplayGroupForTarget(target);
+      if (sourceGroup?.id === destinationGroup.id) continue;
+      await this.moveFileToDirectory(target, destinationDirectory, destinationGroup.id);
+    }
+  }
+
+  private findDisplayGroupForTarget(target: TabTarget): VerticalTabsSnapshot['displayGroups'][number] | undefined {
+    return this.currentSnapshot.displayGroups.find((group) => group.tabs.some((tab) => sameIdentity(tab.target.identity, target.identity)
+      && tab.target.groupIndex === target.groupIndex));
+  }
+
+  private parentDirectoryUri(destinationGroup: VerticalTabsSnapshot['displayGroups'][number], sourceTarget: TabTarget): vscode.Uri | undefined {
+    if (destinationGroup.id === '__other') return undefined;
+    if (destinationGroup.id === '__root') {
+      const source = this.resolveTab(sourceTarget);
+      const sourceUri = source ? inputUri(source.input) : undefined;
+      return sourceUri ? vscode.workspace.getWorkspaceFolder(sourceUri)?.uri : undefined;
+    }
+    const representative = destinationGroup.tabs[0] ? this.resolveTab(destinationGroup.tabs[0].target) : undefined;
+    const representativeUri = representative ? inputUri(representative.input) : undefined;
+    return representativeUri ? representativeUri.with({ path: path.posix.dirname(representativeUri.path) }) : undefined;
+  }
+
+  private async moveFileToDirectory(target: TabTarget, destinationDirectory: vscode.Uri, destinationGroupId: string): Promise<void> {
+    const tab = this.resolveTab(target);
+    const sourceUri = tab ? inputUri(tab.input) : undefined;
+    if (!tab || !sourceUri || sourceUri.scheme === 'untitled' || tab.isDirty) {
+      logWarn('父目录分组移动失败：仅支持已保存且未修改的文件标签', { target, source: tab ? describeTab(tab) : undefined, destinationGroupId });
+      return;
+    }
+    const destinationUri = vscode.Uri.joinPath(destinationDirectory, path.posix.basename(sourceUri.path));
+    if (sourceUri.toString() === destinationUri.toString()) return;
+    try {
+      await vscode.workspace.fs.rename(sourceUri, destinationUri, { overwrite: false });
+      logInfo('父目录分组拖拽已移动文件', { source: sourceUri.toString(), destination: destinationUri.toString(), destinationGroupId });
+    } catch (error) {
+      logWarn('父目录分组移动文件失败', { source: sourceUri.toString(), destination: destinationUri.toString(), destinationGroupId, error });
     }
   }
 

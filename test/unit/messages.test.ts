@@ -39,6 +39,7 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'pinTab', target }), { type: 'pinTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'unpinTab', target }), { type: 'unpinTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'moveTab', target, groupId: 'work_1', beforeTarget: target }), { type: 'moveTab', target, groupId: 'work_1', beforeTarget: target });
+  assert.deepEqual(parseWebviewMessage({ type: 'moveTab', target, groupId: 'apps/web/src' }), { type: 'moveTab', target, groupId: 'apps/web/src' });
   assert.deepEqual(parseWebviewMessage({ type: 'moveTabs', targets: [target], groupId: 'vscode-1', beforeTarget: target }), { type: 'moveTabs', targets: [target], groupId: 'vscode-1', beforeTarget: target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeTabs', targets: [target] }), { type: 'closeTabs', targets: [target] });
   assert.deepEqual(parseWebviewMessage({ type: 'closeOthersForTabs', targets: [target] }), { type: 'closeOthersForTabs', targets: [target] });
@@ -88,6 +89,7 @@ test('rejects malformed and unknown messages', () => {
     { type: 'setGroupMode', groupMode: 'bad' },
     { type: 'setSortMode', sortMode: 'bad' },
     { type: 'moveTab', target, groupId: '../bad' },
+    { type: 'moveTab', target, groupId: 'bad\nvalue' },
     { type: 'moveTab', target, beforeTarget: { revision: 1, groupIndex: 0, tabIndex: 0 } },
     { type: 'createGroupFromTabs', source: target },
     { type: 'moveToGroup', target, groupIndex: -1 },

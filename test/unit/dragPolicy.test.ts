@@ -14,9 +14,16 @@ test('automatic sorting permits group changes but not reordering', () => {
   }
 });
 
-test('directory and file type grouping disable dragging', () => {
-  for (const sortMode of ['none', 'modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc'] as const) {
-    assert.equal(tabDragCapability('parentDir', sortMode), 'disabled');
+test('parent-directory grouping moves files between directories and preserves manual ordering', () => {
+  assert.equal(tabDragCapability('parentDir', 'none'), 'moveDirectoryAndReorder');
+  for (const sortMode of ['modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc'] as const) {
+    assert.equal(tabDragCapability('parentDir', sortMode), 'moveDirectory');
+  }
+});
+
+test('file-type grouping permits only manual ordering', () => {
+  assert.equal(tabDragCapability('fileType', 'none'), 'reorder');
+  for (const sortMode of ['modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc'] as const) {
     assert.equal(tabDragCapability('fileType', sortMode), 'disabled');
   }
 });

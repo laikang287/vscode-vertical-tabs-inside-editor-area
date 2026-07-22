@@ -62,10 +62,10 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if (value.type === 'assignGroup' && isTabTarget(value.target) && (value.groupId === undefined || isId(value.groupId))) return { type: 'assignGroup', target: value.target, ...(value.groupId === undefined ? {} : { groupId: value.groupId }) };
   if ((value.type === 'pinTab' || value.type === 'unpinTab') && isTabTarget(value.target)) return { type: value.type, target: value.target };
   if ((value.type === 'pinTabs' || value.type === 'unpinTabs' || value.type === 'closeTabs' || value.type === 'closeOthersForTabs' || value.type === 'closeBelowForTabs') && isTabTargets(value.targets)) return { type: value.type, targets: value.targets };
-  if ((value.type === 'moveTab' || value.type === 'reorderManualTab') && isTabTarget(value.target) && (value.groupId === undefined || isId(value.groupId)) && (value.beforeTarget === undefined || isTabTarget(value.beforeTarget))) {
+  if ((value.type === 'moveTab' || value.type === 'reorderManualTab') && isTabTarget(value.target) && (value.groupId === undefined || isMoveDisplayGroupId(value.groupId)) && (value.beforeTarget === undefined || isTabTarget(value.beforeTarget))) {
     return { type: value.type, target: value.target, ...(value.groupId === undefined ? {} : { groupId: value.groupId }), ...(value.beforeTarget === undefined ? {} : { beforeTarget: value.beforeTarget }) };
   }
-  if (value.type === 'moveTabs' && isTabTargets(value.targets) && (value.groupId === undefined || isId(value.groupId)) && (value.beforeTarget === undefined || isTabTarget(value.beforeTarget))) {
+  if (value.type === 'moveTabs' && isTabTargets(value.targets) && (value.groupId === undefined || isMoveDisplayGroupId(value.groupId)) && (value.beforeTarget === undefined || isTabTarget(value.beforeTarget))) {
     return { type: 'moveTabs', targets: value.targets, ...(value.groupId === undefined ? {} : { groupId: value.groupId }), ...(value.beforeTarget === undefined ? {} : { beforeTarget: value.beforeTarget }) };
   }
   if (value.type === 'createGroupFromTabs' && isTabTarget(value.source) && isTabTarget(value.target)) return { type: 'createGroupFromTabs', source: value.source, target: value.target };
@@ -85,6 +85,9 @@ function isRailWidth(value: unknown): value is number { return typeof value === 
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }
 function isDisplayGroupId(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(value); }
+function isMoveDisplayGroupId(value: unknown): value is string {
+  return isDisplayGroupId(value) && !value.split(/[\\/]/).some((segment) => segment === '..');
+}
 function isLogMessage(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
 function isLogDetails(value: unknown): value is string { return typeof value === 'string' && value.length <= 2000; }
 function isRequestId(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 80; }

@@ -1,7 +1,7 @@
 import type { ExtensionMessage, GroupMode, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { TabSelection } from './TabSelection';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
-import { tabDragCapability } from './dragPolicy';
+import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
 
@@ -389,7 +389,7 @@ function handleTabDragOver(event: DragEvent, row: HTMLElement, tab: VerticalTabI
   event.preventDefault();
   event.stopPropagation();
   event.dataTransfer!.dropEffect = 'move';
-  if (capability === 'moveGroup') {
+  if (capability === 'moveGroup' || capability === 'moveDirectory') {
     showGroupEndDropIndicator(row.closest<HTMLElement>('.tab-group') ?? row);
     return;
   }
@@ -412,8 +412,8 @@ function handleTabDrop(event: DragEvent, row: HTMLElement, tab: VerticalTabItem,
   const targets = targetsForDrop(group);
   if (targets.length === 0 || targets.some((target) => sameTarget(target, tab.target))) return;
   const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
-  const beforeTarget = capability === 'reorder' ? beforeTargetForDrop(event, row, tab, group) : undefined;
-  logToExtension('debug', capability === 'reorder' ? '标签拖拽排序请求' : '标签拖拽改分组请求', dropDetails(event, draggedTarget, group.id, beforeTarget));
+  const beforeTarget = canReorderTabs(capability) ? beforeTargetForDrop(event, row, tab, group) : undefined;
+  logToExtension('debug', canReorderTabs(capability) ? '标签拖拽排序请求' : '标签拖拽改分组请求', dropDetails(event, draggedTarget, group.id, beforeTarget));
   postTabMove(targets, groupId, beforeTarget);
 }
 
@@ -459,7 +459,24 @@ function currentDragCapability(): ReturnType<typeof tabDragCapability> {
 }
 
 function targetsForDrop(group: VerticalTabDisplayGroup): readonly TabTarget[] {
-  if (currentDragCapability() === 'reorder') return draggedTargets;
+  const capability = currentDragCapability();
+  const dragOrigin = draggedTarget;
+  const dragOriginIsInGroup = dragOrigin !== undefined && group.tabs.some((tab) => sameTarget(tab.target, dragOrigin));
+  if (group.mode === 'fileType' && capability === 'reorder') {
+    // File-type groups describe an extension; a cross-group drop must never be
+    // treated as an implicit rename that changes the file extension.
+    return dragOriginIsInGroup
+      ? draggedTargets.filter((target) => group.tabs.some((tab) => sameTarget(tab.target, target)))
+      : [];
+  }
+  if (canMoveFilesBetweenDirectories(capability)) {
+    // In a parent-directory group, a drop inside the source group is a native
+    // tab reorder. A drop on another group moves only files not already there.
+    return dragOriginIsInGroup && canReorderTabs(capability)
+      ? draggedTargets.filter((target) => group.tabs.some((tab) => sameTarget(tab.target, target)))
+      : draggedTargets.filter((target) => !group.tabs.some((tab) => sameTarget(tab.target, target)));
+  }
+  if (capability === 'reorder') return draggedTargets;
   return draggedTargets.filter((target) => !group.tabs.some((tab) => sameTarget(tab.target, target)));
 }
 
