@@ -84,6 +84,8 @@
 5. 使用 Conventional Commit 自动创建 Git 提交。初版工程固定使用 `chore: scaffold VS Code extension`；后续用户可见功能使用 `feat:`，修复使用 `fix:`。Git 提交说明使用中文
 6. 在交付说明中写明执行过的测试和生成的 VSIX 绝对路径。
 
+7. 只要涉及 `package.json` 版本号变更，就必须执行 `npm run verify` 构建新 VSIX，除非用户明确指明本次不需要构建。
+
 ## VS Code 与 Webview 边界
 
 - 扩展标识为 `local.vertical-tabs-in-editor-area`，最低 VS Code 版本为 `^1.128.0`。
