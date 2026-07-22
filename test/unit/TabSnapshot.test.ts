@@ -43,6 +43,17 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.manualGroups[0].name, '工作');
 });
 
+test('distinguishes tabs shown in editor groups from the focused active tab', () => {
+  const snapshot = buildSnapshot([{ tabs: [
+    { label: 'left.ts', isActive: true, isFocused: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/left.ts' } },
+  ] }, { tabs: [
+    { label: 'right.ts', isActive: true, isFocused: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/right.ts' } },
+  ] }], 23, []);
+
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.isActive), [true, true]);
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.isFocused), [true, false]);
+});
+
 test('classifies reliable and best-effort activation targets', () => {
   const snapshot = buildSnapshot([{ tabs: [
     { label: 'a.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/a.ts' } },

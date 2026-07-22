@@ -66,6 +66,7 @@ function tab(label: string, groupIndex: number, tabIndex: number): VerticalTabIt
     },
     label,
     isActive: false,
+    isFocused: false,
     isDirty: false,
     isPinned: false,
     isPreview: false,

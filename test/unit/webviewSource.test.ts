@@ -89,8 +89,20 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
   assert.match(panelSource, /await this\.moveActiveEditorToGroup\(tab, destination\)/);
   assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedKeys, beforeKey\)/);
-  assert.match(style, /\.tab-row\.is-active(?:\:not\(\.is-selected\))? \{ background: var\(--vscode-list-activeSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
   assert.match(style, /\.tab-row\.is-selected(?:\:not\(\.is-active\))? \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 35%, var\(--vscode-editor-background\)\)/);
+});
+
+test('tab colors distinguish selection, shown editors, and the focused editor', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(panelSource, /isFocused: tab\.isActive && tab\.group\.isActive/);
+  assert.match(source, /tab\.isFocused \? 'is-focused' : ''/);
+  assert.match(style, /\.tab-row\.is-selected \{\s*background: color-mix/);
+  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-focused::before \{[\s\S]+var\(--vscode-tab-activeBorderTop/);
 });
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
@@ -182,7 +194,7 @@ test('vscode mode context menu hides adjacent group moves and move-to-group subm
   assert.doesNotMatch(absoluteMoveMethod, /moveEditorToNextGroup|moveEditorToPreviousGroup/);
 });
 
-test('activation updates webview selection immediately and refreshes after navigation', () => {
+test('activation updates the focused editor without clearing shown tabs in other groups', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
@@ -191,6 +203,9 @@ test('activation updates webview selection immediately and refreshes after navig
   assert.match(source, /parseTargetDataset\(candidate\.dataset\.target\)/);
   assert.match(source, /sameTarget\(candidateTarget, target\)/);
   assert.match(source, /\.tab-row\.is-active/);
+  assert.match(source, /\.tab-row\.is-focused/);
+  assert.match(source, /candidateTarget\?\.groupIndex === target\.groupIndex/);
+  assert.match(source, /classList\.add\('is-active', 'is-focused'\)/);
   assert.match(panelSource, /await this\.activateTab\(tab, message\.requestId\);\s*await this\.refresh\(\{ reason: 'navigate' \}\);/);
 });
 
@@ -323,7 +338,7 @@ test('webview enables best-effort activation with a distinct tooltip', () => {
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
 });
 
-test('webview activates once on pointerdown while retaining full-row dragging and keyboard activation', () => {
+test('webview collapses an existing multi-selection on click while retaining block dragging and keyboard activation', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
   assert.match(source, /let activateRequestSequence = 0/);
@@ -344,7 +359,9 @@ test('webview activates once on pointerdown while retaining full-row dragging an
   assert.match(source, /标签激活按钮发送单次激活请求/);
   assert.match(source, /activate\.addEventListener\('click'/);
   assert.match(source, /if \(event\.detail === 0\) \{\s*selectSingle\(tab\);\s*requestActivation\(\);/);
-  assert.match(source, /else if \(preserveMultiSelectionOnPointerDown\)/);
+  assert.match(source, /preserveMultiSelectionOnPointerDown = true;\s*return;/);
+  assert.match(source, /else if \(preserveMultiSelectionOnPointerDown\) \{\s*preserveMultiSelectionOnPointerDown = false;\s*selectSingle\(tab\);\s*requestActivation\(\);/);
+  assert.match(source, /classList\.remove\('is-selected', 'is-multi-selected'\)/);
   assert.match(source, /const requestId = nextActivateRequestId\(\)/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
   assert.doesNotMatch(source, /function suspendRowDrag/);

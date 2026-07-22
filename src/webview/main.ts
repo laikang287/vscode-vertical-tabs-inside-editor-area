@@ -195,7 +195,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   const row = document.createElement('article');
   const selected = isSelected(tab);
   const multiSelected = selected && selection.keys().length > 1;
-  row.className = ['tab-row', `tree-level-${level}`, selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
+  row.className = ['tab-row', `tree-level-${level}`, selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isFocused ? 'is-focused' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
   row.draggable = currentDragCapability() !== 'disabled';
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
@@ -254,23 +254,22 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       // than the beginning of a drag. Dragstart then carries every selected
       // target; an ordinary click collapses to one item below.
       preserveMultiSelectionOnPointerDown = true;
-      requestActivation();
       return;
     }
     selectSingle(tab);
     requestActivation();
   });
   activate.addEventListener('click', (event) => {
-    // Mouse and pen activation is handled on pointerdown so a slight movement
-    // cannot turn the gesture into a drag and swallow the only click. A
-    // keyboard-generated click has detail=0 and still needs activation here.
+    // Most mouse and pen activation is handled on pointerdown. A click on an
+    // existing multi-selection is intentionally deferred so dragstart can
+    // still carry the whole block; keyboard-generated clicks use detail=0.
     if (event.detail === 0) {
       selectSingle(tab);
       requestActivation();
     } else if (preserveMultiSelectionOnPointerDown) {
       preserveMultiSelectionOnPointerDown = false;
       selectSingle(tab);
-      if (latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
+      requestActivation();
     }
   });
   const label = document.createElement('span');
@@ -528,6 +527,10 @@ function isSelected(tab: VerticalTabItem): boolean {
 
 function selectSingle(tab: VerticalTabItem): void {
   selection.selectSingle(tab);
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-selected, .tab-row.is-multi-selected'))) {
+    row.classList.remove('is-selected', 'is-multi-selected');
+  }
+  findTabRow(tab.target)?.classList.add('is-selected');
 }
 
 function updateSelection(tab: VerticalTabItem, keys: { readonly shiftKey: boolean; readonly toggleKey: boolean }): void {
@@ -675,14 +678,21 @@ function sameTarget(left: TabTarget, right: TabTarget): boolean {
 
 function markActiveTab(target: TabTarget): void {
   if (!latestSnapshot) return;
-  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-active'))) {
-    row.classList.remove('is-active');
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-focused'))) {
+    row.classList.remove('is-focused');
   }
-  const row = Array.from(document.querySelectorAll<HTMLElement>('.tab-row')).find((candidate) => {
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-active'))) {
+    const candidateTarget = parseTargetDataset(row.dataset.target);
+    if (candidateTarget?.groupIndex === target.groupIndex) row.classList.remove('is-active');
+  }
+  findTabRow(target)?.classList.add('is-active', 'is-focused');
+}
+
+function findTabRow(target: TabTarget): HTMLElement | undefined {
+  return Array.from(document.querySelectorAll<HTMLElement>('.tab-row')).find((candidate) => {
     const candidateTarget = parseTargetDataset(candidate.dataset.target);
     return candidateTarget !== undefined && sameTarget(candidateTarget, target);
   });
-  row?.classList.add('is-active');
 }
 
 function parseTargetDataset(value: string | undefined): TabTarget | undefined {

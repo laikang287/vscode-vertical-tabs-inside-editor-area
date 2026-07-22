@@ -600,6 +600,7 @@ export class VerticalTabsPanel {
       return {
         label: tab.label || 'Unknown',
         isActive: tab.isActive,
+        isFocused: tab.isActive && tab.group.isActive,
         isDirty: tab.isDirty,
         isPinned: tab.isPinned,
         isPreview: tab.isPreview,
@@ -616,6 +617,7 @@ export class VerticalTabsPanel {
     return {
       label: tab.label,
       isActive: tab.isActive,
+      isFocused: tab.isActive && tab.group.isActive,
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,

@@ -15,6 +15,7 @@ export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDi
 export interface SnapshotSourceTab {
   readonly label: string;
   readonly isActive: boolean;
+  readonly isFocused?: boolean;
   readonly isDirty: boolean;
   readonly isPinned: boolean;
   readonly isPreview: boolean;
@@ -61,6 +62,7 @@ export function buildSnapshot(
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
       isActive: tab.isActive,
+      isFocused: Boolean(tab.isFocused),
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,

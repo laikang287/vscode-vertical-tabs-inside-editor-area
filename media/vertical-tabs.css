@@ -106,7 +106,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-pin-indicator { flex: 0 0 auto; font-size: 11px; line-height: 18px; }
 .group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.tab-row { display: flex; align-items: stretch; min-width: 0; }
+.tab-row { display: flex; align-items: stretch; min-width: 0; position: relative; }
 .tab-row[draggable="true"] { cursor: grab; }
 .tab-row[draggable="true"]:active { cursor: grabbing; }
 .tab-drop-indicator {
@@ -121,14 +121,23 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-drop-indicator[hidden] { display: none; }
 .tab-row.tree-level-1 { padding-left: 18px; }
 .tab-row:hover { background: var(--vscode-list-hoverBackground); }
-.tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .tab-row.is-selected {
   background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 35%, var(--vscode-editor-background));
   color: var(--vscode-list-inactiveSelectionForeground);
 }
-.tab-row.is-active.is-selected:not(.is-multi-selected) {
+.tab-row.is-active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
+}
+.tab-row.is-focused::before {
+  background: var(--vscode-tab-activeBorderTop, var(--vscode-focusBorder));
+  content: "";
+  height: 1px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
 }
 .tab-row.is-unavailable { opacity: .65; }
 
