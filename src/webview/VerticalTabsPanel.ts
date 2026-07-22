@@ -18,6 +18,8 @@ import {
   VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
   type EditorLayout,
 } from '../layout/RailLayout';
+import { getStrings, resolveLocale } from '../i18n';
+import type { LocaleStrings } from '../i18n/locale';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
@@ -81,6 +83,7 @@ export class VerticalTabsPanel {
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
   private readonly pinnedGroupIds: Set<string>;
+  private readonly localeStrings: LocaleStrings;
   private rememberStateEnabled: boolean;
 
   private constructor(
@@ -95,6 +98,7 @@ export class VerticalTabsPanel {
     this.manualGroupByIdentity = this.rememberStateEnabled ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
     this.manualOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
     this.pinnedGroupIds = this.rememberStateEnabled ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
+    this.localeStrings = this.resolveUiLocale();
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn });
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
@@ -662,6 +666,7 @@ export class VerticalTabsPanel {
       tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTabSafe(tab))),
     })));
     const snapshot = buildSnapshot(groups, revision, this.manualGroups, {
+      localeStrings: this.localeStrings,
       groupMode: this.groupMode,
       sortMode: this.sortMode,
       rememberState: shouldRememberState(),
@@ -1962,6 +1967,23 @@ export class VerticalTabsPanel {
     });
   }
 
+  private resolveConfiguredLanguage(): string {
+    const configured = vscode.workspace.getConfiguration('verticalTabs').get<string>('language', 'auto');
+    return configured?.toLowerCase() === 'auto'
+      ? vscode.env.language
+      : (configured ?? 'en');
+  }
+
+  private resolveUiLocale(): LocaleStrings {
+    const configured = vscode.workspace.getConfiguration('verticalTabs').get<string>('language', 'auto');
+    const locale = configured?.toLowerCase() === 'auto'
+      ? vscode.env.language
+      : configured ?? 'en';
+    const resolved = resolveLocale(locale);
+    logDebug('解析 UI 语言', { configured, vsCodeLanguage: vscode.env.language, resolved });
+    return getStrings(resolved);
+  }
+
   private configureWebview(): void {
     logDebug('配置垂直标签 Webview HTML 与 CSP');
     this.panel.webview.html = this.createHtml();
@@ -1971,9 +1993,11 @@ export class VerticalTabsPanel {
     const nonce = crypto.randomBytes(16).toString('base64');
     const styleContent = this.readWebviewStyle();
     const scriptContent = this.readWebviewScript();
+    const i18n = this.localeStrings;
+    const resolvedLang = this.resolveConfiguredLanguage();
 
     return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1985,16 +2009,16 @@ export class VerticalTabsPanel {
   <main class="vertical-tabs" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
-        <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="Toggle grouping and sorting controls" aria-label="Toggle grouping and sorting controls">□</button>
-        <button id="expand-all" class="toolbar-icon" type="button" title="展开所有分组" aria-label="展开所有分组">⊞</button>
-        <button id="collapse-all" class="toolbar-icon" type="button" title="折叠所有分组" aria-label="折叠所有分组">⊟</button>
+        <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="" aria-label="">□</button>
+        <button id="expand-all" class="toolbar-icon" type="button" title="" aria-label="">⊞</button>
+        <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label="">⊟</button>
       </div>
       <div id="toolbar-controls" class="toolbar-selects">
-        <label class="toolbar-field" for="group-mode"><span>分组方式</span><select id="group-mode"><option value="vscode">跟随 VS Code</option><option value="manual">手动分组</option><option value="parentDir">按父目录</option><option value="fileType">按文件类型</option></select></label>
-        <label class="toolbar-field" for="sort-mode"><span>排序方式</span><select id="sort-mode"><option value="none">手工排序</option><option value="modifiedAsc">修改时间正序</option><option value="modifiedDesc">修改时间逆序</option><option value="nameAsc">文件名正序</option><option value="nameDesc">文件名逆序</option></select></label>
+        <label class="toolbar-field" for="group-mode"><span>Grouping</span><select id="group-mode"><option value="vscode">Follow VS Code</option><option value="manual">Manual</option><option value="parentDir">Parent directory</option><option value="fileType">File type</option></select></label>
+        <label class="toolbar-field" for="sort-mode"><span>Sorting</span><select id="sort-mode"><option value="none">Manual</option><option value="modifiedAsc">Modified (ascending)</option><option value="modifiedDesc">Modified (descending)</option><option value="nameAsc">Name (ascending)</option><option value="nameDesc">Name (descending)</option></select></label>
       </div>
     </header>
-    <p id="description">正在同步打开的标签…</p>
+    <p id="description"></p>
     <section id="groups" aria-label="打开的编辑器标签"></section>
   </main>
   <script nonce="${nonce}">${scriptContent}</script>

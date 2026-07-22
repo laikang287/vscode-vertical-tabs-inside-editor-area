@@ -32,6 +32,26 @@ let draggedTargets: readonly TabTarget[] = [];
 let draggedGroupId: string | undefined;
 let dropIndicator: HTMLElement | undefined;
 let dropHighlightedGroup: HTMLElement | undefined;
+
+interface I18nStrings {
+  readonly emptyState: string; readonly expand: string; readonly collapse: string;
+  readonly expandGroup: string; readonly collapseGroup: string; readonly pinnedGroup: string;
+  readonly closeGroupAndDelete: string; readonly closeTab: string; readonly close: string;
+  readonly closeOthers: string; readonly closeBelow: string; readonly closeGroup: string;
+  readonly closeSaved: string; readonly closeAll: string; readonly closeSavedTabs: string;
+  readonly closeAllUnpinned: string; readonly pinTab: string; readonly unpinTab: string;
+  readonly pinGroup: string; readonly unpinGroup: string; readonly cannotPinVscodeGroup: string;
+  readonly rename: string; readonly renameGroup: string; readonly groupName: string;
+  readonly newGroup: string; readonly newGroupOnlyManual: string; readonly previewSuffix: string;
+  readonly bestEffortActivation: string; readonly unsupportedActivation: string;
+  readonly hideToolbarControls: string; readonly showToolbarControls: string;
+  readonly ungrouped: string; readonly other: string; readonly workspaceRoot: string;
+  readonly noExtension: string; readonly editorGroup: string;
+  [key: string]: string;
+}
+declare const __i18n: I18nStrings;
+const i18n = (typeof __i18n !== 'undefined' ? __i18n : {}) as I18nStrings;
+
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
@@ -91,7 +111,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   setToolbarControlsVisible(message.snapshot.toolbarControlsVisible);
   groups.replaceChildren();
   const { tabs, displayGroups } = message.snapshot;
-  description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
+  description.textContent = tabs.length === 0 ? i18n.emptyState : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
   updateTreeActionState();
   correctPendingActivation();
@@ -149,7 +169,7 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     header.tabIndex = 0;
     header.setAttribute('role', 'button');
     header.setAttribute('aria-expanded', String(!collapsed));
-    header.title = `${collapsed ? '展开' : '折叠'}分组`;
+    header.title = collapsed ? i18n.expandGroup : i18n.collapseGroup;
     header.addEventListener('click', () => toggleDisplayGroup(group));
     header.addEventListener('contextmenu', (event) => {
       event.preventDefault();
@@ -171,7 +191,7 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     }
     const main = document.createElement('div');
     main.className = 'group-main';
-    const toggle = button(collapsed ? '▶' : '▼', `${collapsed ? '展开' : '折叠'}分组`);
+    const toggle = button(collapsed ? '▶' : '▼', collapsed ? i18n.expandGroup : i18n.collapseGroup);
     toggle.className = 'group-toggle';
     toggle.tabIndex = -1;
     toggle.addEventListener('click', (event) => {
@@ -187,8 +207,8 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
       const pin = document.createElement('span');
       pin.className = 'group-pin-indicator';
       pin.textContent = '📌';
-      pin.title = '固定分组';
-      pin.setAttribute('aria-label', '固定分组');
+      pin.title = i18n.pinnedGroup;
+      pin.setAttribute('aria-label', i18n.pinnedGroup);
       main.append(pin);
     }
     if (group.description) {
@@ -200,7 +220,7 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     header.append(main);
     const actions = document.createElement('div');
     actions.className = 'group-actions';
-    const remove = button('×', '关闭分组内所有标签并删除分组');
+    const remove = button('×', i18n.closeGroupAndDelete);
     remove.className = 'group-action tab-action';
     remove.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -241,6 +261,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
     const hotspot = dragImageOffset ?? dragImageOffsetWithin(row, event.clientX, event.clientY);
     row.dataset.dragRequestId = requestId;
     logToExtension('debug', '标签拖拽开始', targetDetails(tab.target, tab.label, requestId));
+
     event.dataTransfer?.setData('application/x-vertical-tab-target', JSON.stringify(tab.target));
     event.dataTransfer?.setData('application/x-vertical-tab-drag-request', requestId);
     event.dataTransfer?.setData('text/plain', tab.label);
@@ -329,7 +350,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   });
   const label = document.createElement('span');
   label.className = 'tab-label';
-  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? ' (预览)' : ''}`;
+  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? i18n.previewSuffix : ''}`;
   activate.append(label);
   if (tab.description) {
     const detail = document.createElement('span');
@@ -406,7 +427,7 @@ function updateTreeActionState(): void {
 function setToolbarControlsVisible(visible: boolean): void {
   if (toolbarControls) toolbarControls.hidden = !visible;
   if (toggleToolbarControlsButton) {
-    toggleToolbarControlsButton.title = visible ? 'Hide grouping and sorting controls' : 'Show grouping and sorting controls';
+    toggleToolbarControlsButton.title = visible ? i18n.hideToolbarControls : i18n.showToolbarControls;
     toggleToolbarControlsButton.setAttribute('aria-label', toggleToolbarControlsButton.title);
     toggleToolbarControlsButton.setAttribute('aria-pressed', String(!visible));
   }
@@ -635,7 +656,7 @@ function actionButton(label: string, title: string, type: 'closeTab' | 'closeOth
 }
 
 function closeSelectionButton(tab: VerticalTabItem): HTMLButtonElement {
-  const result = button('×', '关闭标签');
+  const result = button('×', i18n.closeTab);
   result.className = 'tab-action';
   result.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
@@ -733,7 +754,7 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
   }
   if (group) {
     menu.append(
-      messageButton('关闭', '关闭分组内所有标签', { type: 'closeGroup', groupId: group.id }),
+      messageButton(i18n.close, i18n.closeGroup, { type: 'closeGroup', groupId: group.id }),
       groupPinButton(group),
     );
   }
@@ -742,17 +763,17 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
     const multi = targets.length > 1;
     const pinned = multi ? selectedTabsFor(tab).every((candidate) => candidate.isPinned) : tab.isPinned;
     menu.append(
-      multi ? messageButton('关闭', '关闭标签', { type: 'closeTabs', targets }) : actionButton('关闭', '关闭标签', 'closeTab', tab.target, true),
-      multi ? messageButton('关闭其它', '关闭其它', { type: 'closeOthersForTabs', targets }) : actionButton('关闭其它', '关闭其它', 'closeOthers', tab.target, true),
-      multi ? messageButton('关闭下侧', '关闭下侧', { type: 'closeBelowForTabs', targets }) : actionButton('关闭下侧', '关闭下侧', 'closeBelow', tab.target, true),
-      messageButton(pinned ? '取消固定标签' : '固定标签', pinned ? '取消固定标签' : '固定标签', multi ? { type: pinned ? 'unpinTabs' : 'pinTabs', targets } : { type: pinned ? 'unpinTab' : 'pinTab', target: tab.target }),
+      multi ? messageButton(i18n.close, i18n.closeTab, { type: 'closeTabs', targets }) : actionButton(i18n.close, i18n.closeTab, 'closeTab', tab.target, true),
+      multi ? messageButton(i18n.closeOthers, i18n.closeOthers, { type: 'closeOthersForTabs', targets }) : actionButton(i18n.closeOthers, i18n.closeOthers, 'closeOthers', tab.target, true),
+      multi ? messageButton(i18n.closeBelow, i18n.closeBelow, { type: 'closeBelowForTabs', targets }) : actionButton(i18n.closeBelow, i18n.closeBelow, 'closeBelow', tab.target, true),
+      messageButton(pinned ? i18n.unpinTab : i18n.pinTab, pinned ? i18n.unpinTab : i18n.pinTab, multi ? { type: pinned ? 'unpinTabs' : 'pinTabs', targets } : { type: pinned ? 'unpinTab' : 'pinTab', target: tab.target }),
     );
   }
   const snapshot = latestSnapshot;
   menu.append(
     createGroupButton(snapshot?.groupMode === 'manual'),
-    globalActionButton('关闭已保存', '关闭已保存的标签', 'closeSaved'),
-    globalActionButton('关闭全部', '关闭所有未固定标签', 'closeAll'),
+    globalActionButton(i18n.closeSaved, i18n.closeSavedTabs, 'closeSaved'),
+    globalActionButton(i18n.closeAll, i18n.closeAllUnpinned, 'closeAll'),
   );
   menu.querySelectorAll('button').forEach((item) => item.classList.add('tab-context-action'));
   document.body.append(menu);
@@ -763,9 +784,9 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
 }
 
 function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
-  const result = button('重命名', '重命名分组');
+  const result = button(i18n.rename, i18n.renameGroup);
   result.addEventListener('click', () => {
-    const value = window.prompt('分组名称', group.title);
+    const value = window.prompt(i18n.groupName, group.title);
     if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() });
     dismissContextMenu();
   });
@@ -774,7 +795,7 @@ function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
 
 function groupPinButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
   const disabled = group.mode === 'vscode';
-  const result = messageButton(group.isPinned ? '取消固定分组' : '固定分组', disabled ? '跟随 VS Code 分组时不能固定分组' : group.isPinned ? '取消固定分组' : '固定分组', { type: group.isPinned ? 'unpinGroup' : 'pinGroup', groupId: group.id });
+  const result = messageButton(group.isPinned ? i18n.unpinGroup : i18n.pinGroup, disabled ? i18n.cannotPinVscodeGroup : group.isPinned ? i18n.unpinGroup : i18n.pinGroup, { type: group.isPinned ? 'unpinGroup' : 'pinGroup', groupId: group.id });
   result.disabled = Boolean(disabled);
   return result;
 }
@@ -784,7 +805,7 @@ function globalActionButton(label: string, title: string, type: 'closeSaved' | '
 }
 
 function createGroupButton(enabled: boolean): HTMLButtonElement {
-  const result = button('新建分组', enabled ? '新建分组' : '只有手动分组模式可以新建分组');
+  const result = button(i18n.newGroup, enabled ? i18n.newGroup : i18n.newGroupOnlyManual);
   result.disabled = !enabled;
   result.addEventListener('click', () => {
     if (!enabled) return;

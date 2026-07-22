@@ -182,7 +182,7 @@ test('builds file type groups and sorts files inside groups only', () => {
   ] }], 12, [], { groupMode: 'fileType', sortMode: 'nameAsc' });
   assert.equal(snapshot.displayGroups[0]!.title, '.ts');
   assert.deepEqual(snapshot.displayGroups[0]!.tabs.map((tab) => tab.label), ['a.ts', 'b.ts']);
-  assert.equal(snapshot.displayGroups[1]!.title, '无扩展名');
+  assert.equal(snapshot.displayGroups[1]!.title, 'No extension');
 });
 
 test('keeps pinned tabs at the front of each display group for every sort mode', () => {
@@ -238,7 +238,7 @@ test('renders manual ungrouped tabs at the tree root without an ungrouped header
   const ungrouped = snapshot.displayGroups.find((group) => group.id === '__ungrouped');
   const workGroup = snapshot.displayGroups.find((group) => group.id === 'work');
 
-  assert.equal(ungrouped?.title, '未分组');
+  assert.equal(ungrouped?.title, 'Ungrouped');
   assert.equal(ungrouped?.showHeader, false);
   assert.deepEqual(ungrouped?.tabs.map((tab) => tab.label), ['index.ts', 'Terminal', 'README.md']);
   assert.equal(workGroup?.showHeader, true);

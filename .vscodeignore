@@ -11,5 +11,7 @@ out/**/*.map
 tsconfig.json
 AGENTS.md
 .gitignore
-.vscodeignore
-README.zh-CN.md
+ .vscodeignore
+ .obsidian/
+ obsidian笔记/
+ README.zh-CN.md

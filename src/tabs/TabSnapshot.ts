@@ -1,4 +1,5 @@
 ﻿import * as path from 'node:path';
+import { format, type LocaleStrings } from '../i18n';
 import type {
   GroupMode,
   ManualTabGroup,
@@ -43,6 +44,7 @@ export interface SnapshotBuildOptions {
   readonly toolbarControlsVisible?: boolean;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
+  readonly localeStrings?: LocaleStrings;
 }
 
 export type CloseAction = 'close' | 'closeOthers' | 'closeBelow' | 'closeSaved' | 'closeAll';
@@ -78,7 +80,7 @@ export function buildSnapshot(
     }];
   }));
 
-  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds);
+  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
   return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, tabs, manualGroups, displayGroups };
 }
 
@@ -164,21 +166,22 @@ function buildDisplayGroups(
   sortMode: SortMode,
   manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
   pinnedGroupIds: ReadonlySet<string> | undefined,
+  localeStrings?: LocaleStrings,
 ): VerticalTabDisplayGroup[] {
-  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup, pinnedGroupIds), sortMode);
-  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, pinnedGroupIds), sortMode);
-  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, pinnedGroupIds), sortMode);
-  return buildVsCodeGroups(sourceGroups, tabs, sortMode);
+  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
+  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, pinnedGroupIds, localeStrings), sortMode);
+  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, pinnedGroupIds, localeStrings), sortMode);
+  return buildVsCodeGroups(sourceGroups, tabs, sortMode, localeStrings);
 }
 
-function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: readonly VerticalTabItem[], sortMode: SortMode): VerticalTabDisplayGroup[] {
+function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: readonly VerticalTabItem[], sortMode: SortMode, localeStrings?: LocaleStrings): VerticalTabDisplayGroup[] {
   const groups: VerticalTabDisplayGroup[] = [];
   for (let sourceIndex = 0; sourceIndex < sourceGroups.length; sourceIndex += 1) {
     const groupTabs = tabs.filter((tab) => tab.target.groupIndex === sourceIndex);
     if (groupTabs.length === 0) continue;
     groups.push({
       id: `vscode-${sourceIndex}`,
-      title: sourceGroups[sourceIndex]?.label ?? `编辑器组 ${groups.length + 1}`,
+      title: sourceGroups[sourceIndex]?.label ?? format(localeStrings?.editorGroup ?? 'Editor Group {0}', groups.length + 1),
       collapsed: false,
       mode: 'vscode',
       tabs: sortTabs(groupTabs, sortMode),
@@ -204,13 +207,14 @@ function buildManualGroups(
   sortMode: SortMode,
   manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
   pinnedGroupIds: ReadonlySet<string> | undefined,
+  localeStrings?: LocaleStrings,
 ): VerticalTabDisplayGroup[] {
   const knownGroups = new Set(manualGroups.map((group) => group.id));
   const ungrouped = orderManualTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), '__ungrouped', manualOrderByGroup);
   const displayGroups: VerticalTabDisplayGroup[] = [];
   displayGroups.push({
       id: '__ungrouped',
-      title: '未分组',
+      title: localeStrings?.ungrouped ?? 'Ungrouped',
       collapsed: false,
       mode: 'manual',
       tabs: sortTabs(ungrouped, sortMode),
@@ -234,7 +238,7 @@ function buildManualGroups(
   return displayGroups;
 }
 
-function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir' | 'fileType', sortMode: SortMode, pinnedGroupIds: ReadonlySet<string> | undefined): VerticalTabDisplayGroup[] {
+function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir' | 'fileType', sortMode: SortMode, pinnedGroupIds: ReadonlySet<string> | undefined, localeStrings?: LocaleStrings): VerticalTabDisplayGroup[] {
   const buckets = new Map<string, VerticalTabItem[]>();
   for (const tab of tabs) {
     const id = groupMode === 'parentDir' ? parentDirKey(tab) : fileTypeKey(tab);
@@ -245,7 +249,7 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
   const parentNameCounts = new Map<string, number>();
   if (groupMode === 'parentDir') {
     for (const id of buckets.keys()) {
-      const title = parentDirTitle(id);
+      const title = parentDirTitle(id, localeStrings);
       parentNameCounts.set(title, (parentNameCounts.get(title) ?? 0) + 1);
     }
   }
@@ -253,7 +257,7 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
     ? shortestUniquePathSuffixes(Array.from(buckets.keys()).map((id) => ({ key: id, path: id })))
     : new Map<string, string>();
   return Array.from(buckets.entries()).map(([id, groupTabs]) => {
-    const title = groupMode === 'parentDir' ? parentDirTitle(id) : fileTypeTitle(id);
+    const title = groupMode === 'parentDir' ? parentDirTitle(id, localeStrings) : fileTypeTitle(id, localeStrings);
     return {
       id,
       title,
@@ -419,9 +423,9 @@ function parentDirKey(tab: VerticalTabItem): string {
   return dirname === '.' ? '__root' : dirname;
 }
 
-function parentDirTitle(id: string): string {
-  if (id === '__other') return '其他';
-  if (id === '__root') return '工作区根目录';
+function parentDirTitle(id: string, localeStrings?: LocaleStrings): string {
+  if (id === '__other') return localeStrings?.other ?? 'Other';
+  if (id === '__root') return localeStrings?.workspaceRoot ?? 'Workspace root';
   return path.posix.basename(id);
 }
 
@@ -432,9 +436,9 @@ function fileTypeKey(tab: VerticalTabItem): string {
   return extension || '__none';
 }
 
-function fileTypeTitle(id: string): string {
-  if (id === '__other') return '其他';
-  if (id === '__none') return '无扩展名';
+function fileTypeTitle(id: string, localeStrings?: LocaleStrings): string {
+  if (id === '__other') return localeStrings?.other ?? 'Other';
+  if (id === '__none') return localeStrings?.noExtension ?? 'No extension';
   return id;
 }
 

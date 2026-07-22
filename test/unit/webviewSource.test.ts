@@ -6,10 +6,10 @@ import test from 'node:test';
 test('context menu close actions dismiss the menu after posting', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /actionButton\('关闭', '关闭标签', 'closeTab', tab\.target, true\)/);
-  assert.match(source, /messageButton\('关闭', '关闭标签', \{ type: 'closeTabs', targets \}\)/);
-  assert.match(source, /actionButton\('关闭其它', '关闭其它', 'closeOthers', tab\.target, true\)/);
-  assert.match(source, /actionButton\('关闭下侧', '关闭下侧', 'closeBelow', tab\.target, true\)/);
+ assert.match(source, /actionButton\(i18n\.close, i18n\.closeTab, 'closeTab', tab\.target, true\)/);
+  assert.match(source, /messageButton\(i18n\.close, i18n\.closeTab, \{ type: 'closeTabs', targets \}\)/);
+ assert.match(source, /actionButton\(i18n\.closeOthers, i18n\.closeOthers, 'closeOthers', tab\.target, true\)/);
+  assert.match(source, /actionButton\(i18n\.closeBelow, i18n\.closeBelow, 'closeBelow', tab\.target, true\)/);
   assert.match(source, /closeOthersForTabs/);
   assert.match(source, /closeBelowForTabs/);
   assert.match(source, /if \(dismissAfterClick\) dismissContextMenu\(\)/);
@@ -24,11 +24,11 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.doesNotMatch(panelSource, /id="close-all"/);
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
   assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
-  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\('关闭'/);
-  assert.match(webviewSource, /messageButton\('关闭', '关闭分组内所有标签', \{ type: 'closeGroup', groupId: group\.id \}\)/);
-  assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
-  assert.match(webviewSource, /globalActionButton\('关闭已保存'/);
-  assert.match(webviewSource, /globalActionButton\('关闭全部'/);
+ assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\(i18n\.close/);
+  assert.match(webviewSource, /messageButton\(i18n\.close, i18n\.closeGroup, \{ type: 'closeGroup', groupId: group\.id \}\)/);
+ assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
+  assert.match(webviewSource, /globalActionButton\(i18n\.closeSaved, i18n\.closeSavedTabs, 'closeSaved'/);
+  assert.match(webviewSource, /globalActionButton\(i18n\.closeAll, i18n\.closeAllUnpinned, 'closeAll'/);
 });
 
 test('every visible group header has a close icon and manual rename stays in the context menu', () => {
@@ -38,9 +38,9 @@ test('every visible group header has a close icon and manual rename stays in the
 
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
   assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
-  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
-  assert.match(source, /const remove = button\('×', '关闭分组内所有标签并删除分组'\)/);
-  assert.match(source, /remove\.className = 'group-action tab-action'/);
+ assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
+  assert.match(source, /const remove = button\('×', i18n\.closeGroupAndDelete\)/);
+ assert.match(source, /remove\.className = 'group-action tab-action'/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
   assert.match(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
   assert.match(source, /header\.draggable = true/);
@@ -60,8 +60,8 @@ test('tab close buttons are always visible and context menu labels use the reque
 
   assert.match(style, /\.tab-actions \{ opacity: 1; \}/);
   assert.doesNotMatch(style, /\.tab-actions[^\n]*opacity:\s*0/);
-  assert.match(source, /actionButton\('关闭其它', '关闭其它', 'closeOthers'/);
-  assert.match(source, /actionButton\('关闭下侧', '关闭下侧', 'closeBelow'/);
+  assert.match(source, /actionButton\(i18n\.closeOthers, i18n\.closeOthers, 'closeOthers'/);
+  assert.match(source, /actionButton\(i18n\.closeBelow, i18n\.closeBelow, 'closeBelow'/);
   assert.doesNotMatch(source, /关闭其它标签|关闭下侧标签/);
 });
 
@@ -141,12 +141,12 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="展开所有分组">⊞<\/button>/);
-  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="折叠所有分组">⊟<\/button>/);
-  assert.match(panelSource, /<span>分组方式<\/span><select id="group-mode">/);
-  assert.match(panelSource, /<span>排序方式<\/span><select id="sort-mode">/);
-  assert.match(panelSource, /<option value="none">手工排序<\/option>/);
-  assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
+  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊞<\/button>/);
+ assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊟<\/button>/);
+  assert.match(panelSource, /<span>Grouping<\/span><select id="group-mode">/);
+  assert.match(panelSource, /<span>Sorting<\/span><select id="sort-mode">/);
+  assert.match(panelSource, /<option value="none">Manual<\/option>/);
+ assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLElement>\('#toolbar-controls'\)/);
   assert.match(webviewSource, /querySelector<HTMLButtonElement>\('#toggle-toolbar-controls'\)/);

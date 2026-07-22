@@ -1,0 +1,20 @@
+{
+  "verticalTabs.config.rememberState": "When enabled, remembers group mode, sort mode, manual groups, pinned groups, and adjusted width per workspace. When disabled, always uses the default values.",
+  "verticalTabs.config.tabWidthRatio": "Width percentage of the vertical tab bar relative to the editor area. Controls the tab bar width on first display or when automatic memory is disabled. Default 20%.",
+  "verticalTabs.config.defaultGroupMode": "Default grouping mode. Always used when automatic memory is disabled; used only when no saved value exists when automatic memory is enabled.",
+  "verticalTabs.config.defaultGroupMode.vscode": "Follow VS Code editor groups.",
+  "verticalTabs.config.defaultGroupMode.manual": "Use manual grouping.",
+  "verticalTabs.config.defaultGroupMode.parentDir": "Group by parent directory.",
+  "verticalTabs.config.defaultGroupMode.fileType": "Group by file type.",
+  "verticalTabs.config.defaultSortMode": "Default sort mode. Defaults to manual sort. Always used when automatic memory is disabled; used only when no saved value exists when automatic memory is enabled.",
+  "verticalTabs.config.defaultSortMode.none": "Manual sort; tabs can be reordered by dragging.",
+  "verticalTabs.config.defaultSortMode.modifiedAsc": "Sort by modification time ascending.",
+  "verticalTabs.config.defaultSortMode.modifiedDesc": "Sort by modification time descending.",
+  "verticalTabs.config.defaultSortMode.nameAsc": "Sort by name ascending.",
+  "verticalTabs.config.defaultSortMode.nameDesc": "Sort by name descending.",
+  "verticalTabs.config.language": "Display language for the vertical tab bar UI. `auto` follows VS Code's display language.",
+  "verticalTabs.command.open": "Show Vertical Tabs",
+ "verticalTabs.command.close": "Close Vertical Tabs",
+
+  "verticalTabs.config.language.auto": "Auto (follow VS Code display language)"
+}
