@@ -35,6 +35,8 @@ let dropHighlightedGroup: HTMLElement | undefined;
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
+let pendingActivateTarget: TabTarget | undefined;
+let pendingActivateTimestamp = 0;
 const selection = new TabSelection();
 
 window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
@@ -92,6 +94,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   description.textContent = tabs.length === 0 ? '没有可显示的编辑器标签。' : '';
   for (const group of displayGroups) appendDisplayGroup(groups, group);
   updateTreeActionState();
+  correctPendingActivation();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${tabs.length}, groups=${displayGroups.length}`);
 }
@@ -807,6 +810,8 @@ function sameTarget(left: TabTarget, right: TabTarget): boolean {
 
 function markActiveTab(target: TabTarget): void {
   if (!latestSnapshot) return;
+  pendingActivateTarget = target;
+  pendingActivateTimestamp = Date.now();
   for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-focused'))) {
     row.classList.remove('is-focused');
   }
@@ -815,6 +820,35 @@ function markActiveTab(target: TabTarget): void {
     if (candidateTarget?.groupIndex === target.groupIndex) row.classList.remove('is-active');
   }
   findTabRow(target)?.classList.add('is-active', 'is-focused');
+}
+
+function correctPendingActivation(): void {
+  const PENDING_WINDOW_MS = 300;
+  if (!pendingActivateTarget || Date.now() - pendingActivateTimestamp > PENDING_WINDOW_MS) {
+    pendingActivateTarget = undefined;
+    return;
+  }
+  const expectedRow = findTabRow(pendingActivateTarget);
+  if (!expectedRow) {
+    pendingActivateTarget = undefined;
+    return;
+  }
+  if (expectedRow.classList.contains('is-active')) {
+    pendingActivateTarget = undefined;
+    return;
+  }
+  // A stale snapshot removed is-active from the user's intended target.
+  // Restore it and remove is-active from whatever the snapshot picked.
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-focused'))) {
+    row.classList.remove('is-focused');
+  }
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-active'))) {
+    const candidateTarget = parseTargetDataset(row.dataset.target);
+    if (candidateTarget?.groupIndex === pendingActivateTarget.groupIndex) {
+      row.classList.remove('is-active');
+    }
+  }
+  expectedRow.classList.add('is-active', 'is-focused');
 }
 
 function findTabRow(target: TabTarget): HTMLElement | undefined {

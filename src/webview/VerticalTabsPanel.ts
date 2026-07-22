@@ -72,6 +72,7 @@ export class VerticalTabsPanel {
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
+  private suppressScheduledRefresh = false;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, toolbarControlsVisible: true, tabs: [], manualGroups: [], displayGroups: [] };
   private groupMode: GroupMode;
   private sortMode: SortMode;
@@ -578,7 +579,7 @@ export class VerticalTabsPanel {
   }
 
   private scheduleRefresh(): void {
-    if (this.refreshTimer) {
+    if (this.refreshTimer || this.suppressScheduledRefresh) {
       logTrace('跳过计划刷新：已有刷新定时器');
       return;
     }
@@ -1045,8 +1046,10 @@ export class VerticalTabsPanel {
         resolved: tab ? describeTab(tab) : undefined,
       });
       if (tab) {
+        this.suppressScheduledRefresh = true;
         await this.activateTab(tab, message.requestId);
         await this.refresh({ reason: 'navigate' });
+        this.suppressScheduledRefresh = false;
       } else {
         logWarn('激活标签失败：标签目标已失效', { requestId: message.requestId, target: message.target, groups: describeTabGroups() });
       }
