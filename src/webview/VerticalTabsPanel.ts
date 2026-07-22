@@ -1190,17 +1190,93 @@ export class VerticalTabsPanel {
   private async moveFileToDirectory(target: TabTarget, destinationDirectory: vscode.Uri, destinationGroupId: string): Promise<void> {
     const tab = this.resolveTab(target);
     const sourceUri = tab ? inputUri(tab.input) : undefined;
-    if (!tab || !sourceUri || sourceUri.scheme === 'untitled' || tab.isDirty) {
+    const sourceTabs = sourceUri ? findTabsByResourceUri(sourceUri) : [];
+    if (!tab || !sourceUri || sourceUri.scheme === 'untitled' || sourceTabs.some((candidate) => candidate.isDirty)) {
       logWarn('父目录分组移动失败：仅支持已保存且未修改的文件标签', { target, source: tab ? describeTab(tab) : undefined, destinationGroupId });
       return;
     }
     const destinationUri = vscode.Uri.joinPath(destinationDirectory, path.posix.basename(sourceUri.path));
     if (sourceUri.toString() === destinationUri.toString()) return;
+    const sourceInput = tab.input;
+    const sourceViewColumn = tab.group.viewColumn;
     try {
-      await vscode.workspace.fs.rename(sourceUri, destinationUri, { overwrite: false });
-      logInfo('父目录分组拖拽已移动文件', { source: sourceUri.toString(), destination: destinationUri.toString(), destinationGroupId });
+      const destinationExists = await resourceExists(destinationUri);
+      const destinationTabs = findTabsByResourceUri(destinationUri);
+      const replacementViewColumn = destinationTabs.find((candidate) => candidate.isActive)?.group.viewColumn
+        ?? destinationTabs[0]?.group.viewColumn
+        ?? sourceViewColumn;
+      if (destinationExists) {
+        const confirmed = await this.confirmFileOverwrite(destinationUri, destinationTabs.some((candidate) => candidate.isDirty));
+        if (!confirmed) {
+          logInfo('用户取消覆盖同名文件', { source: sourceUri.toString(), destination: destinationUri.toString(), destinationGroupId });
+          return;
+        }
+        if (destinationTabs.length > 0) {
+          const closed = await vscode.window.tabGroups.close(destinationTabs, true);
+          if (!closed || findTabsByResourceUri(destinationUri).length > 0) {
+            logWarn('覆盖同名文件已取消：目标标签未能全部关闭', { destination: destinationUri.toString(), destinationGroupId });
+            return;
+          }
+        }
+      }
+      await vscode.workspace.fs.rename(sourceUri, destinationUri, { overwrite: destinationExists });
+      await this.openMovedResource(sourceInput, tab.label, destinationUri, replacementViewColumn);
+      if (destinationExists && destinationTabs.length > 0) {
+        const openedDestinationTabs = findTabsByResourceUri(destinationUri);
+        const replacementTab = openedDestinationTabs.find((candidate) => candidate.group.viewColumn === replacementViewColumn && candidate.isActive)
+          ?? openedDestinationTabs.find((candidate) => candidate.group.viewColumn === replacementViewColumn);
+        const duplicateTabs = replacementTab ? openedDestinationTabs.filter((candidate) => candidate !== replacementTab) : [];
+        if (duplicateTabs.length > 0) {
+          await vscode.window.tabGroups.close(duplicateTabs, true);
+        }
+      }
+      const staleSourceTabs = findTabsByResourceUri(sourceUri);
+      if (staleSourceTabs.length > 0) {
+        await vscode.window.tabGroups.close(staleSourceTabs, true);
+      }
+      logInfo(destinationExists ? '父目录分组拖拽已覆盖并移动同名文件' : '父目录分组拖拽已移动文件', {
+        source: sourceUri.toString(),
+        destination: destinationUri.toString(),
+        destinationGroupId,
+      });
     } catch (error) {
       logWarn('父目录分组移动文件失败', { source: sourceUri.toString(), destination: destinationUri.toString(), destinationGroupId, error });
+    }
+  }
+
+  private async confirmFileOverwrite(destinationUri: vscode.Uri, destinationDirty: boolean): Promise<boolean> {
+    const detail = destinationDirty
+      ? '目标文件对应的标签有未保存更改。继续后将关闭目标标签，并用拖拽文件的内容覆盖目标文件。'
+      : '继续后将关闭目标文件的现有标签，并用拖拽文件的内容覆盖目标文件。';
+    const choice = await vscode.window.showWarningMessage(
+      `目标目录已存在同名文件“${path.posix.basename(destinationUri.path)}”，是否覆盖？`,
+      { modal: true, detail },
+      '覆盖',
+      '取消',
+    );
+    return choice === '覆盖';
+  }
+
+  private async openMovedResource(sourceInput: vscode.Tab['input'], label: string, destinationUri: vscode.Uri, viewColumn: vscode.ViewColumn): Promise<void> {
+    const options: vscode.TextDocumentShowOptions = { viewColumn, preserveFocus: false };
+    if (sourceInput instanceof vscode.TabInputText) {
+      await vscode.window.showTextDocument(destinationUri, options);
+      return;
+    }
+    if (sourceInput instanceof vscode.TabInputTextDiff) {
+      await vscode.commands.executeCommand('vscode.diff', sourceInput.original, destinationUri, label, options);
+      return;
+    }
+    if (sourceInput instanceof vscode.TabInputCustom) {
+      await vscode.commands.executeCommand('vscode.openWith', destinationUri, sourceInput.viewType, options);
+      return;
+    }
+    if (sourceInput instanceof vscode.TabInputNotebook) {
+      await vscode.commands.executeCommand('vscode.openWith', destinationUri, sourceInput.notebookType, options);
+      return;
+    }
+    if (sourceInput instanceof vscode.TabInputNotebookDiff) {
+      await vscode.commands.executeCommand('vscode.diff', sourceInput.original, destinationUri, label, options);
     }
   }
 
@@ -2279,6 +2355,23 @@ function inputUri(input: vscode.Tab['input']): vscode.Uri | undefined {
     : input instanceof vscode.TabInputTextDiff || input instanceof vscode.TabInputNotebookDiff
       ? input.modified
       : undefined;
+}
+
+function findTabsByResourceUri(uri: vscode.Uri): vscode.Tab[] {
+  const key = uri.toString();
+  return vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .filter((tab) => inputUri(tab.input)?.toString() === key);
+}
+
+async function resourceExists(uri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(uri);
+    return true;
+  } catch (error) {
+    if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') return false;
+    throw error;
+  }
 }
 
 async function inputMtime(input: vscode.Tab['input']): Promise<number | undefined> {

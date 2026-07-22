@@ -481,3 +481,15 @@ test('dragging shows a bright insertion line at the exact before or after edge',
   assert.match(source, /document\.addEventListener\('dragend', \(\) => clearDropIndicator\(\)\)/);
   assert.match(style, /\.tab-drop-indicator \{[\s\S]+background: var\(--vscode-focusBorder, #007fd4\);[\s\S]+height: 2px;/);
 });
+
+test('parent-directory file collisions require confirmation and replace related tabs', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /const destinationExists = await resourceExists\(destinationUri\)/);
+  assert.match(source, /showWarningMessage\([\s\S]+\{ modal: true, detail \}[\s\S]+['"]覆盖['"]/);
+  assert.match(source, /await vscode\.window\.tabGroups\.close\(destinationTabs, true\)/);
+  assert.match(source, /workspace\.fs\.rename\(sourceUri, destinationUri, \{ overwrite: destinationExists \}\)/);
+  assert.match(source, /await this\.openMovedResource\(sourceInput, tab\.label, destinationUri, replacementViewColumn\)/);
+  assert.match(source, /const duplicateTabs = replacementTab \? openedDestinationTabs\.filter/);
+  assert.match(source, /const staleSourceTabs = findTabsByResourceUri\(sourceUri\)/);
+});
