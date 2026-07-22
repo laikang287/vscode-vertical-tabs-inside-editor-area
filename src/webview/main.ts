@@ -158,6 +158,14 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
       event.preventDefault();
       toggleDisplayGroup(group);
     });
+    if (group.isManual && group.id !== '__ungrouped') {
+      header.draggable = true;
+      header.addEventListener('dragstart', (event) => {
+        draggedGroupId = group.id;
+        event.dataTransfer?.setData('application/x-vertical-tab-group-id', group.id);
+        event.dataTransfer!.effectAllowed = 'move';
+      });
+    }
     const main = document.createElement('div');
     main.className = 'group-main';
     const toggle = button(collapsed ? '▶' : '▼', `${collapsed ? '展开' : '折叠'}分组`);
@@ -471,7 +479,11 @@ function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void
       const afterMatch = displayGroups.slice(targetIndex + 1).find((g) => g.showHeader && g.isManual && g.id !== '__ungrouped');
       beforeGroupId = afterMatch?.id;
     } else {
-      beforeGroupId = group.id;
+      if (group.isManual && group.id !== '__ungrouped') {
+        beforeGroupId = group.id;
+      } else {
+        beforeGroupId = displayGroups.find((g) => g.showHeader && g.isManual && g.id !== '__ungrouped')?.id;
+      }
     }
     logToExtension('debug', '分组拖拽排序请求', `groupId=${draggedGroupId}, beforeGroupId=${beforeGroupId ?? 'none'}`);
     vscode.postMessage({ type: 'reorderManualGroup', groupId: draggedGroupId, ...(beforeGroupId ? { beforeGroupId } : {}) });

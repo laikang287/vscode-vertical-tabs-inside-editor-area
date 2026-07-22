@@ -42,7 +42,9 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(source, /const remove = button\('×', '关闭分组内所有标签并删除分组'\)/);
   assert.match(source, /remove\.className = 'group-action tab-action'/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
-  assert.doesNotMatch(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
+  assert.match(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
+  assert.match(source, /header\.draggable = true/);
+  assert.match(source, /draggedGroupId = group\.id/);
   assert.match(panelSource, /message\.type === 'deleteGroup' \|\| message\.type === 'closeGroup'/);
   assert.match(panelSource, /vscode\.window\.tabGroups\.close\(sourceGroup, true\)/);
   assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);

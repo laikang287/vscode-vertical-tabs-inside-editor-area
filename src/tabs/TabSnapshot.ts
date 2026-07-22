@@ -270,18 +270,35 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
 
 function orderDisplayGroups(groups: VerticalTabDisplayGroup[], sortMode: SortMode): VerticalTabDisplayGroup[] {
   return groups
-    .map((group, index) => ({ group, index }))
+    .map((group, index) => ({ group, index, sortKey: groupSortKey(group, sortMode) }))
     .sort((left, right) => {
       if (isManualRootDisplayGroup(left.group) !== isManualRootDisplayGroup(right.group)) return isManualRootDisplayGroup(left.group) ? -1 : 1;
       if (left.group.isPinned !== right.group.isPinned) return left.group.isPinned ? -1 : 1;
-      if (sortMode !== 'none') {
-        const dir = sortMode === 'nameDesc' || sortMode === 'modifiedDesc' ? -1 : 1;
-        const compared = dir * left.group.title.localeCompare(right.group.title, undefined, { numeric: true, sensitivity: 'base' });
-        if (compared !== 0) return compared;
+      if (sortMode !== 'none' && left.sortKey !== undefined && right.sortKey !== undefined) {
+        const compared = left.sortKey.localeCompare(right.sortKey, undefined, { numeric: true, sensitivity: 'base' });
+        if (compared !== 0) {
+          const dir = sortMode === 'nameDesc' || sortMode === 'modifiedDesc' ? -1 : 1;
+          return dir * compared;
+        }
       }
       return left.index - right.index;
     })
     .map((entry) => entry.group);
+}
+
+function groupSortKey(group: VerticalTabDisplayGroup, sortMode: SortMode): string | undefined {
+  if (sortMode === 'nameAsc' || sortMode === 'nameDesc') {
+    return group.title;
+  }
+  if (sortMode === 'modifiedAsc' || sortMode === 'modifiedDesc') {
+    const latestMtime = group.tabs.reduce((max, tab) => {
+      if (!tab.isFile || tab.mtime === undefined) return max;
+      return Math.max(max, tab.mtime);
+    }, 0);
+    if (latestMtime === 0) return undefined;
+    return latestMtime.toString().padStart(16, '0');
+  }
+  return undefined;
 }
 
 function isManualRootDisplayGroup(group: VerticalTabDisplayGroup): boolean {
