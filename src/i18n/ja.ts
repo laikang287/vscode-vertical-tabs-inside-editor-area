@@ -37,6 +37,17 @@ const ja: LocaleStrings = {
   workspaceRoot: 'ワークスペースルート',
   noExtension: '拡張子なし',
   editorGroup: 'エディターグループ {0}',
+  groupModeLabel: "グループ化",
+  groupModeVscode: "VS Codeに従う",
+  groupModeManual: "手動",
+  groupModeParentDir: "親ディレクトリ",
+  groupModeFileType: "ファイルタイプ",
+  sortModeLabel: "ソート",
+  sortModeNone: "手動",
+  sortModeModifiedAsc: "更新日時 (昇順)",
+  sortModeModifiedDesc: "更新日時 (降順)",
+  sortModeNameAsc: "名前 (昇順)",
+  sortModeNameDesc: "名前 (降順)",
 };
 
 export default ja;

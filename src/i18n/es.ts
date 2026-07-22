@@ -37,6 +37,17 @@ const es: LocaleStrings = {
   workspaceRoot: 'Raíz del espacio de trabajo',
   noExtension: 'Sin extensión',
   editorGroup: 'Grupo de editores {0}',
+  groupModeLabel: "Agrupación",
+  groupModeVscode: "Seguir VS Code",
+  groupModeManual: "Manual",
+  groupModeParentDir: "Directorio padre",
+  groupModeFileType: "Tipo de archivo",
+  sortModeLabel: "Ordenación",
+  sortModeNone: "Manual",
+  sortModeModifiedAsc: "Modificación (ascendente)",
+  sortModeModifiedDesc: "Modificación (descendente)",
+  sortModeNameAsc: "Nombre (ascendente)",
+  sortModeNameDesc: "Nombre (descendente)",
 };
 
 export default es;

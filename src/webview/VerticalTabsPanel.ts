@@ -82,9 +82,9 @@ export class VerticalTabsPanel {
   private readonly manualGroups: ManualTabGroup[];
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
-  private readonly pinnedGroupIds: Set<string>;
-  private readonly localeStrings: LocaleStrings;
-  private rememberStateEnabled: boolean;
+ private readonly pinnedGroupIds: Set<string>;
+  private localeStrings: LocaleStrings;
+ private rememberStateEnabled: boolean;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
@@ -1101,6 +1101,11 @@ export class VerticalTabsPanel {
     const memoryChanged = rememberStateEnabled !== this.rememberStateEnabled;
     this.rememberStateEnabled = rememberStateEnabled;
 
+    if (event.affectsConfiguration('verticalTabs.language')) {
+      this.localeStrings = this.resolveUiLocale();
+      this.configureWebview();
+    }
+
     if (!rememberStateEnabled && (memoryChanged
       || event.affectsConfiguration('verticalTabs.defaultGroupMode')
       || event.affectsConfiguration('verticalTabs.defaultSortMode')
@@ -1975,12 +1980,9 @@ export class VerticalTabsPanel {
   }
 
   private resolveUiLocale(): LocaleStrings {
-    const configured = vscode.workspace.getConfiguration('verticalTabs').get<string>('language', 'auto');
-    const locale = configured?.toLowerCase() === 'auto'
-      ? vscode.env.language
-      : configured ?? 'en';
+    const locale = this.resolveConfiguredLanguage();
     const resolved = resolveLocale(locale);
-    logDebug('解析 UI 语言', { configured, vsCodeLanguage: vscode.env.language, resolved });
+    logDebug('解析 UI 语言', { locale, resolved });
     return getStrings(resolved);
   }
 
@@ -1997,7 +1999,7 @@ export class VerticalTabsPanel {
     const resolvedLang = this.resolveConfiguredLanguage();
 
     return `<!DOCTYPE html>
-<html lang="">
+<html lang="${resolvedLang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2014,13 +2016,14 @@ export class VerticalTabsPanel {
         <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label="">⊟</button>
       </div>
       <div id="toolbar-controls" class="toolbar-selects">
-        <label class="toolbar-field" for="group-mode"><span>Grouping</span><select id="group-mode"><option value="vscode">Follow VS Code</option><option value="manual">Manual</option><option value="parentDir">Parent directory</option><option value="fileType">File type</option></select></label>
-        <label class="toolbar-field" for="sort-mode"><span>Sorting</span><select id="sort-mode"><option value="none">Manual</option><option value="modifiedAsc">Modified (ascending)</option><option value="modifiedDesc">Modified (descending)</option><option value="nameAsc">Name (ascending)</option><option value="nameDesc">Name (descending)</option></select></label>
+        <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
+        <label class="toolbar-field" for="sort-mode"><span>${i18n.sortModeLabel}</span><select id="sort-mode"><option value="none">${i18n.sortModeNone}</option><option value="modifiedAsc">${i18n.sortModeModifiedAsc}</option><option value="modifiedDesc">${i18n.sortModeModifiedDesc}</option><option value="nameAsc">${i18n.sortModeNameAsc}</option><option value="nameDesc">${i18n.sortModeNameDesc}</option></select></label>
       </div>
     </header>
     <p id="description"></p>
     <section id="groups" aria-label="打开的编辑器标签"></section>
   </main>
+  <script nonce="${nonce}">window.__i18n = ${JSON.stringify(i18n)};</script>
   <script nonce="${nonce}">${scriptContent}</script>
 </body>
 </html>`;

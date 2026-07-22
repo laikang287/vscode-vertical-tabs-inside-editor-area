@@ -37,6 +37,17 @@ const ptBr: LocaleStrings = {
   workspaceRoot: 'Raiz do espaço de trabalho',
   noExtension: 'Sem extensão',
   editorGroup: 'Grupo de editores {0}',
+  groupModeLabel: "Agrupamento",
+  groupModeVscode: "Seguir VS Code",
+  groupModeManual: "Manual",
+  groupModeParentDir: "Diretório pai",
+  groupModeFileType: "Tipo de arquivo",
+  sortModeLabel: "Ordenação",
+  sortModeNone: "Manual",
+  sortModeModifiedAsc: "Modificação (crescente)",
+  sortModeModifiedDesc: "Modificação (decrescente)",
+  sortModeNameAsc: "Nome (crescente)",
+  sortModeNameDesc: "Nome (decrescente)",
 };
 
 export default ptBr;

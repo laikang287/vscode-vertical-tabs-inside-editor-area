@@ -37,6 +37,17 @@ const ko: LocaleStrings = {
   workspaceRoot: '작업 영역 루트',
   noExtension: '확장자 없음',
   editorGroup: '편집기 그룹 {0}',
+  groupModeLabel: "그룹화",
+  groupModeVscode: "VS Code 따르기",
+  groupModeManual: "수동",
+  groupModeParentDir: "상위 디렉토리",
+  groupModeFileType: "파일 유형",
+  sortModeLabel: "정렬",
+  sortModeNone: "수동",
+  sortModeModifiedAsc: "수정 시간 (오름차순)",
+  sortModeModifiedDesc: "수정 시간 (내림차순)",
+  sortModeNameAsc: "이름 (오름차순)",
+  sortModeNameDesc: "이름 (내림차순)",
 };
 
 export default ko;

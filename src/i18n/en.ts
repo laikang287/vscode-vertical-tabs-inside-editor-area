@@ -37,6 +37,17 @@ const en: LocaleStrings = {
   workspaceRoot: 'Workspace root',
   noExtension: 'No extension',
   editorGroup: 'Editor Group {0}',
+  groupModeLabel: "Grouping",
+  groupModeVscode: "Follow VS Code",
+  groupModeManual: "Manual",
+  groupModeParentDir: "Parent directory",
+  groupModeFileType: "File type",
+  sortModeLabel: "Sorting",
+  sortModeNone: "Manual",
+  sortModeModifiedAsc: "Modified (ascending)",
+  sortModeModifiedDesc: "Modified (descending)",
+  sortModeNameAsc: "Name (ascending)",
+  sortModeNameDesc: "Name (descending)",
 };
 
 export default en;

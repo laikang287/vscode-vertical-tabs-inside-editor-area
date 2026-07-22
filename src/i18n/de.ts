@@ -37,6 +37,17 @@ const de: LocaleStrings = {
   workspaceRoot: 'Arbeitsbereichsstamm',
   noExtension: 'Keine Erweiterung',
   editorGroup: 'Editor-Gruppe {0}',
+  groupModeLabel: "Gruppierung",
+  groupModeVscode: "VS Code folgen",
+  groupModeManual: "Manuell",
+  groupModeParentDir: "Übergeordneter Ordner",
+  groupModeFileType: "Dateityp",
+  sortModeLabel: "Sortierung",
+  sortModeNone: "Manuell",
+  sortModeModifiedAsc: "Änderungsdatum (aufsteigend)",
+  sortModeModifiedDesc: "Änderungsdatum (absteigend)",
+  sortModeNameAsc: "Name (aufsteigend)",
+  sortModeNameDesc: "Name (absteigend)",
 };
 
 export default de;

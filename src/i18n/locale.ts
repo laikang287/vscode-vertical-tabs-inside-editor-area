@@ -35,6 +35,17 @@ export interface LocaleStrings {
   readonly workspaceRoot: string;
   readonly noExtension: string;
   readonly editorGroup: string;
+  readonly groupModeLabel: string;
+  readonly groupModeVscode: string;
+  readonly groupModeManual: string;
+  readonly groupModeParentDir: string;
+  readonly groupModeFileType: string;
+  readonly sortModeLabel: string;
+  readonly sortModeNone: string;
+  readonly sortModeModifiedAsc: string;
+  readonly sortModeModifiedDesc: string;
+  readonly sortModeNameAsc: string;
+  readonly sortModeNameDesc: string;
 }
 
 export type SupportedLocale =

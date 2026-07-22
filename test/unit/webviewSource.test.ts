@@ -143,9 +143,9 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
 
   assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊞<\/button>/);
  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊟<\/button>/);
-  assert.match(panelSource, /<span>Grouping<\/span><select id="group-mode">/);
-  assert.match(panelSource, /<span>Sorting<\/span><select id="sort-mode">/);
-  assert.match(panelSource, /<option value="none">Manual<\/option>/);
+  assert.match(panelSource, /<span>\$\{i18n\.groupModeLabel\}<\/span><select id="group-mode">/);
+  assert.match(panelSource, /<span>\$\{i18n\.sortModeLabel\}<\/span><select id="sort-mode">/);
+  assert.match(panelSource, /<option value="none">\$\{i18n\.sortModeNone\}<\/option>/);
  assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLElement>\('#toolbar-controls'\)/);

@@ -37,6 +37,17 @@ const zhCn: LocaleStrings = {
   workspaceRoot: '工作区根目录',
   noExtension: '无扩展名',
   editorGroup: '编辑器组 {0}',
+  groupModeLabel: "分组方式",
+  groupModeVscode: "跟随 VS Code",
+  groupModeManual: "手动分组",
+  groupModeParentDir: "按父目录",
+  groupModeFileType: "按文件类型",
+  sortModeLabel: "排序方式",
+  sortModeNone: "手动排序",
+  sortModeModifiedAsc: "修改时间 (升序)",
+  sortModeModifiedDesc: "修改时间 (降序)",
+  sortModeNameAsc: "名称 (升序)",
+  sortModeNameDesc: "名称 (降序)",
 };
 
 export default zhCn;

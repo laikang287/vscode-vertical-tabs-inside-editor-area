@@ -37,6 +37,17 @@ const ru: LocaleStrings = {
   workspaceRoot: 'Корень рабочей области',
   noExtension: 'Без расширения',
   editorGroup: 'Группа редакторов {0}',
+  groupModeLabel: "Группировка",
+  groupModeVscode: "Следовать VS Code",
+  groupModeManual: "Вручную",
+  groupModeParentDir: "Родительский каталог",
+  groupModeFileType: "Тип файла",
+  sortModeLabel: "Сортировка",
+  sortModeNone: "Вручную",
+  sortModeModifiedAsc: "Изменение (возрастание)",
+  sortModeModifiedDesc: "Изменение (убывание)",
+  sortModeNameAsc: "Имя (возрастание)",
+  sortModeNameDesc: "Имя (убывание)",
 };
 
 export default ru;
