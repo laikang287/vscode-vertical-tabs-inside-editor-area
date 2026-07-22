@@ -114,9 +114,12 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
   assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
   assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
+  assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
   assert.match(properties['verticalTabs.tabWidthRatio']?.markdownDescription ?? '', /20%/);
   assert.match(panelSource, /vscode\.workspace\.onDidChangeConfiguration/);
   assert.match(panelSource, /this\.manualGroups\.splice\(0, this\.manualGroups\.length\)/);
+  assert.match(panelSource, /this\.toolbarControlsVisible = readDefaultToolbarControlsVisible\(\)/);
+  assert.match(panelSource, /this\.persistToolbarControlsVisible\(\)/);
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
@@ -143,8 +146,14 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /<option value="none">手工排序<\/option>/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
+  assert.match(webviewSource, /querySelector<HTMLElement>\('#toolbar-controls'\)/);
+  assert.match(webviewSource, /querySelector<HTMLButtonElement>\('#toggle-toolbar-controls'\)/);
   assert.match(webviewSource, /type: 'setGroupMode', groupMode: groupModeSelect\.value as GroupMode/);
   assert.match(webviewSource, /type: 'setSortMode', sortMode: sortModeSelect\.value as SortMode/);
+  assert.match(webviewSource, /type: 'setToolbarControlsVisible', visible/);
+  assert.match(webviewSource, /setToolbarControlsVisible\(message\.snapshot\.toolbarControlsVisible\)/);
+  assert.match(panelSource, /id="toggle-toolbar-controls"/);
+  assert.match(panelSource, /id="toolbar-controls" class="toolbar-selects"/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '分组方式'/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
 });
@@ -355,12 +364,19 @@ test('webview collapses an existing multi-selection on click while retaining blo
   assert.doesNotMatch(source, /const relativeY = /);
   assert.doesNotMatch(source, /const dragHandle = document\.createElement/);
   assert.match(source, /activate\.addEventListener\('pointerdown'/);
+  assert.match(source, /activate\.addEventListener\('pointerup'/);
   assert.match(source, /if \(event\.button !== 0\) return/);
   assert.match(source, /标签激活按钮发送单次激活请求/);
   assert.match(source, /activate\.addEventListener\('click'/);
   assert.match(source, /if \(event\.detail === 0\) \{\s*selectSingle\(tab\);\s*requestActivation\(\);/);
-  assert.match(source, /preserveMultiSelectionOnPointerDown = true;\s*return;/);
-  assert.match(source, /else if \(preserveMultiSelectionOnPointerDown\) \{\s*preserveMultiSelectionOnPointerDown = false;\s*selectSingle\(tab\);\s*requestActivation\(\);/);
+  assert.match(source, /preserveMultiSelectionOnPointerDown = true;[\s\S]+?activate\.setPointerCapture\(event\.pointerId\);\s*return;/);
+  assert.match(source, /const collapsePreservedMultiSelection = \(\) => \{[\s\S]+?preserveMultiSelectionOnPointerDown = false;[\s\S]+?selectSingle\(tab\);[\s\S]+?requestActivation\(\);/);
+  assert.match(source, /window\.setTimeout\(collapsePreservedMultiSelection, 0\)/);
+  assert.match(source, /else if \(preserveMultiSelectionOnPointerDown\) \{\s*collapsePreservedMultiSelection\(\);/);
+  assert.match(source, /if \(preserveMultiSelectionOnPointerDown\) draggedAfterPreservePointerDown = true/);
+  assert.match(source, /activate\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(source, /const cancelledPreservedDrag = preserveMultiSelectionOnPointerDown[\s\S]+?event\.dataTransfer\?\.dropEffect[\s\S]+?=== 'none'/);
+  assert.match(source, /if \(cancelledPreservedDrag\) \{[\s\S]+?draggedAfterPreservePointerDown = false;[\s\S]+?collapsePreservedMultiSelection\(\);/);
   assert.match(source, /classList\.remove\('is-selected', 'is-multi-selected'\)/);
   assert.match(source, /const requestId = nextActivateRequestId\(\)/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
@@ -441,6 +457,20 @@ test('extension restores the active tab after syncing sorted VS Code tab order',
   assert.match(source, /function findTabByIdentity\(identity: TabTargetIdentity\): vscode\.Tab \| undefined/);
 });
 
+test('manual grouping places newly opened tabs at the root manual-order tail', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /vscode\.window\.tabGroups\.onDidChangeTabs\(\(event\) =>/);
+  assert.match(source, /private applyManualGroupLifecycle\(event: vscode\.TabChangeEvent\): boolean/);
+  assert.match(source, /for \(const tab of event\.closed\)[\s\S]+?this\.clearManualGroupIdentity\(targetIdentity\(tab\)\)/);
+  assert.match(source, /const openedGroupId = undefined/);
+  assert.match(source, /for \(const tab of event\.opened\)[\s\S]+?this\.setManualGroup\(identity, openedGroupId\)/);
+  assert.match(source, /this\.insertManualOrder\(openedGroupId \?\? '__ungrouped', key, undefined\)/);
+  assert.doesNotMatch(source, /manualInsertionGroupId/);
+  assert.doesNotMatch(source, /focusedManualGroupIdFromSnapshot/);
+  assert.doesNotMatch(source, /focusedManualGroupIdFromLiveTabs/);
+});
+
 test('extension logs activation request diagnostics and validates the final active tab', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
@@ -494,9 +524,20 @@ test('dragging shows a bright insertion line at the exact before or after edge',
   assert.match(source, /dragInsertionEdge\(event\.clientY, bounds\.top, bounds\.height\)/);
   assert.match(source, /edge === 'before' \? bounds\.top : bounds\.bottom/);
   assert.match(source, /function beforeTargetForDrop[\s\S]+group\.tabs\.slice\(tabIndex \+ 1\)/);
-  assert.match(source, /function showGroupEndDropIndicator/);
   assert.match(source, /document\.addEventListener\('dragend', \(\) => clearDropIndicator\(\)\)/);
   assert.match(style, /\.tab-drop-indicator \{[\s\S]+background: var\(--vscode-focusBorder, #007fd4\);[\s\S]+height: 2px;/);
+});
+
+test('dragging to a group without a precise position highlights the group instead of an insertion line', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /function handleGroupDragOver[\s\S]+showGroupDropHighlight\(event\.currentTarget as HTMLElement\)/);
+  assert.match(source, /capability === 'moveGroup' \|\| capability === 'moveDirectory'[\s\S]+showGroupDropHighlight\(row\.closest<HTMLElement>\('\.tab-group'\) \?\? row\)/);
+  assert.doesNotMatch(source, /function showGroupEndDropIndicator/);
+  assert.match(source, /function showGroupDropHighlight[\s\S]+classList\.add\('is-drop-target'\)/);
+  assert.match(source, /function clearGroupDropHighlight[\s\S]+classList\.remove\('is-drop-target'\)/);
+  assert.match(style, /\.tab-group\.is-drop-target > \.group-header \{[\s\S]+outline: 1px solid var\(--vscode-focusBorder, #007fd4\);/);
 });
 
 test('parent-directory file collisions require confirmation and replace related tabs', () => {

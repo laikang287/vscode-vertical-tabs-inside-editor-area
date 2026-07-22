@@ -29,6 +29,7 @@ const TITLE = 'Vertical Tabs';
 const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
 const GROUP_MODE_STORAGE_KEY = 'verticalTabs.groupMode';
 const SORT_MODE_STORAGE_KEY = 'verticalTabs.sortMode';
+const TOOLBAR_CONTROLS_VISIBLE_STORAGE_KEY = 'verticalTabs.toolbarControlsVisible';
 const MANUAL_GROUPS_STORAGE_KEY = 'verticalTabs.manualGroups';
 const MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY = 'verticalTabs.manualGroupByIdentity';
 const MANUAL_ORDER_BY_GROUP_STORAGE_KEY = 'verticalTabs.manualOrderByGroup';
@@ -71,9 +72,10 @@ export class VerticalTabsPanel {
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, toolbarControlsVisible: true, tabs: [], manualGroups: [], displayGroups: [] };
   private groupMode: GroupMode;
   private sortMode: SortMode;
+  private toolbarControlsVisible: boolean;
   private readonly manualGroups: ManualTabGroup[];
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
@@ -87,6 +89,7 @@ export class VerticalTabsPanel {
     this.rememberStateEnabled = shouldRememberState();
     this.groupMode = readGroupMode(context);
     this.sortMode = readSortMode(context);
+    this.toolbarControlsVisible = readToolbarControlsVisible(context);
     this.manualGroups = this.rememberStateEnabled ? readManualGroups(context) : [];
     this.manualGroupByIdentity = this.rememberStateEnabled ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
     this.manualOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
@@ -97,7 +100,9 @@ export class VerticalTabsPanel {
       this.panel.webview.onDidReceiveMessage((message: unknown) => {
         void this.handleMessage(message).catch((error) => logError('处理 Webview 消息失败', error));
       }),
-      vscode.window.tabGroups.onDidChangeTabs(() => this.scheduleRefresh()),
+      vscode.window.tabGroups.onDidChangeTabs((event) => {
+        void this.handleTabChange(event).catch((error) => logError('处理 VS Code 标签变化失败', error));
+      }),
       vscode.window.tabGroups.onDidChangeTabGroups(() => {
         this.scheduleRefresh();
         this.scheduleMinimizedWidthCorrection('tabGroupsChanged');
@@ -659,11 +664,52 @@ export class VerticalTabsPanel {
       groupMode: this.groupMode,
       sortMode: this.sortMode,
       rememberState: shouldRememberState(),
+      toolbarControlsVisible: this.toolbarControlsVisible,
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
     });
     logDebug('标签快照创建完成', { revision, visibleTabs: snapshot.tabs.length, displayGroups: snapshot.displayGroups.length });
     return snapshot;
+  }
+
+  private async handleTabChange(event: vscode.TabChangeEvent): Promise<void> {
+    const changedManualState = this.groupMode === 'manual' && this.applyManualGroupLifecycle(event);
+    if (changedManualState) {
+      await this.persistManualState();
+    }
+    this.scheduleRefresh();
+  }
+
+  private applyManualGroupLifecycle(event: vscode.TabChangeEvent): boolean {
+    let changed = false;
+    const openedGroupId = undefined;
+    for (const tab of event.closed) {
+      if (isVerticalTabsPanel(tab)) continue;
+      changed = this.clearManualGroupIdentity(targetIdentity(tab)) || changed;
+    }
+    for (const tab of event.opened) {
+      if (isVerticalTabsPanel(tab)) continue;
+      const identity = targetIdentity(tab);
+      const key = identityKey(identity);
+      const previousGroupId = this.manualGroupByIdentity.get(key);
+      if (previousGroupId !== openedGroupId) {
+        this.setManualGroup(identity, openedGroupId);
+        changed = true;
+      }
+      if (this.sortMode === 'none') {
+        changed = this.removeManualOrderKey(key) || changed;
+        this.insertManualOrder(openedGroupId ?? '__ungrouped', key, undefined);
+        changed = true;
+      }
+    }
+    if (changed) {
+      logDebug('已按当前激活标签更新手动分组生命周期', {
+        opened: event.opened.length,
+        closed: event.closed.length,
+        openedGroupId,
+      });
+    }
+    return changed;
   }
 
   private async toSnapshotTabSafe(tab: vscode.Tab): Promise<SnapshotSourceTab> {
@@ -787,6 +833,14 @@ export class VerticalTabsPanel {
       if (this.groupMode === 'vscode') {
         await this.syncVsCodeTabOrder();
       }
+      await this.refresh({ reason: 'operation' });
+      return;
+    }
+
+    if (message.type === 'setToolbarControlsVisible') {
+      this.toolbarControlsVisible = message.visible;
+      await this.persistToolbarControlsVisible();
+      logInfo('Toggle vertical tabs toolbar controls visibility', { visible: message.visible });
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -1020,9 +1074,11 @@ export class VerticalTabsPanel {
 
     if (!rememberStateEnabled && (memoryChanged
       || event.affectsConfiguration('verticalTabs.defaultGroupMode')
-      || event.affectsConfiguration('verticalTabs.defaultSortMode'))) {
+      || event.affectsConfiguration('verticalTabs.defaultSortMode')
+      || event.affectsConfiguration('verticalTabs.defaultToolbarControlsVisible'))) {
       this.groupMode = readDefaultGroupMode();
       this.sortMode = readDefaultSortMode();
+      this.toolbarControlsVisible = readDefaultToolbarControlsVisible();
       this.manualGroups.splice(0, this.manualGroups.length);
       this.manualGroupByIdentity.clear();
       this.manualOrderByGroup.clear();
@@ -1035,6 +1091,7 @@ export class VerticalTabsPanel {
       await Promise.all([
         this.persistGroupMode(),
         this.persistSortMode(),
+        this.persistToolbarControlsVisible(),
         this.persistManualState(),
         this.persistPinnedGroups(),
       ]);
@@ -1114,6 +1171,23 @@ export class VerticalTabsPanel {
     const key = identityKey(identity);
     if (groupId) this.manualGroupByIdentity.set(key, groupId);
     else this.manualGroupByIdentity.delete(key);
+  }
+
+  private clearManualGroupIdentity(identity: TabTargetIdentity): boolean {
+    const key = identityKey(identity);
+    const removedGroup = this.manualGroupByIdentity.delete(key);
+    const removedOrder = this.removeManualOrderKey(key);
+    return removedGroup || removedOrder;
+  }
+
+  private removeManualOrderKey(key: string): boolean {
+    let changed = false;
+    for (const [groupId, order] of this.manualOrderByGroup) {
+      if (!order.includes(key)) continue;
+      this.manualOrderByGroup.set(groupId, order.filter((candidate) => candidate !== key));
+      changed = true;
+    }
+    return changed;
   }
 
   private async moveManualTab(target: TabTarget, groupId: string | undefined, beforeTarget: TabTarget | undefined): Promise<void> {
@@ -1405,6 +1479,10 @@ export class VerticalTabsPanel {
     this.manualOrderByGroup.set(groupId, current);
   }
 
+  private normalizeManualGroupId(groupId: string | undefined): string | undefined {
+    return groupId && this.manualGroups.some((group) => group.id === groupId) ? groupId : undefined;
+  }
+
   private async moveEditorWithinVsCode(target: TabTarget, destinationGroupId: string | undefined, beforeTarget: TabTarget | undefined, stableDestination?: vscode.TabGroup): Promise<void> {
     const tab = this.resolveTab(target);
     if (!tab || !isActivatableTabForCommands(tab)) {
@@ -1669,6 +1747,10 @@ export class VerticalTabsPanel {
     if (shouldRememberState()) await this.context.workspaceState.update(SORT_MODE_STORAGE_KEY, this.sortMode);
   }
 
+  private async persistToolbarControlsVisible(): Promise<void> {
+    if (shouldRememberState()) await this.context.workspaceState.update(TOOLBAR_CONTROLS_VISIBLE_STORAGE_KEY, this.toolbarControlsVisible);
+  }
+
   private async persistPinnedGroups(): Promise<void> {
     if (shouldRememberState()) await this.context.workspaceState.update(PINNED_GROUP_IDS_STORAGE_KEY, Array.from(this.pinnedGroupIds));
   }
@@ -1879,10 +1961,11 @@ export class VerticalTabsPanel {
   <main class="vertical-tabs" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
+        <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="Toggle grouping and sorting controls" aria-label="Toggle grouping and sorting controls">□</button>
         <button id="expand-all" class="toolbar-icon" type="button" title="展开所有分组" aria-label="展开所有分组">⊞</button>
         <button id="collapse-all" class="toolbar-icon" type="button" title="折叠所有分组" aria-label="折叠所有分组">⊟</button>
       </div>
-      <div class="toolbar-selects">
+      <div id="toolbar-controls" class="toolbar-selects">
         <label class="toolbar-field" for="group-mode"><span>分组方式</span><select id="group-mode"><option value="vscode">跟随 VS Code</option><option value="manual">手动分组</option><option value="parentDir">按父目录</option><option value="fileType">按文件类型</option></select></label>
         <label class="toolbar-field" for="sort-mode"><span>排序方式</span><select id="sort-mode"><option value="none">手工排序</option><option value="modifiedAsc">修改时间正序</option><option value="modifiedDesc">修改时间逆序</option><option value="nameAsc">文件名正序</option><option value="nameDesc">文件名逆序</option></select></label>
       </div>
@@ -2493,6 +2576,12 @@ function readSortMode(context: vscode.ExtensionContext): SortMode {
   return isSortMode(value) ? value : readDefaultSortMode();
 }
 
+function readToolbarControlsVisible(context: vscode.ExtensionContext): boolean {
+  if (!shouldRememberState()) return readDefaultToolbarControlsVisible();
+  const value = context.workspaceState.get<boolean>(TOOLBAR_CONTROLS_VISIBLE_STORAGE_KEY);
+  return typeof value === 'boolean' ? value : readDefaultToolbarControlsVisible();
+}
+
 function readManualGroups(context: vscode.ExtensionContext): ManualTabGroup[] {
   const value = context.workspaceState.get<unknown>(MANUAL_GROUPS_STORAGE_KEY);
   if (!Array.isArray(value)) return [];
@@ -2534,6 +2623,11 @@ function readDefaultGroupMode(): GroupMode {
 function readDefaultSortMode(): SortMode {
   const value = vscode.workspace.getConfiguration('verticalTabs').get<SortMode>('defaultSortMode', 'none');
   return isSortMode(value) ? value : 'none';
+}
+
+function readDefaultToolbarControlsVisible(): boolean {
+  const value = vscode.workspace.getConfiguration('verticalTabs').get<unknown>('defaultToolbarControlsVisible', true);
+  return typeof value === 'boolean' ? value : true;
 }
 
 function isGroupMode(value: unknown): value is GroupMode {

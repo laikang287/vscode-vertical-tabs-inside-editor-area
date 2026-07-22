@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.68",
+  "version": "0.1.70",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -113,6 +113,12 @@
           ],
           "scope": "window",
           "markdownDescription": "默认排序方式。默认为手工排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。"
+        },
+        "verticalTabs.defaultToolbarControlsVisible": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Default visibility for the grouping and sorting dropdown controls. When automatic memory is enabled, this is used only when no saved visibility exists; when automatic memory is disabled, this default is always used."
         }
       }
     },

@@ -244,3 +244,29 @@ test('renders manual ungrouped tabs at the tree root without an ungrouped header
   assert.equal(workGroup?.showHeader, true);
   assert.deepEqual(workGroup?.tabs.map((tab) => tab.label), ['index.ts']);
 });
+
+test('places newly opened manual-order root tabs after root files and before manual groups', () => {
+  const manualSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: '标签1', path: 'one.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/one.ts' } },
+    { label: '标签2', path: 'two.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/two.ts' } },
+    { label: '标签3', path: 'three.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/three.ts' } },
+    { label: '分组1文件', path: 'group-one.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/group-one.ts' }, manualGroupId: 'group-1' },
+    { label: '分组2文件', path: 'group-two.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/group-two.ts' }, manualGroupId: 'group-2' },
+    { label: '新标签', path: 'new.ts', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/new.ts' } },
+  ] }];
+  const order = new Map<string, string[]>([['__ungrouped', [
+    JSON.stringify({ kind: 'text', uri: 'file:///workspace/one.ts' }),
+    JSON.stringify({ kind: 'text', uri: 'file:///workspace/two.ts' }),
+    JSON.stringify({ kind: 'text', uri: 'file:///workspace/three.ts' }),
+    JSON.stringify({ kind: 'text', uri: 'file:///workspace/new.ts' }),
+  ]]]);
+
+  const snapshot = buildSnapshot(manualSource, 25, [
+    { id: 'group-1', name: '分组1', collapsed: false },
+    { id: 'group-2', name: '分组2', collapsed: false },
+  ], { groupMode: 'manual', sortMode: 'none', manualOrderByGroup: order });
+
+  assert.deepEqual(snapshot.displayGroups.map((group) => group.id), ['__ungrouped', 'group-1', 'group-2']);
+  assert.deepEqual(snapshot.displayGroups[0]?.tabs.map((tab) => tab.label), ['标签1', '标签2', '标签3', '新标签']);
+  assert.deepEqual(snapshot.displayGroups.slice(1).map((group) => group.title), ['分组1', '分组2']);
+});
