@@ -1,3 +1,10 @@
+---
+date created: 2026-07-23 03:12
+author: null
+tags: null
+source: null
+---
+
 # 项目协作规范
 
 ## 项目目标
@@ -35,9 +42,9 @@
 ### 分组与状态规则
 
 - 关闭标签不得删除其所属的空分组；空分组由用户显式删除。
+
 - 固定和分组等 UI 偏好应持久化，并明确区分用户级设置与工作区级设置。
 
- 
 ## 目录职责
 
 - `src/`：扩展宿主代码和 Webview TypeScript 源码。
@@ -78,13 +85,19 @@
 每项独立功能完成后，必须依序执行：
 
 1. 递增 `package.json` 的 `version`；每次构建都必须使用新版本号，VSIX 文件名必须与该版本号一致。
+
 2. `npm run verify`；任何失败都必须先修复，不能提交。
+
 3. 确认 `dist/vertical-tabs-in-editor-area-<version>.vsix` 已生成且 VSIX 内容校验通过。
+
 4. 执行 `git status` 与 `git diff --check`，只暂存该功能相关文件；不得提交 `node_modules/`、`out/` 或 `dist/*.vsix`。
+
 5. 使用 Conventional Commit 自动创建 Git 提交。初版工程固定使用 `chore: scaffold VS Code extension`；后续用户可见功能使用 `feat:`，修复使用 `fix:`。Git 提交说明使用中文
+
 6. 在交付说明中写明执行过的测试和生成的 VSIX 绝对路径。
 
 7. 只要涉及 `package.json` 版本号变更，就必须执行 `npm run verify` 构建新 VSIX，除非用户明确指明本次不需要构建。
+
 8. 版本号分3段，第1段由用户手工自增，第2段当新增功能是自增，第三段修复bug时自增
 
 ## VS Code 与 Webview 边界
@@ -94,3 +107,22 @@
 - Webview 必须使用 nonce、严格 CSP、最小脚本权限，且仅加载由 `asWebviewUri` 生成的本地资源。
 - 对所有来自 Webview 的消息先进行运行时校验；未知或无效消息不得改变状态。
 - 禁止通过 Webview 读取、模拟或覆盖用户工作区文件。
+
+## README文档
+-  `README.zh-CN.md` 文件只能手工编写，AI不可以修改此文档
+-  `README.zh-CN.md` 为原本文档，其它语言版本的文档均由  `README.zh-CN.md` 使用AI翻译而来
+- README 顶部必须保留 GitHub 可用的语言导航链接，至少覆盖仓库当前支持的所有 README 语言版本。将 `README.zh-CN.md` 自动翻译为其他语言 README ，其他语言文件中的以下导航块必须保持原样，不得翻译链接文字、路径、标点或标签结构：
+
+```html
+<p align="center">
+  <a href="README.md">English</a> ·
+  <a href="README.zh-CN.md">简体中文（规范源）</a> ·
+  <a href="docs/README.zh-TW.md">繁體中文</a> ·
+  <a href="docs/README.ja.md">日本語</a> ·
+  <a href="docs/README.ko.md">한국어</a> ·
+  <a href="docs/README.es.md">Español</a> ·
+  <a href="docs/README.fr.md">Français</a> ·
+  <a href="docs/README.de.md">Deutsch</a> ·
+  <a href="docs/README.ru.md">Русский</a>
+</p>
+```

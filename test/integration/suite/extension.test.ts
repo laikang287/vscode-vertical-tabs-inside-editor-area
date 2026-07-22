@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 
 suite('Vertical Tabs extension', () => {
   test('activates and exposes P0 commands', async () => {
-    const extension = vscode.extensions.getExtension('local.vertical-tabs-in-editor-area');
+    const extension = vscode.extensions.getExtension('laikang287.vertical-tabs-in-editor-area');
     assert.ok(extension, 'The extension should be discoverable.');
 
     await extension.activate();
