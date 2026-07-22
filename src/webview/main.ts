@@ -1,4 +1,5 @@
 import type { ExtensionMessage, GroupMode, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import { TabSelection } from './TabSelection';
 
 declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
 
@@ -22,8 +23,7 @@ let draggedTargets: readonly TabTarget[] = [];
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
-const selectedTabKeys = new Set<string>();
-let lastSelectedTabKey: string | undefined;
+const selection = new TabSelection();
 
 window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
@@ -55,6 +55,10 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
     return;
   }
   latestSnapshot = message.snapshot;
+  if (!message.snapshot.rememberState && collapsedGroups.size > 0) {
+    collapsedGroups.clear();
+    vscode.setState({});
+  }
   pruneSelectedTabs(message.snapshot.tabs);
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
   if (sortModeSelect) sortModeSelect.value = message.snapshot.sortMode;
@@ -137,6 +141,14 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     name.className = 'group-name';
     name.textContent = group.title;
     main.append(name);
+    if (group.isPinned) {
+      const pin = document.createElement('span');
+      pin.className = 'group-pin-indicator';
+      pin.textContent = '📌';
+      pin.title = '固定分组';
+      pin.setAttribute('aria-label', '固定分组');
+      main.append(pin);
+    }
     if (group.description) {
       const detail = document.createElement('span');
       detail.className = 'group-description';
@@ -144,18 +156,16 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
       main.append(detail);
     }
     header.append(main);
-    if (group.isManual && group.id !== '__ungrouped') {
-      const actions = document.createElement('div');
-      actions.className = 'group-actions';
-      const remove = button('×', '关闭分组内所有标签并删除分组');
-      remove.className = 'group-action tab-action';
-      remove.addEventListener('click', (event) => {
-        event.stopPropagation();
-        vscode.postMessage({ type: 'deleteGroup', groupId: group.id });
-      });
-      actions.append(remove);
-      header.append(actions);
-    }
+    const actions = document.createElement('div');
+    actions.className = 'group-actions';
+    const remove = button('×', '关闭分组内所有标签并删除分组');
+    remove.className = 'group-action tab-action';
+    remove.addEventListener('click', (event) => {
+      event.stopPropagation();
+      vscode.postMessage({ type: 'closeGroup', groupId: group.id });
+    });
+    actions.append(remove);
+    header.append(actions);
     section.append(header);
   }
   if (!collapsed) appendTabList(section, group.tabs, group, group.showHeader ? 1 : 0);
@@ -197,6 +207,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   activate.type = 'button';
   activate.disabled = !tab.isActivatable;
   activate.title = activationTitle(tab);
+  let preserveMultiSelectionOnPointerDown = false;
   const requestActivation = () => {
     const requestId = nextActivateRequestId();
     logToExtension('debug', '标签激活按钮发送单次激活请求', targetDetails(tab.target, tab.label, requestId));
@@ -210,6 +221,14 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       updateSelection(tab, { shiftKey: event.shiftKey, toggleKey: event.ctrlKey || event.metaKey });
       return;
     }
+    if (isSelected(tab) && selectedTabsFor(tab).length > 1) {
+      // Keep the selected block intact until we know this is a click rather
+      // than the beginning of a drag. Dragstart then carries every selected
+      // target; an ordinary click collapses to one item below.
+      preserveMultiSelectionOnPointerDown = true;
+      requestActivation();
+      return;
+    }
     selectSingle(tab);
     requestActivation();
   });
@@ -217,7 +236,14 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
     // Mouse and pen activation is handled on pointerdown so a slight movement
     // cannot turn the gesture into a drag and swallow the only click. A
     // keyboard-generated click has detail=0 and still needs activation here.
-    if (event.detail === 0) requestActivation();
+    if (event.detail === 0) {
+      selectSingle(tab);
+      requestActivation();
+    } else if (preserveMultiSelectionOnPointerDown) {
+      preserveMultiSelectionOnPointerDown = false;
+      selectSingle(tab);
+      if (latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
+    }
   });
   const label = document.createElement('span');
   label.className = 'tab-label';
@@ -280,7 +306,8 @@ function openGroupCollapseKey(group: VerticalTabDisplayGroup): string {
 }
 
 function saveCollapsedGroups(): void {
-  vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
+  if (latestSnapshot?.rememberState) vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
+  else vscode.setState({});
 }
 
 function updateTreeActionState(): void {
@@ -307,7 +334,7 @@ function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): 
 function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void {
   if (!draggedTarget) return;
   event.preventDefault();
-  const groupId = latestSnapshot?.groupMode === 'manual' && group.id !== '__ungrouped' ? group.id : undefined;
+  const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
   logToExtension('debug', '标签拖拽投放到分组', dropDetails(event, draggedTarget, group.id));
   vscode.postMessage(draggedTargets.length > 1 ? { type: 'moveTabs', targets: draggedTargets, groupId } : { type: 'moveTab', target: draggedTarget, groupId });
 }
@@ -321,8 +348,8 @@ function handleTabDragOver(event: DragEvent, group: VerticalTabDisplayGroup): vo
 function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
   if (!draggedTarget) return;
   event.preventDefault();
-  if (sameTarget(draggedTarget, tab.target)) return;
-  const groupId = latestSnapshot?.groupMode === 'manual' && group.id !== '__ungrouped' ? group.id : undefined;
+  if (draggedTargets.some((target) => sameTarget(target, tab.target))) return;
+  const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
   logToExtension('debug', '标签拖拽排序请求', dropDetails(event, draggedTarget, group.id, tab.target));
   vscode.postMessage(draggedTargets.length > 1 ? { type: 'moveTabs', targets: draggedTargets, groupId, beforeTarget: tab.target } : { type: 'moveTab', target: draggedTarget, groupId, beforeTarget: tab.target });
 }
@@ -355,48 +382,16 @@ function closeSelectionButton(tab: VerticalTabItem): HTMLButtonElement {
 
 function postTarget(type: 'activateTab' | 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget): void { vscode.postMessage({ type, target }); }
 
-function tabKey(tab: VerticalTabItem): string {
-  return JSON.stringify(tab.target.identity);
-}
-
-function targetKey(target: TabTarget): string {
-  return JSON.stringify(target.identity);
-}
-
 function isSelected(tab: VerticalTabItem): boolean {
-  return selectedTabKeys.has(tabKey(tab));
+  return selection.isSelected(tab);
 }
 
 function selectSingle(tab: VerticalTabItem): void {
-  selectedTabKeys.clear();
-  selectedTabKeys.add(tabKey(tab));
-  lastSelectedTabKey = tabKey(tab);
+  selection.selectSingle(tab);
 }
 
 function updateSelection(tab: VerticalTabItem, keys: { readonly shiftKey: boolean; readonly toggleKey: boolean }): void {
-  const key = tabKey(tab);
-  if (keys.shiftKey && latestSnapshot) {
-    const visibleTabs = latestSnapshot.displayGroups.flatMap((group) => group.tabs);
-    const anchorIndex = lastSelectedTabKey ? visibleTabs.findIndex((candidate) => tabKey(candidate) === lastSelectedTabKey) : -1;
-    const targetIndex = visibleTabs.findIndex((candidate) => tabKey(candidate) === key);
-    if (anchorIndex >= 0 && targetIndex >= 0) {
-      selectedTabKeys.clear();
-      const [start, end] = anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-      for (const candidate of visibleTabs.slice(start, end + 1)) selectedTabKeys.add(tabKey(candidate));
-    } else {
-      selectedTabKeys.add(key);
-    }
-  } else if (keys.toggleKey) {
-    if (selectedTabKeys.has(key)) selectedTabKeys.delete(key);
-    else selectedTabKeys.add(key);
-    lastSelectedTabKey = key;
-  } else {
-    selectSingle(tab);
-  }
-  if (selectedTabKeys.size === 0) {
-    selectedTabKeys.add(key);
-    lastSelectedTabKey = key;
-  }
+  selection.update(selectableTabs(), tab, keys);
   if (latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
 }
 
@@ -405,19 +400,16 @@ function selectedTargetsFor(tab: VerticalTabItem): readonly TabTarget[] {
 }
 
 function selectedTabsFor(tab: VerticalTabItem): readonly VerticalTabItem[] {
-  if (!latestSnapshot || !selectedTabKeys.has(tabKey(tab))) return [tab];
-  const tabs = latestSnapshot.displayGroups
-    .flatMap((group) => group.tabs)
-    .filter((candidate) => selectedTabKeys.has(tabKey(candidate)));
-  return tabs.length > 0 ? tabs : [tab];
+  if (!latestSnapshot) return [tab];
+  return selection.selectedTabs(latestSnapshot.displayGroups.flatMap((group) => group.tabs), tab);
 }
 
 function pruneSelectedTabs(tabs: readonly VerticalTabItem[]): void {
-  const available = new Set(tabs.map(tabKey));
-  for (const key of Array.from(selectedTabKeys)) {
-    if (!available.has(key)) selectedTabKeys.delete(key);
-  }
-  if (lastSelectedTabKey && !available.has(lastSelectedTabKey)) lastSelectedTabKey = undefined;
+  selection.prune(tabs);
+}
+
+function selectableTabs(): readonly VerticalTabItem[] {
+  return latestSnapshot?.displayGroups.flatMap((group) => isGroupCollapsed(group) ? [] : group.tabs) ?? [];
 }
 
 function nextActivateRequestId(): string {
@@ -506,7 +498,7 @@ function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
 }
 
 function groupPinButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
-  const disabled = latestSnapshot?.groupMode === 'vscode';
+  const disabled = group.mode === 'vscode';
   const result = messageButton(group.isPinned ? '取消固定分组' : '固定分组', disabled ? '跟随 VS Code 分组时不能固定分组' : group.isPinned ? '取消固定分组' : '固定分组', { type: group.isPinned ? 'unpinGroup' : 'pinGroup', groupId: group.id });
   result.disabled = Boolean(disabled);
   return result;
@@ -537,7 +529,7 @@ function messageButton(label: string, title: string, message: unknown): HTMLButt
 }
 
 function sameTarget(left: TabTarget, right: TabTarget): boolean {
-  if (JSON.stringify(left.identity) === JSON.stringify(right.identity)) return true;
+  if (left.groupIndex === right.groupIndex && JSON.stringify(left.identity) === JSON.stringify(right.identity)) return true;
   return left.revision === right.revision && left.groupIndex === right.groupIndex && left.tabIndex === right.tabIndex;
 }
 

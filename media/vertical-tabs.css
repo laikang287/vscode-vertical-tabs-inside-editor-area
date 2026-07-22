@@ -103,12 +103,13 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-action { color: inherit; }
 .group-header .tab-action { line-height: 20px; min-width: 20px; padding: 0; }
 .group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-pin-indicator { flex: 0 0 auto; font-size: 11px; line-height: 18px; }
 .group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .tab-row { cursor: grab; display: flex; align-items: stretch; min-width: 0; }
 .tab-row:active { cursor: grabbing; }
 .tab-row.tree-level-1 { padding-left: 18px; }
-.tab-row:hover,
+.tab-row:hover { background: var(--vscode-list-hoverBackground); }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .tab-row.is-selected:not(.is-active) { background: var(--vscode-list-inactiveSelectionBackground); color: var(--vscode-list-inactiveSelectionForeground); }
 .tab-row.is-unavailable { opacity: .65; }

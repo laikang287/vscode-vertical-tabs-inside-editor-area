@@ -31,8 +31,9 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.match(webviewSource, /globalActionButton\('关闭全部'/);
 });
 
-test('manual group rename is exposed from the group context menu and group delete uses the close icon column', () => {
+test('every visible group header has a close icon and manual rename stays in the context menu', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
@@ -40,10 +41,71 @@ test('manual group rename is exposed from the group context menu and group delet
   assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
   assert.match(source, /const remove = button\('×', '关闭分组内所有标签并删除分组'\)/);
   assert.match(source, /remove\.className = 'group-action tab-action'/);
+  assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
+  assert.doesNotMatch(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
+  assert.match(panelSource, /message\.type === 'deleteGroup' \|\| message\.type === 'closeGroup'/);
+  assert.match(panelSource, /vscode\.window\.tabGroups\.close\(sourceGroup, true\)/);
+  assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
   assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; flex: 0 0 23px; justify-content: center; padding-right: 3px; \}/);
   assert.match(style, /\.group-header \.tab-action \{ line-height: 20px; min-width: 20px; padding: 0; \}/);
+});
+
+test('tab close buttons are always visible and context menu labels use the requested short wording', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(style, /\.tab-actions \{ opacity: 1; \}/);
+  assert.doesNotMatch(style, /\.tab-actions[^\n]*opacity:\s*0/);
+  assert.match(source, /actionButton\('关闭其它', '关闭其它', 'closeOthers'/);
+  assert.match(source, /actionButton\('关闭下侧', '关闭下侧', 'closeBelow'/);
+  assert.doesNotMatch(source, /关闭其它标签|关闭下侧标签/);
+});
+
+test('pinned groups render an indicator, sort first, and reject unsupported host messages', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /pin\.className = 'group-pin-indicator'/);
+  assert.match(source, /pin\.textContent = '📌'/);
+  assert.match(source, /const disabled = group\.mode === 'vscode'/);
+  assert.match(panelSource, /!displayGroup \|\| !displayGroup\.showHeader \|\| displayGroup\.mode === 'vscode'/);
+  assert.match(panelSource, /this\.pinnedGroupIds\.add\(message\.groupId\)/);
+});
+
+test('multi-selection drives batch close, pin, and cross-group drag messages through the host', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /const selection = new TabSelection\(\)/);
+  assert.match(source, /selection\.update\(selectableTabs\(\), tab, keys\)/);
+  assert.match(source, /preserveMultiSelectionOnPointerDown = true/);
+  assert.match(source, /dragstart[\s\S]+draggedTargets = selectedTargetsFor\(tab\)/);
+  assert.match(source, /type: 'closeTabs', targets/);
+  assert.match(source, /type: pinned \? 'unpinTabs' : 'pinTabs', targets/);
+  assert.match(source, /type: 'moveTabs', targets: draggedTargets, groupId/);
+  assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
+  assert.match(panelSource, /await this\.moveActiveEditorToGroup\(targetIdentity\(tab\), destination\)/);
+  assert.match(panelSource, /destinationTabs\.splice\([^\n]+\.\.\.movedKeys\)/);
+  assert.match(style, /\.tab-row\.is-active \{ background: var\(--vscode-list-activeSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-selected:not\(\.is-active\) \{ background: var\(--vscode-list-inactiveSelectionBackground\)/);
+});
+
+test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, { default: unknown; markdownDescription?: string }> } } };
+  const properties = manifest.contributes.configuration.properties;
+
+  assert.equal(properties['verticalTabs.rememberState']?.default, true);
+  assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
+  assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
+  assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
+  assert.match(properties['verticalTabs.tabWidthRatio']?.markdownDescription ?? '', /20%/);
+  assert.match(panelSource, /vscode\.workspace\.onDidChangeConfiguration/);
+  assert.match(panelSource, /this\.manualGroups\.splice\(0, this\.manualGroups\.length\)/);
+  assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
@@ -276,7 +338,8 @@ test('webview activates once on pointerdown while retaining full-row dragging an
   assert.match(source, /if \(event\.button !== 0\) return/);
   assert.match(source, /标签激活按钮发送单次激活请求/);
   assert.match(source, /activate\.addEventListener\('click'/);
-  assert.match(source, /if \(event\.detail === 0\) requestActivation\(\)/);
+  assert.match(source, /if \(event\.detail === 0\) \{\s*selectSingle\(tab\);\s*requestActivation\(\);/);
+  assert.match(source, /else if \(preserveMultiSelectionOnPointerDown\)/);
   assert.match(source, /const requestId = nextActivateRequestId\(\)/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target: tab\.target, requestId \}\)/);
   assert.doesNotMatch(source, /function suspendRowDrag/);

@@ -38,6 +38,7 @@ export interface SnapshotSourceGroup {
 export interface SnapshotBuildOptions {
   readonly groupMode?: GroupMode;
   readonly sortMode?: SortMode;
+  readonly rememberState?: boolean;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
 }
@@ -75,14 +76,14 @@ export function buildSnapshot(
   }));
 
   const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds);
-  return { revision, groupMode, sortMode, tabs, manualGroups, displayGroups };
+  return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, tabs, manualGroups, displayGroups };
 }
 
 export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: CloseAction, target?: VerticalTabItem['target']): VerticalTabItem['target'][] {
   if (action === 'closeSaved') return snapshot.tabs.filter((tab) => !tab.isDirty && !tab.isPinned).map((tab) => tab.target);
   if (action === 'closeAll') return snapshot.tabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
   if (!target) return [];
-  const selected = snapshot.tabs.find((tab) => sameIdentity(tab.target.identity, target.identity));
+  const selected = resolveSnapshotTarget(snapshot, target);
   if (!selected) return [];
   if (action === 'close') return [selected.target];
   const bucket = findDisplayBucket(snapshot, selected) ?? snapshot.tabs.filter((tab) => tab.manualGroupId === selected.manualGroupId);
@@ -95,15 +96,15 @@ export function selectCloseTargetsForTabs(snapshot: VerticalTabsSnapshot, action
   const selectedTabs = resolveSnapshotTargets(snapshot, targets);
   if (selectedTabs.length === 0) return [];
   if (action === 'close') return selectedTabs.map((tab) => tab.target);
-  const selectedKeys = new Set(selectedTabs.map((tab) => identityKey(tab.target.identity)));
+  const selectedKeys = new Set(selectedTabs.map((tab) => occurrenceKey(tab.target)));
   const result: VerticalTabItem[] = [];
   for (const group of snapshot.displayGroups) {
     const selectedIndexes = group.tabs
-      .map((tab, index) => selectedKeys.has(identityKey(tab.target.identity)) ? index : -1)
+      .map((tab, index) => selectedKeys.has(occurrenceKey(tab.target)) ? index : -1)
       .filter((index) => index >= 0);
     if (selectedIndexes.length === 0) continue;
     const candidates = action === 'closeOthers'
-      ? group.tabs.filter((tab) => !selectedKeys.has(identityKey(tab.target.identity)))
+      ? group.tabs.filter((tab) => !selectedKeys.has(occurrenceKey(tab.target)))
       : group.tabs.slice(Math.max(...selectedIndexes) + 1);
     result.push(...candidates.filter((tab) => !tab.isPinned));
   }
@@ -111,7 +112,7 @@ export function selectCloseTargetsForTabs(snapshot: VerticalTabsSnapshot, action
 }
 
 export function sameTarget(left: VerticalTabItem['target'], right: VerticalTabItem['target']): boolean {
-  if (sameIdentity(left.identity, right.identity)) return true;
+  if (left.groupIndex === right.groupIndex && sameIdentity(left.identity, right.identity)) return true;
   return left.revision === right.revision && left.groupIndex === right.groupIndex && left.tabIndex === right.tabIndex;
 }
 
@@ -167,9 +168,6 @@ function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: r
       isManual: false,
       isPinned: false,
     });
-  }
-  if (groups.length === 1) {
-    groups[0] = { ...groups[0], showHeader: false };
   }
   return groups;
 }
@@ -313,14 +311,14 @@ function orderManualTabs(tabs: readonly VerticalTabItem[], groupId: string, manu
 }
 
 function findDisplayBucket(snapshot: VerticalTabsSnapshot, selected: VerticalTabItem): readonly VerticalTabItem[] | undefined {
-  return snapshot.displayGroups.find((group) => group.tabs.some((tab) => sameIdentity(tab.target.identity, selected.target.identity)))?.tabs;
+  return snapshot.displayGroups.find((group) => group.tabs.some((tab) => occurrenceKey(tab.target) === occurrenceKey(selected.target)))?.tabs;
 }
 
 function resolveSnapshotTargets(snapshot: VerticalTabsSnapshot, targets: readonly VerticalTabItem['target'][]): VerticalTabItem[] {
   const result: VerticalTabItem[] = [];
   for (const target of targets) {
-    const tab = snapshot.tabs.find((candidate) => sameIdentity(candidate.target.identity, target.identity));
-    if (tab && !result.some((candidate) => sameIdentity(candidate.target.identity, tab.target.identity))) {
+    const tab = resolveSnapshotTarget(snapshot, target);
+    if (tab && !result.some((candidate) => occurrenceKey(candidate.target) === occurrenceKey(tab.target))) {
       result.push(tab);
     }
   }
@@ -330,11 +328,22 @@ function resolveSnapshotTargets(snapshot: VerticalTabsSnapshot, targets: readonl
 function uniqueTargets(targets: readonly VerticalTabItem['target'][]): VerticalTabItem['target'][] {
   const result: VerticalTabItem['target'][] = [];
   for (const target of targets) {
-    if (!result.some((candidate) => sameIdentity(candidate.identity, target.identity))) {
+    if (!result.some((candidate) => occurrenceKey(candidate) === occurrenceKey(target))) {
       result.push(target);
     }
   }
   return result;
+}
+
+function resolveSnapshotTarget(snapshot: VerticalTabsSnapshot, target: VerticalTabItem['target']): VerticalTabItem | undefined {
+  const sameGroup = snapshot.tabs.find((candidate) => candidate.target.groupIndex === target.groupIndex && sameIdentity(candidate.target.identity, target.identity));
+  if (sameGroup) return sameGroup;
+  const identityMatches = snapshot.tabs.filter((candidate) => sameIdentity(candidate.target.identity, target.identity));
+  return identityMatches.length === 1 ? identityMatches[0] : undefined;
+}
+
+function occurrenceKey(target: VerticalTabItem['target']): string {
+  return JSON.stringify([target.identity, target.groupIndex]);
 }
 
 function activationKind(tab: SnapshotSourceTab): TabActivationKind {

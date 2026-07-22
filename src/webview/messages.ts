@@ -19,7 +19,7 @@ export interface VerticalTabDisplayGroup {
   readonly isPinned: boolean;
 }
 export interface VerticalTabsSnapshot {
-  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode;
+  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly rememberState: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
 }
 export type WebviewMessage =
@@ -43,6 +43,7 @@ export type WebviewMessage =
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
 export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot };
+const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
@@ -56,7 +57,8 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if (value.type === 'railWidth' && isRailWidth(value.width)) return { type: 'railWidth', width: value.width };
   if (value.type === 'createGroup' && isName(value.name)) return { type: 'createGroup', name: value.name };
   if ((value.type === 'renameGroup') && isId(value.groupId) && isName(value.name)) return { type: 'renameGroup', groupId: value.groupId, name: value.name };
-  if ((value.type === 'deleteGroup' || value.type === 'closeGroup' || value.type === 'toggleGroup' || value.type === 'pinGroup' || value.type === 'unpinGroup') && isId(value.groupId)) return { type: value.type, groupId: value.groupId };
+  if ((value.type === 'deleteGroup' || value.type === 'toggleGroup') && isId(value.groupId)) return { type: value.type, groupId: value.groupId };
+  if ((value.type === 'closeGroup' || value.type === 'pinGroup' || value.type === 'unpinGroup') && isDisplayGroupId(value.groupId)) return { type: value.type, groupId: value.groupId };
   if (value.type === 'assignGroup' && isTabTarget(value.target) && (value.groupId === undefined || isId(value.groupId))) return { type: 'assignGroup', target: value.target, ...(value.groupId === undefined ? {} : { groupId: value.groupId }) };
   if ((value.type === 'pinTab' || value.type === 'unpinTab') && isTabTarget(value.target)) return { type: value.type, target: value.target };
   if ((value.type === 'pinTabs' || value.type === 'unpinTabs' || value.type === 'closeTabs' || value.type === 'closeOthersForTabs' || value.type === 'closeBelowForTabs') && isTabTargets(value.targets)) return { type: value.type, targets: value.targets };
@@ -82,6 +84,7 @@ function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' 
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }
+function isDisplayGroupId(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(value); }
 function isLogMessage(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
 function isLogDetails(value: unknown): value is string { return typeof value === 'string' && value.length <= 2000; }
 function isRequestId(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 80; }
@@ -93,7 +96,7 @@ function isTabTarget(value: unknown): value is TabTarget {
     && isTabTargetIdentity(value.identity);
 }
 function isTabTargets(value: unknown): value is readonly TabTarget[] {
-  return Array.isArray(value) && value.length > 0 && value.length <= 100 && value.every(isTabTarget);
+  return Array.isArray(value) && value.length > 0 && value.length <= MAX_BATCH_TAB_TARGETS && value.every(isTabTarget);
 }
 function isTabTargetIdentity(value: unknown): value is TabTargetIdentity {
   if (!isRecord(value) || typeof value.kind !== 'string') return false;

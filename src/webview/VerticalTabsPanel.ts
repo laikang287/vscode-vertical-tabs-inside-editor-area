@@ -65,24 +65,26 @@ export class VerticalTabsPanel {
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, tabs: [], manualGroups: [], displayGroups: [] };
   private groupMode: GroupMode;
   private sortMode: SortMode;
   private readonly manualGroups: ManualTabGroup[];
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
   private readonly pinnedGroupIds: Set<string>;
+  private rememberStateEnabled: boolean;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext,
   ) {
+    this.rememberStateEnabled = shouldRememberState();
     this.groupMode = readGroupMode(context);
     this.sortMode = readSortMode(context);
-    this.manualGroups = shouldRememberState() ? readManualGroups(context) : [];
-    this.manualGroupByIdentity = shouldRememberState() ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
-    this.manualOrderByGroup = shouldRememberState() ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
-    this.pinnedGroupIds = shouldRememberState() ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
+    this.manualGroups = this.rememberStateEnabled ? readManualGroups(context) : [];
+    this.manualGroupByIdentity = this.rememberStateEnabled ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
+    this.manualOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
+    this.pinnedGroupIds = this.rememberStateEnabled ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn });
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
@@ -91,6 +93,11 @@ export class VerticalTabsPanel {
       }),
       vscode.window.tabGroups.onDidChangeTabs(() => this.scheduleRefresh()),
       vscode.window.tabGroups.onDidChangeTabGroups(() => this.scheduleRefresh()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('verticalTabs')) {
+          void this.handleConfigurationChange(event).catch((error) => logError('应用垂直标签配置变更失败', error));
+        }
+      }),
     );
     this.configureWebview();
     this.scheduleInitialHostRefresh();
@@ -576,6 +583,7 @@ export class VerticalTabsPanel {
     const snapshot = buildSnapshot(groups, revision, this.manualGroups, {
       groupMode: this.groupMode,
       sortMode: this.sortMode,
+      rememberState: shouldRememberState(),
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
     });
@@ -751,31 +759,15 @@ export class VerticalTabsPanel {
       }
       return;
     }
-    if (message.type === 'deleteGroup') {
-      const index = this.manualGroups.findIndex((candidate) => candidate.id === message.groupId);
-      if (index >= 0) {
-        await this.closeTargets(this.targetsForDisplayGroup(message.groupId));
-        this.manualGroups.splice(index, 1);
-        for (const [key, groupId] of this.manualGroupByIdentity) {
-          if (groupId === message.groupId) this.manualGroupByIdentity.delete(key);
-        }
-        this.manualOrderByGroup.delete(message.groupId);
-        await this.persistManualState();
-        await this.refresh({ reason: 'operation' });
-        logInfo('删除手动标签分组', { groupId: message.groupId });
-      } else {
-        logWarn('删除手动标签分组失败：分组不存在', { groupId: message.groupId });
-      }
-      return;
-    }
-    if (message.type === 'closeGroup') {
-      await this.closeTargets(this.targetsForDisplayGroup(message.groupId));
-      await this.refresh({ reason: 'navigate' });
+    if (message.type === 'deleteGroup' || message.type === 'closeGroup') {
+      await this.closeDisplayGroup(message.groupId);
+      await this.refresh({ reason: 'operation' });
       return;
     }
     if (message.type === 'pinGroup' || message.type === 'unpinGroup') {
-      if (this.groupMode === 'vscode') {
-        logWarn('Group pinning is disabled while following VS Code groups', { groupId: message.groupId });
+      const displayGroup = this.currentSnapshot.displayGroups.find((group) => group.id === message.groupId);
+      if (!displayGroup || !displayGroup.showHeader || displayGroup.mode === 'vscode') {
+        logWarn('拒绝无效或不可固定的分组消息', { groupId: message.groupId, groupMode: this.groupMode, displayGroupMode: displayGroup?.mode });
         return;
       }
       if (message.type === 'pinGroup') this.pinnedGroupIds.add(message.groupId);
@@ -805,7 +797,7 @@ export class VerticalTabsPanel {
       if (this.groupMode === 'manual') {
         await this.moveManualTab(message.target, message.groupId, message.beforeTarget);
       } else if (this.groupMode === 'vscode') {
-        await this.moveEditorWithinVsCode(message.target, message.beforeTarget);
+        await this.moveEditorWithinVsCode(message.target, message.groupId, message.beforeTarget);
       } else {
         this.groupMode = 'manual';
         await this.persistGroupMode();
@@ -924,6 +916,42 @@ export class VerticalTabsPanel {
     await this.refresh({ reason: 'navigate' });
   }
 
+  private async handleConfigurationChange(event: vscode.ConfigurationChangeEvent): Promise<void> {
+    const rememberStateEnabled = shouldRememberState();
+    const memoryChanged = rememberStateEnabled !== this.rememberStateEnabled;
+    this.rememberStateEnabled = rememberStateEnabled;
+
+    if (!rememberStateEnabled && (memoryChanged
+      || event.affectsConfiguration('verticalTabs.defaultGroupMode')
+      || event.affectsConfiguration('verticalTabs.defaultSortMode'))) {
+      this.groupMode = readDefaultGroupMode();
+      this.sortMode = readDefaultSortMode();
+      this.manualGroups.splice(0, this.manualGroups.length);
+      this.manualGroupByIdentity.clear();
+      this.manualOrderByGroup.clear();
+      this.pinnedGroupIds.clear();
+      logInfo('自动记忆关闭，已恢复垂直标签默认状态', { groupMode: this.groupMode, sortMode: this.sortMode });
+    } else if (rememberStateEnabled && memoryChanged) {
+      // Enabling memory starts from the state currently visible to the user.
+      // Overwrite older saved values so disabling memory cannot unexpectedly
+      // resurrect a stale layout when the setting is enabled again.
+      await Promise.all([
+        this.persistGroupMode(),
+        this.persistSortMode(),
+        this.persistManualState(),
+        this.persistPinnedGroups(),
+      ]);
+      logInfo('自动记忆开启，已保存当前垂直标签状态', { groupMode: this.groupMode, sortMode: this.sortMode });
+    }
+
+    if (!rememberStateEnabled && (memoryChanged
+      || event.affectsConfiguration('verticalTabs.tabWidthRatio')
+      || event.affectsConfiguration('verticalTabs.defaultRailWidthRatio'))) {
+      await applyLeadingRailRatio(getDefaultRailRatio());
+    }
+    await this.refresh({ reason: 'operation' });
+  }
+
   private async closeTargets(targets: readonly TabTarget[]): Promise<void> {
     const tabs = targets.map((target) => this.resolveTab(target)).filter((tab): tab is vscode.Tab => tab !== undefined);
     logInfo('Execute tab close targets', { selectedTargets: targets.length, resolvedTabs: tabs.length });
@@ -940,6 +968,42 @@ export class VerticalTabsPanel {
 
   private targetsForDisplayGroup(groupId: string): readonly TabTarget[] {
     return this.currentSnapshot.displayGroups.find((group) => group.id === groupId)?.tabs.map((tab) => tab.target) ?? [];
+  }
+
+  private async closeDisplayGroup(groupId: string): Promise<void> {
+    const displayGroup = this.currentSnapshot.displayGroups.find((group) => group.id === groupId);
+    if (!displayGroup) {
+      logWarn('关闭标签分组失败：显示分组不存在', { groupId, groupMode: this.groupMode });
+      return;
+    }
+
+    if (displayGroup.mode === 'vscode') {
+      const sourceGroupIndex = displayGroup.tabs[0]?.target.groupIndex;
+      const sourceGroup = sourceGroupIndex === undefined ? undefined : vscode.window.tabGroups.all[sourceGroupIndex];
+      if (sourceGroup && !sourceGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
+        logInfo('关闭 VS Code 编辑器分组及其全部标签', { groupId, sourceGroupIndex, tabCount: sourceGroup.tabs.length });
+        await vscode.window.tabGroups.close(sourceGroup, true);
+      } else {
+        await this.closeTargets(displayGroup.tabs.map((tab) => tab.target));
+      }
+    } else {
+      await this.closeTargets(displayGroup.tabs.map((tab) => tab.target));
+    }
+
+    const manualGroupIndex = this.manualGroups.findIndex((candidate) => candidate.id === groupId);
+    if (manualGroupIndex >= 0) {
+      this.manualGroups.splice(manualGroupIndex, 1);
+      for (const [key, assignedGroupId] of this.manualGroupByIdentity) {
+        if (assignedGroupId === groupId) this.manualGroupByIdentity.delete(key);
+      }
+      this.manualOrderByGroup.delete(groupId);
+      logInfo('关闭标签并删除手动分组', { groupId });
+    }
+
+    if (this.pinnedGroupIds.delete(groupId)) {
+      logDebug('关闭分组后清理分组固定状态', { groupId });
+    }
+    await Promise.all([this.persistManualState(), this.persistPinnedGroups()]);
   }
 
   private async createManualGroup(name: string): Promise<void> {
@@ -987,20 +1051,38 @@ export class VerticalTabsPanel {
         logWarn('Multi-select manual move failed: group does not exist', { groupId });
         return;
       }
+      const resolvedTabs = targets.map((target) => this.resolveTab(target)).filter((tab): tab is vscode.Tab => tab !== undefined);
+      const movedKeys = resolvedTabs.map((tab) => identityKey(targetIdentity(tab)));
+      const movedKeySet = new Set(movedKeys);
       const beforeKey = beforeTarget ? identityKey(beforeTarget.identity) : undefined;
-      for (const target of targets) {
-        const tab = this.resolveTab(target);
-        if (!tab) continue;
-        const key = identityKey(targetIdentity(tab));
-        this.setManualGroup(targetIdentity(tab), groupId);
-        this.insertManualOrder(destinationGroupId, key, beforeKey);
+      if (beforeKey && movedKeySet.has(beforeKey)) {
+        logDebug('忽略投放到选中标签集合内部的批量移动', { count: resolvedTabs.length, groupId });
+        return;
       }
+      for (const [storedGroupId, order] of this.manualOrderByGroup) {
+        this.manualOrderByGroup.set(storedGroupId, order.filter((key) => !movedKeySet.has(key)));
+      }
+      for (const tab of resolvedTabs) {
+        this.setManualGroup(targetIdentity(tab), groupId);
+      }
+      const destinationTabs = this.currentSnapshot.displayGroups
+        .find((group) => group.id === destinationGroupId)?.tabs
+        .map((tab) => identityKey(tab.target.identity))
+        .filter((key) => !movedKeySet.has(key)) ?? [];
+      const beforeIndex = beforeKey ? destinationTabs.indexOf(beforeKey) : -1;
+      destinationTabs.splice(beforeIndex >= 0 ? beforeIndex : destinationTabs.length, 0, ...movedKeys);
+      this.manualOrderByGroup.set(destinationGroupId, destinationTabs);
       await this.persistManualState();
-      logInfo('Moved selected tabs in manual grouping', { count: targets.length, groupId });
+      logInfo('Moved selected tabs in manual grouping', { count: resolvedTabs.length, groupId });
       return;
     }
+    if (beforeTarget && targets.some((target) => sameIdentity(target.identity, beforeTarget.identity) && target.groupIndex === beforeTarget.groupIndex)) {
+      logDebug('忽略投放到选中标签集合内部的 VS Code 批量移动', { count: targets.length, groupId });
+      return;
+    }
+    const stableDestination = (beforeTarget ? this.resolveTab(beforeTarget)?.group : undefined) ?? this.resolveVsCodeDisplayGroup(groupId);
     for (const target of targets) {
-      await this.moveEditorWithinVsCode(target, beforeTarget);
+      await this.moveEditorWithinVsCode(target, groupId, beforeTarget, stableDestination);
     }
   }
 
@@ -1047,32 +1129,46 @@ export class VerticalTabsPanel {
     this.manualOrderByGroup.set(groupId, current);
   }
 
-  private async moveEditorWithinVsCode(target: TabTarget, beforeTarget: TabTarget | undefined): Promise<void> {
+  private async moveEditorWithinVsCode(target: TabTarget, destinationGroupId: string | undefined, beforeTarget: TabTarget | undefined, stableDestination?: vscode.TabGroup): Promise<void> {
     const tab = this.resolveTab(target);
     if (!tab || !isActivatableTabForCommands(tab)) {
       logWarn('跟随 VS Code 模式移动失败：标签不可可靠激活', { target });
       return;
     }
     const beforeTab = beforeTarget ? this.resolveTab(beforeTarget) : undefined;
+    const destination = beforeTab?.group ?? stableDestination ?? this.resolveVsCodeDisplayGroup(destinationGroupId) ?? tab.group;
     logInfo('跟随 VS Code 模式移动标签', {
       source: describeTab(tab),
       before: beforeTab ? describeTab(beforeTab) : undefined,
+      destinationGroupId,
       target,
       beforeTarget,
     });
     await this.activateTab(tab);
+    if (tab.group !== destination) {
+      await this.moveActiveEditorToGroup(targetIdentity(tab), destination);
+    }
     if (!beforeTab) {
       await this.moveActiveEditorToEndOfGroup(targetIdentity(tab));
       return;
     }
-    if (beforeTab.group === tab.group) {
+    const movedTab = findTabByIdentity(targetIdentity(tab));
+    if (movedTab && beforeTab.group === movedTab.group) {
       await this.moveActiveEditorBeforeTarget(targetIdentity(tab), targetIdentity(beforeTab));
     } else {
-      logWarn('跟随 VS Code 模式移动失败：暂不支持拖拽到其它编辑器组，请使用右键菜单移动到其它组', {
+      logWarn('跟随 VS Code 模式移动失败：无法解析移动后的源标签或目标标签', {
         source: describeTab(tab),
         before: describeTab(beforeTab),
       });
     }
+  }
+
+  private resolveVsCodeDisplayGroup(groupId: string | undefined): vscode.TabGroup | undefined {
+    if (!groupId) return undefined;
+    const displayGroup = this.currentSnapshot.displayGroups.find((group) => group.id === groupId && group.mode === 'vscode');
+    const groupIndex = displayGroup?.tabs[0]?.target.groupIndex;
+    const group = groupIndex === undefined ? undefined : vscode.window.tabGroups.all[groupIndex];
+    return group && !group.tabs.some((tab) => isVerticalTabsPanel(tab)) ? group : undefined;
   }
 
   private async moveEditorToVsCodeGroup(target: TabTarget, targetGroupIndex: number): Promise<void> {
@@ -1283,12 +1379,12 @@ export class VerticalTabsPanel {
         return tab;
       }
     }
-    for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
-        if (!isVerticalTabsPanel(tab) && sameIdentity(targetIdentity(tab), target.identity)) {
-          return tab;
-        }
-      }
+    const identityMatches = vscode.window.tabGroups.all.flatMap((group) => group.tabs)
+      .filter((tab) => !isVerticalTabsPanel(tab) && sameIdentity(targetIdentity(tab), target.identity));
+    if (identityMatches.length === 1) return identityMatches[0];
+    if (identityMatches.length > 1) {
+      logWarn('标签目标存在多个相同稳定标识，拒绝猜测其它编辑器组中的目标', { target, matches: identityMatches.map(describeTab) });
+      return undefined;
     }
     logWarn('无法按稳定标识解析标签目标', { target });
     return undefined;
@@ -1811,7 +1907,7 @@ async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
 }
 
 async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<number | undefined> {
-  const savedRatio = context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY);
+  const savedRatio = shouldRememberState() ? context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY) : undefined;
   const configuredRatio = readConfiguredRailRatio();
   const ratio = getConfiguredRailRatio(context);
   try {

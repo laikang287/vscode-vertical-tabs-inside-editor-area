@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSnapshot, sameIdentity, selectCloseTargets, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
+import { buildSnapshot, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
@@ -76,13 +76,45 @@ test('selects close targets within the same manual display bucket and preserves 
   assert.deepEqual(selectCloseTargets(snapshot, 'closeAll'), [snapshot.tabs[0].target, snapshot.tabs[2].target, snapshot.tabs[3].target]);
 });
 
-test('uses VS Code groups and hides the only display group header', () => {
+test('applies multi-select close-other and close-below rules independently in every selected group', () => {
+  const groups: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///a.ts' } },
+    { label: 'b.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///b.ts' } },
+    { label: 'c.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///c.ts' } },
+  ] }, { tabs: [
+    { label: 'd.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///d.ts' } },
+    { label: 'e.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///e.ts' } },
+    { label: 'f.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///f.ts' } },
+  ] }];
+  const snapshot = buildSnapshot(groups, 20, [], { groupMode: 'vscode' });
+  const selected = [snapshot.tabs[1]!.target, snapshot.tabs[3]!.target, snapshot.tabs[4]!.target];
+
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', selected), selected);
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeOthers', selected), [snapshot.tabs[0]!.target, snapshot.tabs[2]!.target]);
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeBelow', selected), [snapshot.tabs[2]!.target]);
+});
+
+test('keeps duplicate resources in different editor groups as separate multi-select occurrences', () => {
+  const duplicateGroups: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'same.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///same.ts' } },
+    { label: 'left.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///left.ts' } },
+  ] }, { tabs: [
+    { label: 'same.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///same.ts' } },
+    { label: 'right.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///right.ts' } },
+  ] }];
+  const snapshot = buildSnapshot(duplicateGroups, 23, [], { groupMode: 'vscode' });
+
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', [snapshot.tabs[2]!.target]), [snapshot.tabs[2]!.target]);
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeOthers', [snapshot.tabs[2]!.target]), [snapshot.tabs[3]!.target]);
+});
+
+test('uses VS Code groups and keeps a header for the group close action', () => {
   const snapshot = buildSnapshot(source, 9, [], { groupMode: 'vscode' });
   assert.equal(snapshot.groupMode, 'vscode');
   assert.equal(snapshot.displayGroups.length, 2);
   const singleGroup = buildSnapshot([{ tabs: source[0]!.tabs }], 10, [], { groupMode: 'vscode' });
   assert.equal(singleGroup.displayGroups.length, 1);
-  assert.equal(singleGroup.displayGroups[0]!.showHeader, false);
+  assert.equal(singleGroup.displayGroups[0]!.showHeader, true);
 });
 
 test('builds parent directory groups with same-name disambiguation', () => {
@@ -123,6 +155,22 @@ test('keeps pinned tabs at the front of each display group for every sort mode',
 
   const byModified = buildSnapshot(tabs, 19, [], { groupMode: 'vscode', sortMode: 'modifiedAsc' });
   assert.deepEqual(byModified.displayGroups[0]!.tabs.map((tab) => tab.label), ['b.ts', 'c.ts', 'a.ts', 'd.ts']);
+});
+
+test('orders pinned manual and automatic groups first while retaining their relative order', () => {
+  const grouped: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'a.ts', path: 'alpha/a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///alpha/a.ts' }, manualGroupId: 'alpha' },
+    { label: 'b.ts', path: 'beta/b.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///beta/b.ts' }, manualGroupId: 'beta' },
+  ] }];
+  const pinned = new Set(['beta']);
+  const manual = buildSnapshot(grouped, 21, [
+    { id: 'alpha', name: 'Alpha', collapsed: false },
+    { id: 'beta', name: 'Beta', collapsed: false },
+  ], { groupMode: 'manual', pinnedGroupIds: pinned });
+  assert.deepEqual(manual.displayGroups.map((group) => [group.id, group.isPinned]), [['beta', true], ['alpha', false]]);
+
+  const automatic = buildSnapshot(grouped, 22, [], { groupMode: 'parentDir', pinnedGroupIds: new Set(['beta']) });
+  assert.deepEqual(automatic.displayGroups.map((group) => [group.id, group.isPinned]), [['beta', true], ['alpha', false]]);
 });
 
 test('orders manual tabs from persisted identity order', () => {
