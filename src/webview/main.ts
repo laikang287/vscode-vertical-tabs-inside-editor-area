@@ -1,5 +1,6 @@
 import type { ExtensionMessage, GroupMode, SortMode, TabTarget, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { TabSelection } from './TabSelection';
+import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { tabDragCapability } from './dragPolicy';
 
 declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
@@ -26,6 +27,7 @@ let contextMenu: HTMLElement | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let draggedTarget: TabTarget | undefined;
 let draggedTargets: readonly TabTarget[] = [];
+let dropIndicator: HTMLElement | undefined;
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
@@ -49,6 +51,12 @@ sortModeSelect?.addEventListener('change', () => {
   vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value as SortMode });
 });
 document.addEventListener('click', () => dismissContextMenu());
+document.addEventListener('dragend', () => clearDropIndicator());
+document.addEventListener('drop', () => clearDropIndicator());
+document.addEventListener('dragleave', (event) => { if (event.relatedTarget === null) clearDropIndicator(); });
+document.addEventListener('dragover', (event) => {
+  if (!(event.target instanceof Element) || !event.target.closest('.tab-group')) clearDropIndicator();
+});
 window.addEventListener('blur', () => dismissContextMenu());
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(); });
 new ResizeObserver(([entry]) => { const width = Math.round(entry.contentRect.width); if (width >= 180) vscode.postMessage({ type: 'railWidth', width }); }).observe(document.documentElement);
@@ -61,6 +69,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
     return;
   }
   latestSnapshot = message.snapshot;
+  clearDropIndicator();
   if (!message.snapshot.rememberState && collapsedGroups.size > 0) {
     collapsedGroups.clear();
     vscode.setState({});
@@ -213,8 +222,8 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
     delete row.dataset.dragRequestId;
     event.preventDefault();
   });
-  row.addEventListener('dragover', (event) => handleTabDragOver(event, group));
-  row.addEventListener('drop', (event) => handleTabDrop(event, tab, group));
+  row.addEventListener('dragover', (event) => handleTabDragOver(event, row, tab, group));
+  row.addEventListener('drop', (event) => handleTabDrop(event, row, tab, group));
   const activate = document.createElement('button');
   activate.className = 'tab-main';
   activate.type = 'button';
@@ -351,12 +360,17 @@ function clamp(value: number, minimum: number, maximum: number): number {
 }
 
 function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
-  if (!draggedTarget || currentDragCapability() === 'disabled' || targetsForDrop(group).length === 0) return;
+  if (!draggedTarget || currentDragCapability() === 'disabled' || targetsForDrop(group).length === 0) {
+    clearDropIndicator();
+    return;
+  }
   event.preventDefault();
   event.dataTransfer!.dropEffect = 'move';
+  showGroupEndDropIndicator(event.currentTarget as HTMLElement);
 }
 
 function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void {
+  clearDropIndicator();
   if (!draggedTarget || currentDragCapability() === 'disabled') return;
   event.preventDefault();
   const targets = targetsForDrop(group);
@@ -366,14 +380,28 @@ function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void
   postTabMove(targets, groupId);
 }
 
-function handleTabDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
-  if (!draggedTarget || currentDragCapability() === 'disabled' || targetsForDrop(group).length === 0) return;
+function handleTabDragOver(event: DragEvent, row: HTMLElement, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
+  const capability = currentDragCapability();
+  if (!draggedTarget || capability === 'disabled' || targetsForDrop(group).length === 0) {
+    clearDropIndicator();
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   event.dataTransfer!.dropEffect = 'move';
+  if (capability === 'moveGroup') {
+    showGroupEndDropIndicator(row.closest<HTMLElement>('.tab-group') ?? row);
+    return;
+  }
+  if (draggedTargets.some((target) => sameTarget(target, tab.target))) {
+    clearDropIndicator();
+    return;
+  }
+  showTabDropIndicator(row, dragInsertionEdge(event.clientY, row.getBoundingClientRect().top, row.getBoundingClientRect().height));
 }
 
-function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
+function handleTabDrop(event: DragEvent, row: HTMLElement, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
+  clearDropIndicator();
   const capability = currentDragCapability();
   if (!draggedTarget || capability === 'disabled') return;
   event.preventDefault();
@@ -384,9 +412,46 @@ function handleTabDrop(event: DragEvent, tab: VerticalTabItem, group: VerticalTa
   const targets = targetsForDrop(group);
   if (targets.length === 0 || targets.some((target) => sameTarget(target, tab.target))) return;
   const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
-  const beforeTarget = capability === 'reorder' ? tab.target : undefined;
-  logToExtension('debug', beforeTarget ? '标签拖拽排序请求' : '标签拖拽改分组请求', dropDetails(event, draggedTarget, group.id, beforeTarget));
+  const beforeTarget = capability === 'reorder' ? beforeTargetForDrop(event, row, tab, group) : undefined;
+  logToExtension('debug', capability === 'reorder' ? '标签拖拽排序请求' : '标签拖拽改分组请求', dropDetails(event, draggedTarget, group.id, beforeTarget));
   postTabMove(targets, groupId, beforeTarget);
+}
+
+function beforeTargetForDrop(event: DragEvent, row: HTMLElement, tab: VerticalTabItem, group: VerticalTabDisplayGroup): TabTarget | undefined {
+  const bounds = row.getBoundingClientRect();
+  if (dragInsertionEdge(event.clientY, bounds.top, bounds.height) === 'before') return tab.target;
+  const tabIndex = group.tabs.findIndex((candidate) => sameTarget(candidate.target, tab.target));
+  return group.tabs.slice(tabIndex + 1).find((candidate) =>
+    !draggedTargets.some((target) => sameTarget(target, candidate.target)))?.target;
+}
+
+function showTabDropIndicator(row: HTMLElement, edge: DragInsertionEdge): void {
+  const bounds = row.getBoundingClientRect();
+  showDropIndicator(bounds.left, edge === 'before' ? bounds.top : bounds.bottom, bounds.width);
+}
+
+function showGroupEndDropIndicator(group: HTMLElement): void {
+  const rows = group.querySelectorAll<HTMLElement>(':scope > .tab-row');
+  const anchor = rows.item(rows.length - 1) ?? group.querySelector<HTMLElement>(':scope > .group-header') ?? group;
+  const bounds = anchor.getBoundingClientRect();
+  showDropIndicator(bounds.left, bounds.bottom, bounds.width);
+}
+
+function showDropIndicator(left: number, top: number, width: number): void {
+  if (!dropIndicator) {
+    dropIndicator = document.createElement('div');
+    dropIndicator.className = 'tab-drop-indicator';
+    dropIndicator.setAttribute('aria-hidden', 'true');
+    document.body.append(dropIndicator);
+  }
+  dropIndicator.style.left = `${Math.round(left)}px`;
+  dropIndicator.style.top = `${Math.round(top)}px`;
+  dropIndicator.style.width = `${Math.max(0, Math.round(width))}px`;
+  dropIndicator.hidden = false;
+}
+
+function clearDropIndicator(): void {
+  if (dropIndicator) dropIndicator.hidden = true;
 }
 
 function currentDragCapability(): ReturnType<typeof tabDragCapability> {

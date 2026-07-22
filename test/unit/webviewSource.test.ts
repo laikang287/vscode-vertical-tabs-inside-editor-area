@@ -364,7 +364,7 @@ test('webview and host enforce drag capabilities for grouping and sorting modes'
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(webviewSource, /const beforeTarget = capability === 'reorder' \? tab\.target : undefined/);
+  assert.match(webviewSource, /const beforeTarget = capability === 'reorder' \? beforeTargetForDrop/);
   assert.match(webviewSource, /targetsForDrop\(group\)/);
   assert.match(webviewSource, /!group\.tabs\.some\(\(tab\) => sameTarget\(tab\.target, target\)\)/);
   assert.match(panelSource, /const dragCapability = tabDragCapability\(this\.groupMode, this\.sortMode\)/);
@@ -465,6 +465,18 @@ test('extension reorders a multi-select VS Code drag as one stable block', () =>
 test('tab-row drop stops before the outer group can append the same drag to the end', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?const beforeTarget = capability === 'reorder' \? tab\.target : undefined/);
+  assert.match(source, /function handleTabDrop[\s\S]+?event\.preventDefault\(\);\s*\/\/[\s\S]+?event\.stopPropagation\(\);[\s\S]+?const beforeTarget = capability === 'reorder' \? beforeTargetForDrop/);
   assert.match(source, /function handleTabDragOver[\s\S]+?event\.preventDefault\(\);\s*event\.stopPropagation\(\)/);
+});
+
+test('dragging shows a bright insertion line at the exact before or after edge', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /dragInsertionEdge\(event\.clientY, bounds\.top, bounds\.height\)/);
+  assert.match(source, /edge === 'before' \? bounds\.top : bounds\.bottom/);
+  assert.match(source, /function beforeTargetForDrop[\s\S]+group\.tabs\.slice\(tabIndex \+ 1\)/);
+  assert.match(source, /function showGroupEndDropIndicator/);
+  assert.match(source, /document\.addEventListener\('dragend', \(\) => clearDropIndicator\(\)\)/);
+  assert.match(style, /\.tab-drop-indicator \{[\s\S]+background: var\(--vscode-focusBorder, #007fd4\);[\s\S]+height: 2px;/);
 });

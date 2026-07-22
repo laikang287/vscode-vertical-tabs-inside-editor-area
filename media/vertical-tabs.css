@@ -109,6 +109,16 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-row { display: flex; align-items: stretch; min-width: 0; }
 .tab-row[draggable="true"] { cursor: grab; }
 .tab-row[draggable="true"]:active { cursor: grabbing; }
+.tab-drop-indicator {
+  background: var(--vscode-focusBorder, #007fd4);
+  box-shadow: 0 0 4px 1px var(--vscode-focusBorder, #007fd4);
+  height: 2px;
+  pointer-events: none;
+  position: fixed;
+  transform: translateY(-1px);
+  z-index: 20;
+}
+.tab-drop-indicator[hidden] { display: none; }
 .tab-row.tree-level-1 { padding-left: 18px; }
 .tab-row:hover { background: var(--vscode-list-hoverBackground); }
 .tab-row.is-active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
