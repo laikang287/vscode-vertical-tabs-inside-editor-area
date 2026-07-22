@@ -33,24 +33,36 @@ let draggedGroupId: string | undefined;
 let dropIndicator: HTMLElement | undefined;
 let dropHighlightedGroup: HTMLElement | undefined;
 
-interface I18nStrings {
-  readonly emptyState: string; readonly expand: string; readonly collapse: string;
-  readonly expandGroup: string; readonly collapseGroup: string; readonly pinnedGroup: string;
-  readonly closeGroupAndDelete: string; readonly closeTab: string; readonly close: string;
-  readonly closeOthers: string; readonly closeBelow: string; readonly closeGroup: string;
-  readonly closeSaved: string; readonly closeAll: string; readonly closeSavedTabs: string;
-  readonly closeAllUnpinned: string; readonly pinTab: string; readonly unpinTab: string;
-  readonly pinGroup: string; readonly unpinGroup: string; readonly cannotPinVscodeGroup: string;
-  readonly rename: string; readonly renameGroup: string; readonly groupName: string;
-  readonly newGroup: string; readonly newGroupOnlyManual: string; readonly previewSuffix: string;
-  readonly bestEffortActivation: string; readonly unsupportedActivation: string;
-  readonly hideToolbarControls: string; readonly showToolbarControls: string;
-  readonly ungrouped: string; readonly other: string; readonly workspaceRoot: string;
-  readonly noExtension: string; readonly editorGroup: string;
-  [key: string]: string;
+const EN_DEFAULTS: Record<string, string> = {
+  emptyState: 'No displayable editor tabs.', expand: 'Expand', collapse: 'Collapse',
+  expandGroup: 'Expand group', collapseGroup: 'Collapse group', pinnedGroup: 'Pinned group',
+  closeGroupAndDelete: 'Close all tabs in group and delete group', closeTab: 'Close tab', close: 'Close',
+  closeOthers: 'Close others', closeBelow: 'Close below', closeGroup: 'Close all tabs in group',
+  closeSaved: 'Close saved', closeAll: 'Close all', closeSavedTabs: 'Close saved tabs',
+  closeAllUnpinned: 'Close all unpinned tabs', pinTab: 'Pin tab', unpinTab: 'Unpin tab',
+  pinGroup: 'Pin group', unpinGroup: 'Unpin group', cannotPinVscodeGroup: 'Cannot pin group when following VS Code groups',
+  rename: 'Rename', renameGroup: 'Rename group', groupName: 'Group name',
+  newGroup: 'New group', newGroupOnlyManual: 'Only manual grouping mode can create groups',
+  previewSuffix: ' (preview)', bestEffortActivation: 'Navigate using VS Code built-in commands',
+  unsupportedActivation: 'Cannot be navigated by extension',
+  hideToolbarControls: 'Hide grouping and sorting controls', showToolbarControls: 'Show grouping and sorting controls',
+  ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root',
+  noExtension: 'No extension', editorGroup: 'Editor Group {0}',
+};
+
+function resolveI18n(): Record<string, string> {
+  if (typeof __i18n !== 'undefined') {
+    return __i18n;
+  }
+  return {};
 }
-declare const __i18n: I18nStrings;
-const i18n = (typeof __i18n !== 'undefined' ? __i18n : {}) as I18nStrings;
+
+const i18n = new Proxy(resolveI18n(), {
+  get(target: Record<string, string>, prop: string) {
+    return target[prop] ?? EN_DEFAULTS[prop] ?? prop;
+  }
+}) as Record<string, string>;
+
 
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
@@ -283,8 +295,11 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       // stale multi-selection and inactive target behind.
       draggedAfterPreservePointerDown = false;
       collapsePreservedMultiSelection();
-    } else {
+    } else if (preserveMultiSelectionOnPointerDown) {
       preserveMultiSelectionOnPointerDown = false;
+      draggedAfterPreservePointerDown = false;
+      selectSingle(tab);
+      requestActivation();
     }
     event.preventDefault();
   });

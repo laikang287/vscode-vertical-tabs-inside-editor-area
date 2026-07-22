@@ -2,7 +2,7 @@
   "name": "vertical-tabs-in-editor-area",
   "displayName": "Vertical Tabs in Editor Area",
   "description": "A synchronized vertical tab navigator hosted in the VS Code editor area.",
-  "version": "0.1.78",
+  "version": "0.1.79",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -119,8 +119,7 @@
           "default": true,
           "scope": "window",
           "markdownDescription": "Default visibility for the grouping and sorting dropdown controls. When automatic memory is enabled, this is used only when no saved visibility exists; when automatic memory is disabled, this default is always used."
-        }
-      ,
+        },
         "verticalTabs.language": {
           "type": "string",
           "default": "auto",
@@ -139,12 +138,21 @@
           ],
           "enumDescriptions": [
             "%verticalTabs.config.language.auto%",
-            "English",
-            "简体中文"
+            "%verticalTabs.config.language.en%",
+            "%verticalTabs.config.language.zh-cn%",
+            "%verticalTabs.config.language.zh-tw%",
+            "%verticalTabs.config.language.ja%",
+            "%verticalTabs.config.language.ko%",
+            "%verticalTabs.config.language.de%",
+            "%verticalTabs.config.language.fr%",
+            "%verticalTabs.config.language.es%",
+            "%verticalTabs.config.language.pt-br%",
+            "%verticalTabs.config.language.ru%"
           ],
           "scope": "window",
           "markdownDescription": "%verticalTabs.config.language%"
-        }}
+        }
+      }
     },
     "viewsContainers": {
       "activitybar": [
@@ -167,13 +175,13 @@
     "viewsWelcome": [
       {
         "view": "verticalTabs.launcher",
-       "when": "!verticalTabs.visible",
-        "contents": "[Show Vertical Tabs](command:verticalTabs.open)"
-     },
-     {
-       "view": "verticalTabs.launcher",
-       "when": "verticalTabs.visible",
-        "contents": "[Close Vertical Tabs](command:verticalTabs.close)"
+        "when": "!verticalTabs.visible",
+        "contents": "[%verticalTabs.command.open%](command:verticalTabs.open)"
+      },
+      {
+        "view": "verticalTabs.launcher",
+        "when": "verticalTabs.visible",
+        "contents": "[%verticalTabs.command.close%](command:verticalTabs.close)"
       }
     ]
   },
