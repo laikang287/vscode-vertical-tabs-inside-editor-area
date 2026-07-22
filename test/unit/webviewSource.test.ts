@@ -6,6 +6,8 @@ import test from 'node:test';
 test('context menu close actions dismiss the menu after posting', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
+  assert.match(source, /actionButton\('关闭', '关闭标签', 'closeTab', tab\.target, true\)/);
+  assert.match(source, /messageButton\('关闭', '关闭标签', \{ type: 'closeTabs', targets \}\)/);
   assert.match(source, /actionButton\('关闭其它', '关闭其它', 'closeOthers', tab\.target, true\)/);
   assert.match(source, /actionButton\('关闭下侧', '关闭下侧', 'closeBelow', tab\.target, true\)/);
   assert.match(source, /closeOthersForTabs/);
@@ -22,7 +24,7 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.doesNotMatch(panelSource, /id="close-all"/);
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
   assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
-  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\('关闭其它'/);
+  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\('关闭'/);
   assert.match(webviewSource, /messageButton\('关闭', '关闭分组内所有标签', \{ type: 'closeGroup', groupId: group\.id \}\)/);
   assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
   assert.match(webviewSource, /globalActionButton\('关闭已保存'/);

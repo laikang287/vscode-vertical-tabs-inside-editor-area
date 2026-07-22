@@ -475,6 +475,7 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
     const multi = targets.length > 1;
     const pinned = multi ? selectedTabsFor(tab).every((candidate) => candidate.isPinned) : tab.isPinned;
     menu.append(
+      multi ? messageButton('关闭', '关闭标签', { type: 'closeTabs', targets }) : actionButton('关闭', '关闭标签', 'closeTab', tab.target, true),
       multi ? messageButton('关闭其它', '关闭其它', { type: 'closeOthersForTabs', targets }) : actionButton('关闭其它', '关闭其它', 'closeOthers', tab.target, true),
       multi ? messageButton('关闭下侧', '关闭下侧', { type: 'closeBelowForTabs', targets }) : actionButton('关闭下侧', '关闭下侧', 'closeBelow', tab.target, true),
       messageButton(pinned ? '取消固定标签' : '固定标签', pinned ? '取消固定标签' : '固定标签', multi ? { type: pinned ? 'unpinTabs' : 'pinTabs', targets } : { type: pinned ? 'unpinTab' : 'pinTab', target: tab.target }),
