@@ -7,19 +7,7 @@ source: null
 
 # 编辑器区域垂直标签页
 
-```html
-<p align="center">
-  <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文（规范源）</a> ·
-  <a href="docs/README.zh-TW.md">繁體中文</a> ·
-  <a href="docs/README.ja.md">日本語</a> ·
-  <a href="docs/README.ko.md">한국어</a> ·
-  <a href="docs/README.es.md">Español</a> ·
-  <a href="docs/README.fr.md">Français</a> ·
-  <a href="docs/README.de.md">Deutsch</a> ·
-  <a href="docs/README.ru.md">Русский</a>
-</p>
-```
+[English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
 在 VS Code <mark>编辑器区域左侧</mark>显示一个始终可见的<mark>垂直标签栏</mark>，不占用主侧边栏和辅助侧边栏。
 

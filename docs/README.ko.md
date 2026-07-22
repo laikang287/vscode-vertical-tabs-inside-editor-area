@@ -1,19 +1,8 @@
 
 # 편집기 영역 세로 탭
 
-```html
-<p align="center">
-  <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文（规范源）</a> ·
-  <a href="docs/README.zh-TW.md">繁體中文</a> ·
-  <a href="docs/README.ja.md">日本語</a> ·
-  <a href="docs/README.ko.md">한국어</a> ·
-  <a href="docs/README.es.md">Español</a> ·
-  <a href="docs/README.fr.md">Français</a> ·
-  <a href="docs/README.de.md">Deutsch</a> ·
-  <a href="docs/README.ru.md">Русский</a>
-</p>
-```
+
+[English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
 VS Code <mark>편집기 영역 왼쪽</mark>에 항상 표시되는 <mark>세로 탭 막대</mark>를 표시하며, 기본 사이드바와 보조 사이드바를 차지하지 않습니다.
 
