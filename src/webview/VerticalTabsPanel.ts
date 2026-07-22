@@ -1,4 +1,4 @@
-import * as crypto from 'node:crypto';
+﻿import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -964,6 +964,27 @@ export class VerticalTabsPanel {
       return;
     }
 
+
+    if (message.type === 'reorderManualGroup') {
+      if (this.groupMode !== 'manual' || this.sortMode !== 'none') {
+        logWarn('拒绝非手动排序模式下的分组拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode });
+        return;
+      }
+      const index = this.manualGroups.findIndex((group) => group.id === message.groupId);
+      if (index < 0) {
+        logWarn('重排手动分组失败：分组不存在', { groupId: message.groupId });
+        return;
+      }
+      const [moved] = this.manualGroups.splice(index, 1);
+      const beforeIndex = message.beforeGroupId
+        ? this.manualGroups.findIndex((group) => group.id === message.beforeGroupId)
+        : -1;
+      this.manualGroups.splice(beforeIndex >= 0 ? beforeIndex : this.manualGroups.length, 0, moved);
+      await this.persistManualGroups();
+      logInfo('重排手动分组', { groupId: message.groupId, beforeGroupId: message.beforeGroupId });
+      await this.refresh({ reason: 'operation' });
+      return;
+    }
     if (message.type === 'createGroupFromTabs') {
       await this.createManualGroupFromTabs(message.source, message.target);
       await this.refresh({ reason: 'operation' });

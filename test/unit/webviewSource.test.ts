@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -524,7 +524,7 @@ test('dragging shows a bright insertion line at the exact before or after edge',
   assert.match(source, /dragInsertionEdge\(event\.clientY, bounds\.top, bounds\.height\)/);
   assert.match(source, /edge === 'before' \? bounds\.top : bounds\.bottom/);
   assert.match(source, /function beforeTargetForDrop[\s\S]+group\.tabs\.slice\(tabIndex \+ 1\)/);
-  assert.match(source, /document\.addEventListener\('dragend', \(\) => clearDropIndicator\(\)\)/);
+  assert.match(source, /document\.addEventListener\('dragend', \(\) => \{ clearDropIndicator\(\); draggedGroupId = undefined; \}\)/);
   assert.match(style, /\.tab-drop-indicator \{[\s\S]+background: var\(--vscode-focusBorder, #007fd4\);[\s\S]+height: 2px;/);
 });
 

@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
@@ -90,6 +90,8 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   min-height: 24px;
   padding: 2px 0;
 }
+.group-header[draggable="true"] { cursor: grab; }
+.group-header[draggable="true"]:active { cursor: grabbing; }
 .group-header:hover { background: var(--vscode-list-hoverBackground); }
 .tab-group.is-drop-target > .group-header {
   background: var(--vscode-list-dropBackground, var(--vscode-list-hoverBackground));

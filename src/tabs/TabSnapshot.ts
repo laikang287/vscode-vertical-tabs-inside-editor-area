@@ -1,4 +1,4 @@
-import * as path from 'node:path';
+﻿import * as path from 'node:path';
 import type {
   GroupMode,
   ManualTabGroup,
@@ -165,9 +165,9 @@ function buildDisplayGroups(
   manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
   pinnedGroupIds: ReadonlySet<string> | undefined,
 ): VerticalTabDisplayGroup[] {
-  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup, pinnedGroupIds));
-  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, pinnedGroupIds));
-  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, pinnedGroupIds));
+  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup, pinnedGroupIds), sortMode);
+  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, pinnedGroupIds), sortMode);
+  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, pinnedGroupIds), sortMode);
   return buildVsCodeGroups(sourceGroups, tabs, sortMode);
 }
 
@@ -268,12 +268,17 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
   });
 }
 
-function orderDisplayGroups(groups: VerticalTabDisplayGroup[]): VerticalTabDisplayGroup[] {
+function orderDisplayGroups(groups: VerticalTabDisplayGroup[], sortMode: SortMode): VerticalTabDisplayGroup[] {
   return groups
     .map((group, index) => ({ group, index }))
     .sort((left, right) => {
       if (isManualRootDisplayGroup(left.group) !== isManualRootDisplayGroup(right.group)) return isManualRootDisplayGroup(left.group) ? -1 : 1;
       if (left.group.isPinned !== right.group.isPinned) return left.group.isPinned ? -1 : 1;
+      if (sortMode !== 'none') {
+        const dir = sortMode === 'nameDesc' || sortMode === 'modifiedDesc' ? -1 : 1;
+        const compared = dir * left.group.title.localeCompare(right.group.title, undefined, { numeric: true, sensitivity: 'base' });
+        if (compared !== 0) return compared;
+      }
       return left.index - right.index;
     })
     .map((entry) => entry.group);
