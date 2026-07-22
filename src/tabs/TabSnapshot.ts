@@ -180,9 +180,9 @@ function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: r
     const groupTabs = tabs.filter((tab) => tab.target.groupIndex === sourceIndex);
     if (groupTabs.length === 0) continue;
     groups.push({
-      id: `vscode-${sourceIndex}`,
-      title: sourceGroups[sourceIndex]?.label ?? format(localeStrings?.editorGroup ?? 'Editor Group {0}', groups.length + 1),
-      collapsed: false,
+     id: `vscode-${sourceIndex}`,
+      title: format(localeStrings?.editorGroup ?? sourceGroups[sourceIndex]?.label ?? 'Editor Group {0}', groups.length + 1),
+     collapsed: false,
       mode: 'vscode',
       tabs: sortTabs(groupTabs, sortMode),
       showHeader: true,
