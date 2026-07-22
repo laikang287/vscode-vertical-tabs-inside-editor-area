@@ -22,7 +22,7 @@ suite('Vertical Tabs extension', () => {
 
   });
 
-  test('keeps one locked vertical-tabs group on the left and restores its width', async function () {
+  test('keeps one locked vertical-tabs group on the left without forcing its width', async function () {
     this.timeout(10_000);
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
@@ -41,19 +41,13 @@ suite('Vertical Tabs extension', () => {
       tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
     ))), 'An editor already open before rail creation should remain outside the new left rail group.');
 
-    const layout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
-    const railRatios = rootGroupRatios(layout);
-    assert.ok(railRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail should use the configured 20% width unless VS Code enforces its native minimum group width; received ${JSON.stringify(layout)}.`);
-
     const existingTab = vscode.window.tabGroups.all.flatMap((editorGroup) => editorGroup.tabs).find((tab) => (
       tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
     ));
     assert.ok(existingTab, 'The pre-existing editor tab should remain available for cleanup.');
     await vscode.window.tabGroups.close(existingTab, true);
     await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length >= 2);
-    const emptyRailLayout = await waitForEditorLayout((candidate) => rootGroupRatios(candidate).some((ratio) => ratio >= 0.2 && ratio < 0.3));
-    const emptyRailRatios = rootGroupRatios(emptyRailLayout);
-    assert.ok(emptyRailRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail should restore its configured width after the last right-side tab closes; received ${JSON.stringify(emptyRailLayout)}.`);
+    assert.ok(nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')), 'Closing the last right-side tab should still restore a usable welcome editor area.');
 
     await vscode.commands.executeCommand('verticalTabs.focus');
     const document = await vscode.workspace.openTextDocument({ content: 'locked rail verification' });
@@ -124,7 +118,7 @@ suite('Vertical Tabs extension', () => {
     assert.ok(nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')), 'The restored right editor area should contain the welcome editor.');
   });
 
-  test('minimum rail width persists without expanding the rail on reopen', async function () {
+  test('reopening leaves the rail at VS Code native width while automatic width changes are disabled', async function () {
     this.timeout(15_000);
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
@@ -153,11 +147,10 @@ suite('Vertical Tabs extension', () => {
 
     const reopenedLayout = await waitForEditorLayout((candidate) => {
       const ratios = rootGroupRatios(candidate);
-      return Math.min(...ratios) <= 0.3 && Math.max(...ratios) >= 0.65;
+      return ratios.length >= 2 && (ratios[0] ?? 0) > 0.3;
     });
     const reopenedRatios = rootGroupRatios(reopenedLayout);
-    assert.ok(Math.min(...reopenedRatios) <= 0.3, `The rail should not reopen near its maximum width; received ${JSON.stringify(reopenedLayout)}.`);
-    assert.ok(Math.max(...reopenedRatios) >= 0.65, `The right editor area should remain usable; received ${JSON.stringify(reopenedLayout)}.`);
+    assert.ok((reopenedRatios[0] ?? 0) > 0.3, `The extension should not restore the previously minimized rail ratio; received ${JSON.stringify(reopenedLayout)}.`);
   });
 });
 

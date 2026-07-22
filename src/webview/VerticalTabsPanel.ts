@@ -2052,9 +2052,10 @@ async function getEditorLayout(): Promise<EditorLayout | undefined> {
 
 async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   try {
-    logDebug('应用编辑器布局', { layout });
-    await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
-    logDebug('编辑器布局命令执行完成');
+    logDebug('自动宽度调整已临时禁用，跳过应用编辑器布局', { layout });
+    // TEMP: 按用户要求临时禁止插件在启动、空标签恢复和配置变更时主动修改宽度。
+    // 后续需要恢复自动宽度时，取消下一行注释即可。
+    // await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
     return true;
   } catch (error) {
     // The rail remains usable at VS Code's native split size when unavailable.
