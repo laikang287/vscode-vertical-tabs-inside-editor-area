@@ -61,7 +61,7 @@ Cette extension place la barre d'onglets verticaux à gauche de la zone de l'éd
 
 ## Démarrage Rapide
 
-- Recherchez "Vertical Tabs in Editor Area" dans le marketplace des extensions VS Code et installez-le. L'identifiant de l'extension est `laikang287.vertical-tabs-in-editor-area`
+- Recherchez "Vertical Tabs Inside Editor Area" dans le marketplace des extensions VS Code et installez-le. L'identifiant de l'extension est `laikang287.vertical-tabs-inside-editor-area`
 - Redémarrez VS Code
 - Trouvez l'icône `VERTICAL TABS` dans la barre d'activités de VS Code, cliquez pour ouvrir la vue. Utilisez Show/Hide pour afficher ou masquer la barre d'onglets verticaux
 - Note 1 : Vous pouvez déplacer la vue `VERTICAL TABS` vers d'autres zones fréquemment utilisées de la barre d'activités
@@ -98,5 +98,5 @@ Licence MIT - voir [LICENSE](LICENSE)
 
 ## Installation Manuelle
 
-- Trouvez le fichier `.vsix` le plus récent dans le répertoire releases du dépôt [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) sur GitHub et téléchargez-le
+- Trouvez le fichier `.vsix` le plus récent dans le répertoire releases du dépôt [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) sur GitHub et téléchargez-le
 - Ouvrez VS Code, allez dans la vue Extensions dans la barre d'activités, cliquez sur le menu à trois points en haut à droite de la barre latérale, et sélectionnez "Installer à partir d'un VSIX..."

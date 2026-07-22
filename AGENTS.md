@@ -88,7 +88,7 @@ source: null
 
 2. `npm run verify`；任何失败都必须先修复，不能提交。
 
-3. 确认 `dist/vertical-tabs-in-editor-area-<version>.vsix` 已生成且 VSIX 内容校验通过。
+3. 确认 `dist/vertical-tabs-inside-editor-area-<version>.vsix` 已生成且 VSIX 内容校验通过。
 
 4. 执行 `git status` 与 `git diff --check`，只暂存该功能相关文件；不得提交 `node_modules/`、`out/` 或 `dist/*.vsix`。
 
@@ -102,7 +102,7 @@ source: null
 
 ## VS Code 与 Webview 边界
 
-- 扩展标识为 `local.vertical-tabs-in-editor-area`，最低 VS Code 版本为 `^1.128.0`。
+- 扩展标识为 `local.vertical-tabs-inside-editor-area`，最低 VS Code 版本为 `^1.128.0`。
 - 编辑器交互与业务状态留在扩展宿主；Webview 只负责渲染和发送已定义的消息。
 - Webview 必须使用 nonce、严格 CSP、最小脚本权限，且仅加载由 `asWebviewUri` 生成的本地资源。
 - 对所有来自 Webview 的消息先进行运行时校验；未知或无效消息不得改变状态。

@@ -61,7 +61,7 @@ Diese Erweiterung platziert die vertikale Tableiste auf der linken Seite des Edi
 
 ## Schnellstart
 
-- Suchen Sie im VS Code Extension Marketplace nach "Vertical Tabs in Editor Area" und installieren Sie die Erweiterung. Die Erweiterungs-ID lautet `laikang287.vertical-tabs-in-editor-area`
+- Suchen Sie im VS Code Extension Marketplace nach "Vertical Tabs Inside Editor Area" und installieren Sie die Erweiterung. Die Erweiterungs-ID lautet `laikang287.vertical-tabs-inside-editor-area`
 - Starten Sie VS Code neu
 - Finden Sie das `VERTICAL TABS`-Symbol in der Aktivitätsleiste von VS Code und klicken Sie darauf, um die Ansicht zu öffnen. Verwenden Sie Show/Hide, um die vertikale Tableiste ein- oder auszublenden
 - Hinweis 1: Sie können die `VERTICAL TABS`-Ansicht an andere häufig genutzte Stellen in der Aktivitätsleiste verschieben
@@ -98,5 +98,5 @@ MIT-Lizenz - siehe [LICENSE](LICENSE)
 
 ## Manuelle Installation
 
-- Finden Sie die neueste `.vsix`-Datei im releases-Verzeichnis des [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) GitHub-Repositories und laden Sie sie herunter
+- Finden Sie die neueste `.vsix`-Datei im releases-Verzeichnis des [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) GitHub-Repositories und laden Sie sie herunter
 - Öffnen Sie VS Code, gehen Sie zur Erweiterungsansicht in der Aktivitätsleiste, klicken Sie auf das Drei-Punkte-Menü oben rechts in der Seitenleiste und wählen Sie "Von VSIX installieren..."

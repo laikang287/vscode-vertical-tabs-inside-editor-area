@@ -61,7 +61,7 @@ VS Code 預設使用橫向標籤欄。開啟大量檔案後，標籤名稱容易
 
 ## 快速開始
 
-- 在 VS Code 擴充市場中搜尋 "Vertical Tabs in Editor Area" 進行安裝，擴充的 Identifier 為 `laikang287.vertical-tabs-in-editor-area`
+- 在 VS Code 擴充市場中搜尋 "Vertical Tabs Inside Editor Area" 進行安裝，擴充的 Identifier 為 `laikang287.vertical-tabs-inside-editor-area`
 - 重啟 VS Code
 - 在 VS Code 的活動欄找到 `VERTICAL TABS` 圖示，點擊圖示開啟檢視，可以點擊 Show、Hide 來顯示、隱藏垂直標籤頁
 - 註 1：此 `VERTICAL TABS` 檢視可移動到其他常用的活動欄內部，方便使用
@@ -98,5 +98,5 @@ MIT License - 詳見 [LICENSE](LICENSE)
 
 ## 如何手動安裝擴充
 
-- 在 GitHub 的 [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) 倉庫的 releases 目錄下找到最新版的 .vsix 並下載
+- 在 GitHub 的 [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) 倉庫的 releases 目錄下找到最新版的 .vsix 並下載
 - 開啟 VS Code → 活動欄找到擴充 → 點擊側邊欄右上角的三點選單 → 選擇「從 VSIX 安裝...」

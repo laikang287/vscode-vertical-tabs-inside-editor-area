@@ -61,7 +61,7 @@ VS Code по умолчанию использует горизонтальну�
 
 ## Быстрый Старт
 
-- Найдите «Vertical Tabs in Editor Area» в магазине расширений VS Code и установите его. Идентификатор расширения: `laikang287.vertical-tabs-in-editor-area`
+- Найдите «Vertical Tabs Inside Editor Area» в магазине расширений VS Code и установите его. Идентификатор расширения: `laikang287.vertical-tabs-inside-editor-area`
 - Перезапустите VS Code
 - Найдите значок `VERTICAL TABS` на панели действий VS Code, нажмите на него, чтобы открыть представление. Используйте Show/Hide для отображения или скрытия вертикальной панели вкладок
 - Примечание 1: Вы можете переместить представление `VERTICAL TABS` в другие часто используемые области панели действий
@@ -98,5 +98,5 @@ VS Code по умолчанию использует горизонтальну�
 
 ## Ручная Установка
 
-- Найдите последний файл `.vsix` в директории releases репозитория [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) на GitHub и скачайте его
+- Найдите последний файл `.vsix` в директории releases репозитория [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) на GitHub и скачайте его
 - Откройте VS Code, перейдите к представлению расширений на панели действий, нажмите на меню из трех точек в правом верхнем углу боковой панели и выберите «Установить из VSIX...»

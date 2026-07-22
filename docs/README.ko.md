@@ -61,7 +61,7 @@ VS Code는 기본적으로 가로 탭 막대를 사용합니다. 많은 파일�
 
 ## 빠른 시작
 
-- VS Code 확장 마켓플레이스에서 "Vertical Tabs in Editor Area"를 검색하여 설치하세요. 확장의 Identifier는 `laikang287.vertical-tabs-in-editor-area`입니다
+- VS Code 확장 마켓플레이스에서 "Vertical Tabs Inside Editor Area"를 검색하여 설치하세요. 확장의 Identifier는 `laikang287.vertical-tabs-inside-editor-area`입니다
 - VS Code를 다시 시작하세요
 - VS Code 활동 표시줄에서 `VERTICAL TABS` 아이콘을 찾아 클릭하여 보기를 열고, Show/Hide를 클릭하여 세로 탭 막대를 표시하거나 숨깁니다
 - 참고 1: 이 `VERTICAL TABS` 보기는 활동 표시줄 내의 다른 자주 사용하는 위치로 이동할 수 있습니다
@@ -98,5 +98,5 @@ MIT License - 자세한 내용은 [LICENSE](LICENSE)를 참조하세요
 
 ## 수동 설치 방법
 
-- GitHub의 [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) 저장소 releases 디렉터리에서 최신 `.vsix` 파일을 다운로드하세요
+- GitHub의 [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) 저장소 releases 디렉터리에서 최신 `.vsix` 파일을 다운로드하세요
 - VS Code 열기 → 활동 표시줄에서 확장 보기 열기 → 사이드바 오른쪽 상단의 점 세 개 메뉴 클릭 → "VSIX에서 설치..." 선택

@@ -61,7 +61,7 @@ Esta extensión coloca la barra de pestañas vertical en el lado izquierdo del �
 
 ## Inicio Rápido
 
-- Busca "Vertical Tabs in Editor Area" en el marketplace de extensiones de VS Code e instálalo. El identificador de la extensión es `laikang287.vertical-tabs-in-editor-area`
+- Busca "Vertical Tabs Inside Editor Area" en el marketplace de extensiones de VS Code e instálalo. El identificador de la extensión es `laikang287.vertical-tabs-inside-editor-area`
 - Reinicia VS Code
 - Encuentra el icono `VERTICAL TABS` en la barra de actividades de VS Code, haz clic para abrir la vista. Usa Show/Hide para mostrar u ocultar la barra de pestañas vertical
 - Nota 1: Puedes arrastrar la vista `VERTICAL TABS` a otras áreas de uso frecuente dentro de la barra de actividades
@@ -98,5 +98,5 @@ Licencia MIT - consulta [LICENSE](LICENSE)
 
 ## Instalación Manual
 
-- Encuentra el archivo `.vsix` más reciente en el directorio releases del repositorio [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) en GitHub y descárgalo
+- Encuentra el archivo `.vsix` más reciente en el directorio releases del repositorio [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) en GitHub y descárgalo
 - Abre VS Code, ve a la vista de Extensiones en la barra de actividades, haz clic en el menú de tres puntos en la esquina superior derecha de la barra lateral y selecciona "Instalar desde VSIX..."

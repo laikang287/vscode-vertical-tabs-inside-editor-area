@@ -1,5 +1,5 @@
 
-# Vertical Tabs in Editor Area
+# Vertical Tabs Inside Editor Area
 
 ```html
 <p align="center">
@@ -61,7 +61,7 @@ This extension places the vertical tab bar on the left side of the editor area, 
 
 ## Quick Start
 
-- Search for "Vertical Tabs in Editor Area" in the VS Code extension marketplace and install it. The extension identifier is `laikang287.vertical-tabs-in-editor-area`
+- Search for "Vertical Tabs Inside Editor Area" in the VS Code extension marketplace and install it. The extension identifier is `laikang287.vertical-tabs-inside-editor-area`
 - Restart VS Code
 - Find the `VERTICAL TABS` icon in the VS Code activity bar, click it to open the view. Use Show/Hide to toggle the vertical tab bar
 - Note 1: You can drag the `VERTICAL TABS` view into other frequently used areas of the activity bar for convenience
@@ -98,5 +98,5 @@ MIT License - see [LICENSE](LICENSE)
 
 ## Manual Installation
 
-- Find the latest `.vsix` file in the releases directory of the [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases) GitHub repository and download it
+- Find the latest `.vsix` file in the releases directory of the [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) GitHub repository and download it
 - Open VS Code, go to the Extensions view in the activity bar, click the three-dot menu in the top-right corner of the sidebar, and select "Install from VSIX..."

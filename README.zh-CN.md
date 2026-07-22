@@ -67,7 +67,7 @@ VS Code 默认使用横向标签栏。打开大量文件后，标签名称容易
 
 ## 快速开始
 
-- vscode 插件市场中搜索 Vertical Tabs in Editor Area 进行安装，插件的 Identifier 为 laikang287.vertical-tabs-in-editor-area
+- vscode 插件市场中搜索 Vertical Tabs Inside Editor Area 进行安装，插件的 Identifier 为 laikang287.vertical-tabs-inside-editor-area
 - 重启vscode
 - 在vscode的活动栏的找到`VERTICAL TABS`图标，点击图标打开视图，可以点击Show、Hide来显示、隐藏垂直标签页
 - 注1:此 `VERTICAL TABS`视图可挪到挪到其它常用的活动栏内部，方遍使用
@@ -104,6 +104,6 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 ## 如何手工安装插件
 
-- github找到 vscode-vertical-tabs-in-editor-area 仓库 releases 目录下找到最新版的.vsix，下载
-	- github 仓库地址 [vscode-vertical-tabs-in-editor-area](https://github.com/laikang287/vscode-vertical-tabs-in-editor-area/tree/main/releases)
+- github找到 vscode-vertical-tabs-inside-editor-area 仓库 releases 目录下找到最新版的.vsix，下载
+	- github 仓库地址 [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - 打开vscode——活动栏找到扩展——点击侧边栏右上角的三点查看，选择 从VISX 安装
