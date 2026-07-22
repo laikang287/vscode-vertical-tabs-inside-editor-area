@@ -193,7 +193,9 @@ function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], gr
 
 function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 0 | 1): HTMLElement {
   const row = document.createElement('article');
-  row.className = ['tab-row', `tree-level-${level}`, isSelected(tab) ? 'is-selected' : '', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
+  const selected = isSelected(tab);
+  const multiSelected = selected && selection.keys().length > 1;
+  row.className = ['tab-row', `tree-level-${level}`, selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
   row.draggable = currentDragCapability() !== 'disabled';
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
@@ -238,6 +240,10 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   };
   activate.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
+    // A drag does not always produce a click, so a previous gesture may have
+    // left this flag set. Every new pointer gesture must decide preservation
+    // from its own current selection state.
+    preserveMultiSelectionOnPointerDown = false;
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       event.preventDefault();
       updateSelection(tab, { shiftKey: event.shiftKey, toggleKey: event.ctrlKey || event.metaKey });
