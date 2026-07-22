@@ -359,6 +359,19 @@ test('webview styles the full tab row as draggable', () => {
   assert.doesNotMatch(style, /\.tab-drag-handle/);
 });
 
+test('webview keeps the grabbed point aligned with the pointer while dragging', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+
+  assert.match(source, /interface DragImageOffset/);
+  assert.match(source, /row\.addEventListener\('pointerdown',[\s\S]+dragImageOffset = dragImageOffsetWithin\(row, event\.clientX, event\.clientY\);\s*\}, \{ capture: true \}\)/);
+  assert.match(source, /const hotspot = dragImageOffset \?\? dragImageOffsetWithin\(row, event\.clientX, event\.clientY\)/);
+  assert.match(source, /setDragImage\(row, hotspot\.x, hotspot\.y\)/);
+  assert.match(source, /dragImageOffset = undefined/);
+  assert.match(source, /x: clamp\(clientX - bounds\.left, 0, bounds\.width\)/);
+  assert.match(source, /y: clamp\(clientY - bounds\.top, 0, bounds\.height\)/);
+  assert.doesNotMatch(source, /setDragImage\(row, 8, 8\)/);
+});
+
 test('extension selects existing tabs without cycling through intermediate tabs', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 

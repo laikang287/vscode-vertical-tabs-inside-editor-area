@@ -7,6 +7,11 @@ interface WebviewState {
   readonly collapsedGroups?: readonly string[];
 }
 
+interface DragImageOffset {
+  readonly x: number;
+  readonly y: number;
+}
+
 const vscode = acquireVsCodeApi();
 const description = document.querySelector<HTMLParagraphElement>('#description');
 const groups = document.querySelector<HTMLElement>('#groups');
@@ -182,21 +187,28 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   row.draggable = true;
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
+  let dragImageOffset: DragImageOffset | undefined;
+  row.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    dragImageOffset = dragImageOffsetWithin(row, event.clientX, event.clientY);
+  }, { capture: true });
   row.addEventListener('dragstart', (event) => {
     draggedTarget = tab.target;
     draggedTargets = selectedTargetsFor(tab);
     const requestId = nextDragRequestId();
+    const hotspot = dragImageOffset ?? dragImageOffsetWithin(row, event.clientX, event.clientY);
     row.dataset.dragRequestId = requestId;
     logToExtension('debug', '标签拖拽开始', targetDetails(tab.target, tab.label, requestId));
     event.dataTransfer?.setData('application/x-vertical-tab-target', JSON.stringify(tab.target));
     event.dataTransfer?.setData('application/x-vertical-tab-drag-request', requestId);
     event.dataTransfer?.setData('text/plain', tab.label);
-    event.dataTransfer?.setDragImage(row, 8, 8);
+    event.dataTransfer?.setDragImage(row, hotspot.x, hotspot.y);
   });
   row.addEventListener('dragend', (event) => {
     logToExtension('debug', '标签拖拽结束', targetDetails(tab.target, tab.label, row.dataset.dragRequestId));
     draggedTarget = undefined;
     draggedTargets = [];
+    dragImageOffset = undefined;
     delete row.dataset.dragRequestId;
     event.preventDefault();
   });
@@ -322,6 +334,19 @@ function activationTitle(tab: VerticalTabItem): string {
   if (tab.activationKind === 'reliable') return title;
   if (tab.activationKind === 'bestEffort') return `${title}：使用 VS Code 内置导航命令尝试跳转`;
   return `${title} 无法由扩展跳转`;
+}
+
+function dragImageOffsetWithin(row: HTMLElement, clientX: number, clientY: number): DragImageOffset {
+  const bounds = row.getBoundingClientRect();
+  return {
+    x: clamp(clientX - bounds.left, 0, bounds.width),
+    y: clamp(clientY - bounds.top, 0, bounds.height),
+  };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  if (!Number.isFinite(value)) return minimum;
+  return Math.min(maximum, Math.max(minimum, value));
 }
 
 function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
