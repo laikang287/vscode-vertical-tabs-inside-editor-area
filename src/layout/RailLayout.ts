@@ -5,6 +5,8 @@ export const MIN_RAIL_RATIO = 0.1;
 export const MAX_RAIL_RATIO = 0.5;
 export const FULL_WIDTH_RAIL_RATIO = 0.9;
 export const MAX_PERSISTED_RAIL_RATIO = 0.3;
+export const VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH = 220;
+export const SAFE_RAIL_WIDTH = 222;
 
 export interface EditorLayoutGroup {
   readonly size?: number;
@@ -54,6 +56,87 @@ export function setLeadingRailWidth(layout: EditorLayout, width: number): Editor
   };
 
   return { orientation: layout.orientation, groups: layout.groups.map(update) };
+}
+
+/**
+ * Returns the depth-first layout path for the editor group addressed by its
+ * one-based VS Code view column. VS Code assigns view columns in the same grid
+ * appearance order used to serialize editor layout leaves.
+ */
+export function findLayoutLeafPath(layout: EditorLayout, viewColumn: number): readonly number[] | undefined {
+  if (!Number.isInteger(viewColumn) || viewColumn < 1) {
+    return undefined;
+  }
+
+  let remaining = viewColumn - 1;
+  const visit = (groups: readonly EditorLayoutGroup[], parentPath: readonly number[]): readonly number[] | undefined => {
+    for (let index = 0; index < groups.length; index += 1) {
+      const group = groups[index];
+      const path = [...parentPath, index];
+      if (group.groups && group.groups.length > 0) {
+        const nested = visit(group.groups, path);
+        if (nested) return nested;
+        continue;
+      }
+      if (remaining === 0) return path;
+      remaining -= 1;
+    }
+    return undefined;
+  };
+
+  return visit(layout.groups, []);
+}
+
+/** Returns the width assigned by the deepest horizontal split for a group. */
+export function getEditorGroupWidth(layout: EditorLayout, viewColumn: number): number | undefined {
+  const location = findHorizontalWidthLocation(layout, viewColumn);
+  const width = location?.groups[location.targetIndex]?.size;
+  return typeof width === 'number' && Number.isFinite(width) ? width : undefined;
+}
+
+/**
+ * Nudges only the editor group identified by `viewColumn` above VS Code's
+ * native minimized width. The size is taken from the deepest horizontal split
+ * that controls the target leaf's width, so nested layouts remain intact.
+ */
+export function correctMinimizedEditorGroupWidth(
+  layout: EditorLayout,
+  viewColumn: number,
+  minimizedWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+  safeWidth = SAFE_RAIL_WIDTH,
+): EditorLayout | undefined {
+  const location = findHorizontalWidthLocation(layout, viewColumn);
+  if (!location || safeWidth <= minimizedWidth) {
+    return undefined;
+  }
+  const { groups: horizontalGroups, parentPath: horizontalParentPath, targetIndex: horizontalTargetIndex } = location;
+  if (horizontalGroups[horizontalTargetIndex]?.size !== minimizedWidth) {
+    return undefined;
+  }
+
+  const delta = safeWidth - minimizedWidth;
+  let donorIndex: number | undefined;
+  let donorSize = Number.NEGATIVE_INFINITY;
+  horizontalGroups.forEach((group, index) => {
+    if (index === horizontalTargetIndex || typeof group.size !== 'number' || !Number.isFinite(group.size)) return;
+    if (group.size - delta < minimizedWidth) return;
+    if (group.size > donorSize) {
+      donorIndex = index;
+      donorSize = group.size;
+    }
+  });
+  if (donorIndex === undefined) {
+    return undefined;
+  }
+
+  return {
+    ...layout,
+    groups: updateGroupsAtPath(layout.groups, horizontalParentPath, (siblings) => siblings.map((group, index) => {
+      if (index === horizontalTargetIndex) return { ...group, size: safeWidth };
+      if (index === donorIndex) return { ...group, size: donorSize - delta };
+      return copyGroup(group);
+    })),
+  };
 }
 
 export function countLayoutLeaves(layout: EditorLayout | EditorLayoutGroup): number {
@@ -141,6 +224,46 @@ function copyGroup(group: EditorLayoutGroup): EditorLayoutGroup {
     ...(typeof group.size === 'number' ? { size: group.size } : {}),
     ...(group.groups ? { groups: group.groups.map(copyGroup) } : {}),
   };
+}
+
+function findHorizontalWidthLocation(layout: EditorLayout, viewColumn: number): {
+  readonly groups: readonly EditorLayoutGroup[];
+  readonly parentPath: readonly number[];
+  readonly targetIndex: number;
+} | undefined {
+  const leafPath = findLayoutLeafPath(layout, viewColumn);
+  if (!leafPath) return undefined;
+
+  let groups = layout.groups;
+  let orientation = layout.orientation ?? 0;
+  let result: { readonly groups: readonly EditorLayoutGroup[]; readonly parentPath: readonly number[]; readonly targetIndex: number } | undefined;
+  for (let depth = 0; depth < leafPath.length; depth += 1) {
+    const index = leafPath[depth];
+    const group = groups[index];
+    if (!group) return undefined;
+    if (orientation === 0) {
+      result = { groups, parentPath: leafPath.slice(0, depth), targetIndex: index };
+    }
+    if (depth < leafPath.length - 1) {
+      if (!group.groups || group.groups.length === 0) return undefined;
+      groups = group.groups;
+      orientation = orientation === 0 ? 1 : 0;
+    }
+  }
+  return result;
+}
+
+function updateGroupsAtPath(
+  groups: readonly EditorLayoutGroup[],
+  path: readonly number[],
+  update: (groups: readonly EditorLayoutGroup[]) => readonly EditorLayoutGroup[],
+): readonly EditorLayoutGroup[] {
+  if (path.length === 0) return update(groups);
+  const [index, ...rest] = path;
+  return groups.map((group, groupIndex) => {
+    if (groupIndex !== index || !group.groups) return copyGroup(group);
+    return { ...group, groups: updateGroupsAtPath(group.groups, rest, update) };
+  });
 }
 
 function hasUsableRightEditorArea(layout: EditorLayout | undefined): layout is EditorLayout {

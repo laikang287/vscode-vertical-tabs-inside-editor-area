@@ -22,7 +22,7 @@ suite('Vertical Tabs extension', () => {
 
   });
 
-  test('keeps one locked vertical-tabs group on the left without forcing its width', async function () {
+  test('keeps one locked vertical-tabs group on the left and restores its width', async function () {
     this.timeout(10_000);
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
@@ -41,12 +41,19 @@ suite('Vertical Tabs extension', () => {
       tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
     ))), 'An editor already open before rail creation should remain outside the new left rail group.');
 
+    const layout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+    const railRatios = rootGroupRatios(layout);
+    assert.ok(railRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail should use the configured 20% width unless VS Code enforces its native minimum group width; received ${JSON.stringify(layout)}.`);
+
     const existingTab = vscode.window.tabGroups.all.flatMap((editorGroup) => editorGroup.tabs).find((tab) => (
       tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === existingDocument.uri.toString()
     ));
     assert.ok(existingTab, 'The pre-existing editor tab should remain available for cleanup.');
     await vscode.window.tabGroups.close(existingTab, true);
     await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length >= 2);
+    const emptyRailLayout = await waitForEditorLayout((candidate) => rootGroupRatios(candidate).some((ratio) => ratio >= 0.2 && ratio < 0.3));
+    const emptyRailRatios = rootGroupRatios(emptyRailLayout);
+    assert.ok(emptyRailRatios.some((ratio) => ratio >= 0.2 && ratio < 0.3), `The rail should restore its configured width after the last right-side tab closes; received ${JSON.stringify(emptyRailLayout)}.`);
     assert.ok(nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')), 'Closing the last right-side tab should still restore a usable welcome editor area.');
 
     await vscode.commands.executeCommand('verticalTabs.focus');
@@ -118,7 +125,7 @@ suite('Vertical Tabs extension', () => {
     assert.ok(nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')), 'The restored right editor area should contain the welcome editor.');
   });
 
-  test('reopening leaves the rail at VS Code native width while automatic width changes are disabled', async function () {
+  test('nudges the native minimum rail width before focus and restores it on reopen', async function () {
     this.timeout(15_000);
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
@@ -131,15 +138,16 @@ suite('Vertical Tabs extension', () => {
     await waitFor(() => verticalTabs()[0]?.group.viewColumn === vscode.ViewColumn.One && verticalTabs()[0]?.group.tabs.length === 1);
     await waitFor(() => nonVerticalTabs().some(({ tab }) => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === document.uri.toString()));
 
+    await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
     await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 180 }, { size: 1420 }] });
-    const minimizedLayout = await waitForEditorLayout((candidate) => {
-      const ratios = rootGroupRatios(candidate);
-      return Math.min(...ratios) <= 0.3 && Math.max(...ratios) >= 0.65;
-    });
-    const minimizedRatios = rootGroupRatios(minimizedLayout);
-    assert.ok(Math.min(...minimizedRatios) <= 0.3, `The rail should be minimized before closing; received ${JSON.stringify(minimizedLayout)}.`);
+    const safeMinimumLayout = await waitForEditorLayout((candidate) => candidate.groups[0]?.size === 222);
+    assert.equal(safeMinimumLayout.groups[0]?.size, 222, `The extension should nudge the rail above VS Code's native 220px minimum; received ${JSON.stringify(safeMinimumLayout)}.`);
 
-    await vscode.commands.executeCommand('verticalTabs.next');
+    await vscode.commands.executeCommand('verticalTabs.focus');
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    const focusedLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+    assert.equal(focusedLayout.groups[0]?.size, 222, `Focusing the rail must not expand it to the maximum width; received ${JSON.stringify(focusedLayout)}.`);
+
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
     await vscode.commands.executeCommand('verticalTabs.open');
@@ -147,10 +155,49 @@ suite('Vertical Tabs extension', () => {
 
     const reopenedLayout = await waitForEditorLayout((candidate) => {
       const ratios = rootGroupRatios(candidate);
-      return ratios.length >= 2 && (ratios[0] ?? 0) > 0.3;
+      return ratios.length >= 2 && (candidate.groups[0]?.size ?? 0) > 220 && (ratios[0] ?? 1) <= 0.3;
     });
     const reopenedRatios = rootGroupRatios(reopenedLayout);
-    assert.ok((reopenedRatios[0] ?? 0) > 0.3, `The extension should not restore the previously minimized rail ratio; received ${JSON.stringify(reopenedLayout)}.`);
+    assert.ok((reopenedRatios[0] ?? 1) <= 0.3, `The rail should restore its safe narrow ratio rather than expanding; received ${JSON.stringify(reopenedLayout)}.`);
+  });
+
+  test('corrects only the vertical-tabs group after a third editor group expands', async function () {
+    this.timeout(15_000);
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+    await closeNonVerticalTabs();
+
+    const secondDocument = await vscode.workspace.openTextDocument({ content: 'second editor group' });
+    await vscode.window.showTextDocument(secondDocument, { preserveFocus: false });
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length >= 2);
+    await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
+    await vscode.commands.executeCommand('workbench.action.newGroupRight');
+    const thirdDocument = await vscode.workspace.openTextDocument({ content: 'third editor group' });
+    await vscode.window.showTextDocument(thirdDocument, { preserveFocus: false });
+    await waitFor(() => vscode.window.tabGroups.all.length === 3);
+
+    await vscode.commands.executeCommand('workbench.action.focusSecondEditorGroup');
+    await vscode.commands.executeCommand('vscode.setEditorLayout', {
+      orientation: 0,
+      groups: [{ size: 300 }, { size: 1080 }, { size: 220 }],
+    });
+    await waitForEditorLayout((candidate) => candidate.groups[2]?.size === 220);
+
+    await vscode.commands.executeCommand('workbench.action.focusThirdEditorGroup');
+    const expandedLayout = await waitForEditorLayout((candidate) => (
+      candidate.groups[0]?.size === 222
+      && candidate.groups[1]?.size === 220
+      && (candidate.groups[2]?.size ?? 0) > 220
+    ));
+    const expandedSizes = expandedLayout.groups.map((group) => group.size);
+    assert.ok(expandedSizes.every((size): size is number => typeof size === 'number'));
+    const expandedTotal = expandedSizes.reduce((total, size) => total + size, 0);
+    assert.deepEqual(
+      expandedSizes,
+      [222, 220, expandedTotal - 442],
+      `Only the vertical-tabs group should be nudged after the third group expands; received ${JSON.stringify(expandedLayout)}.`,
+    );
   });
 });
 

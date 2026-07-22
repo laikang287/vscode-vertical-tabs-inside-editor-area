@@ -3,15 +3,19 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
+  correctMinimizedEditorGroupWidth,
   DEFAULT_RAIL_RATIO,
   getEditorAreaWidth,
+  getEditorGroupWidth,
   getObservedRailRatio,
   getRailGroupRatio,
   isEditorLayout,
   normalizeRailRatio,
   resolveRailRatio,
+  SAFE_RAIL_WIDTH,
   shouldPersistRailGroupRatio,
   shouldPersistObservedRailWidth,
+  VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
   type EditorLayout,
 } from '../layout/RailLayout';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
@@ -58,6 +62,7 @@ export class VerticalTabsPanel {
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   private renderAckTimer: ReturnType<typeof setTimeout> | undefined;
+  private minWidthCorrectionTimer: ReturnType<typeof setTimeout> | undefined;
   private renderAckRevision = 0;
   private renderAckAttempts = 0;
   private disposed = false;
@@ -93,7 +98,10 @@ export class VerticalTabsPanel {
         void this.handleMessage(message).catch((error) => logError('处理 Webview 消息失败', error));
       }),
       vscode.window.tabGroups.onDidChangeTabs(() => this.scheduleRefresh()),
-      vscode.window.tabGroups.onDidChangeTabGroups(() => this.scheduleRefresh()),
+      vscode.window.tabGroups.onDidChangeTabGroups(() => {
+        this.scheduleRefresh();
+        this.scheduleMinimizedWidthCorrection('tabGroupsChanged');
+      }),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('verticalTabs')) {
           void this.handleConfigurationChange(event).catch((error) => logError('应用垂直标签配置变更失败', error));
@@ -146,7 +154,7 @@ export class VerticalTabsPanel {
     if (existing) {
       logDebug('复用已附加的垂直标签面板', { settled: existing.hasSettledRail() });
       const previousEditor = vscode.window.activeTextEditor;
-      existing.reveal(false);
+      await existing.reveal(false);
       if (!existing.hasSettledRail()) {
         await existing.settleAndEnsureRail(previousEditor);
       }
@@ -161,7 +169,7 @@ export class VerticalTabsPanel {
       VerticalTabsPanel.syncVisibilityContext();
       if (restored) {
         const previousEditor = vscode.window.activeTextEditor;
-        restored.reveal(false);
+        await restored.reveal(false);
         await restored.settleAndEnsureRail(previousEditor);
       } else {
         logWarn('等待已恢复的垂直标签面板实例超时');
@@ -179,7 +187,7 @@ export class VerticalTabsPanel {
   static async focus(context: vscode.ExtensionContext): Promise<void> {
     logDebug('请求聚焦垂直标签面板');
     const instance = await VerticalTabsPanel.open(context);
-    instance?.reveal(false);
+    await instance?.reveal(false);
   }
 
   static async close(): Promise<void> {
@@ -229,7 +237,7 @@ export class VerticalTabsPanel {
     logDebug('WebviewPanel 创建完成', { viewType: VIEW_TYPE, requestedViewColumn: vscode.ViewColumn.One });
     const instance = VerticalTabsPanel.panels.show(
       () => new VerticalTabsPanel(panel, context),
-      (existing) => existing.reveal(false),
+      (existing) => { void existing.reveal(false); },
     );
     await VerticalTabsPanel.setVisibilityContext(true);
     await instance.settleAndEnsureRail(previouslyActiveEditor, ratio);
@@ -448,14 +456,20 @@ export class VerticalTabsPanel {
     if (this.renderAckTimer) {
       clearTimeout(this.renderAckTimer);
     }
+    if (this.minWidthCorrectionTimer) {
+      clearTimeout(this.minWidthCorrectionTimer);
+    }
     queueMicrotask(() => VerticalTabsPanel.syncVisibilityContext());
     while (this.disposables.length > 0) {
       this.disposables.pop()?.dispose();
     }
   }
 
-  private reveal(preserveFocus: boolean): void {
+  private async reveal(preserveFocus: boolean): Promise<void> {
     logTrace('显示垂直标签面板', { viewColumn: this.panel.viewColumn, preserveFocus });
+    if (!preserveFocus) {
+      await this.correctOwnGroupMinimizedWidth('beforeReveal');
+    }
     this.panel.reveal(this.panel.viewColumn, preserveFocus);
   }
 
@@ -481,10 +495,70 @@ export class VerticalTabsPanel {
       logWarn('锁定垂直标签分组失败：找不到面板所在分组');
       return false;
     }
+    await this.correctOwnGroupMinimizedWidthInLayoutOperation('beforeFocus');
     await focusEditorGroup(ownGroup.viewColumn);
     this.panel.reveal(ownGroup.viewColumn ?? vscode.ViewColumn.One, false);
     await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
     await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+    return true;
+  }
+
+  private scheduleMinimizedWidthCorrection(source: string): void {
+    if (this.minWidthCorrectionTimer) clearTimeout(this.minWidthCorrectionTimer);
+    this.minWidthCorrectionTimer = setTimeout(() => {
+      this.minWidthCorrectionTimer = undefined;
+      if (this.disposed || this.arrangingRail) return;
+      void this.correctOwnGroupMinimizedWidth(source).catch((error) => logError('检查垂直标签栏最小宽度失败', { source, error }));
+    }, GROUP_WAIT_INTERVAL_MS);
+  }
+
+  private correctOwnGroupMinimizedWidth(source: string): Promise<boolean> {
+    return VerticalTabsPanel.enqueueLayout(() => this.correctOwnGroupMinimizedWidthInLayoutOperation(source));
+  }
+
+  private async correctOwnGroupMinimizedWidthInLayoutOperation(source: string): Promise<boolean> {
+    const ownGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+    const viewColumn = ownGroup?.viewColumn;
+    if (!ownGroup || typeof viewColumn !== 'number' || viewColumn < vscode.ViewColumn.One) {
+      logDebug('跳过垂直标签栏最小宽度修正：无法定位插件所属编辑器组', { source, viewColumn });
+      return false;
+    }
+
+    const layout = await getEditorLayout();
+    if (!layout) return false;
+    const currentWidth = getEditorGroupWidth(layout, viewColumn);
+    if (currentWidth !== VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH) {
+      logTrace('垂直标签栏不处于 VS Code 原生最小宽度，无需修正', { source, viewColumn, currentWidth });
+      return false;
+    }
+
+    const nextLayout = correctMinimizedEditorGroupWidth(layout, viewColumn);
+    if (!nextLayout) {
+      logWarn('无法安全修正垂直标签栏最小宽度', { source, viewColumn, currentWidth, layout });
+      return false;
+    }
+    logDebug('准备将插件所属编辑器组移出 VS Code 原生最小宽度', {
+      source,
+      viewColumn,
+      previousWidth: currentWidth,
+      targetWidth: SAFE_RAIL_WIDTH,
+      previousLayout: layout,
+      nextLayout,
+    });
+    if (!await applyEditorLayout(nextLayout)) return false;
+
+    const verifiedLayout = await getEditorLayout();
+    const verifiedWidth = verifiedLayout ? getEditorGroupWidth(verifiedLayout, viewColumn) : undefined;
+    if (verifiedWidth === undefined || verifiedWidth === VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH) {
+      logWarn('垂直标签栏最小宽度修正未生效', { source, viewColumn, verifiedWidth, verifiedLayout });
+      return false;
+    }
+    logInfo('已将插件所属编辑器组从 VS Code 原生最小宽度修正为安全宽度', {
+      source,
+      viewColumn,
+      previousWidth: currentWidth,
+      verifiedWidth,
+    });
     return true;
   }
 
@@ -670,6 +744,12 @@ export class VerticalTabsPanel {
       this.lastObservedRailWidth = message.width;
       logDebug('观察到垂直标签 Webview 宽度', { width: message.width, arrangingRail: this.arrangingRail });
       if (this.arrangingRail) {
+        return;
+      }
+      if (message.width <= VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH) {
+        await this.correctOwnGroupMinimizedWidth('resizeObserver');
+        // Never persist the transient native minimum. A successful correction
+        // produces a fresh ResizeObserver report for the safe width.
         return;
       }
       if (await this.ensureUsableEmptyRailLayout()) {
@@ -963,7 +1043,7 @@ export class VerticalTabsPanel {
 
     if (!rememberStateEnabled && (memoryChanged
       || event.affectsConfiguration('verticalTabs.tabWidthRatio'))) {
-      await applyLeadingRailRatio(getDefaultRailRatio());
+      await VerticalTabsPanel.enqueueLayout(() => applyLeadingRailRatio(getDefaultRailRatio()));
     }
     await this.refresh({ reason: 'operation' });
   }
@@ -2130,10 +2210,9 @@ async function getEditorLayout(): Promise<EditorLayout | undefined> {
 
 async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   try {
-    logDebug('自动宽度调整已临时禁用，跳过应用编辑器布局', { layout });
-    // TEMP: 按用户要求临时禁止插件在启动、空标签恢复和配置变更时主动修改宽度。
-    // 后续需要恢复自动宽度时，取消下一行注释即可。
-    // await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
+    logDebug('应用编辑器布局', { layout });
+    await vscode.commands.executeCommand('vscode.setEditorLayout', layout);
+    logDebug('编辑器布局命令执行完成');
     return true;
   } catch (error) {
     // The rail remains usable at VS Code's native split size when unavailable.
@@ -2188,7 +2267,7 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
   }
   const totalWidth = getEditorAreaWidth(layout);
   const normalizedRatio = clampAutomaticRailRatio(ratio, { source: 'applyLeadingRailRatio' });
-  const railWidth = Math.max(1, Math.ceil(totalWidth * normalizedRatio));
+  const railWidth = Math.max(SAFE_RAIL_WIDTH, Math.ceil(totalWidth * normalizedRatio));
   const existingRailLikeGroup = findExistingRailLikeRootGroup(layout, normalizedRatio);
   logDebug('准备调整左侧标签栏宽度', {
     requestedRatio: ratio,
