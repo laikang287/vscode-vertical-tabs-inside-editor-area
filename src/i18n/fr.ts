@@ -48,6 +48,10 @@ const fr: LocaleStrings = {
   sortModeModifiedDesc: "Date de modification (décroissant)",
   sortModeNameAsc: "Nom (croissant)",
   sortModeNameDesc: "Nom (décroissant)",
+  searchPlaceholder: "Rechercher",
+  searchGroup: "Rechercher les noms de groupe",
+  showSearch: "Afficher la recherche",
+  hideSearch: "Masquer la recherche",
 };
 
 export default fr;

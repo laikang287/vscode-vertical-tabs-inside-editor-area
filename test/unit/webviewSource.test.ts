@@ -554,3 +554,27 @@ test('parent-directory file collisions require confirmation and replace related 
   assert.match(source, /const duplicateTabs = replacementTab \? openedDestinationTabs\.filter/);
   assert.match(source, /const staleSourceTabs = findTabsByResourceUri\(sourceUri\)/);
 });
+
+
+test('search input, group toggle, and search visibility toggle are present in the panel template', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(panelSource, /id="toggle-search"/);
+  assert.match(panelSource, /id="search-container"/);
+  assert.match(panelSource, /id="search-input"/);
+  assert.match(panelSource, /id="search-group-toggle"/);
+  assert.ok(webviewSource.includes("querySelector<HTMLInputElement>('#search-input')"));
+  assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#search-group-toggle')"));
+  assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#toggle-search')"));
+  assert.ok(webviewSource.includes("querySelector<HTMLElement>('#search-container')"));
+  assert.ok(webviewSource.includes("type: 'setSearchVisible'"));
+  assert.ok(webviewSource.includes("type: 'setSearchGroups'"));
+  assert.match(webviewSource, /function applySearchFilter/);
+  assert.match(webviewSource, /function applyCurrentFilter/);
+  assert.match(webviewSource, /function setSearchContainerVisible/);
+  assert.match(panelSource, /searchVisible:/);
+  assert.match(panelSource, /searchGroups:/);
+  assert.match(panelSource, /SEARCH_VISIBLE_STORAGE_KEY/);
+  assert.match(panelSource, /SEARCH_GROUPS_STORAGE_KEY/);
+});

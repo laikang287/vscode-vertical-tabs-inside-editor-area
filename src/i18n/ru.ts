@@ -48,6 +48,10 @@ const ru: LocaleStrings = {
   sortModeModifiedDesc: "Изменение (убывание)",
   sortModeNameAsc: "Имя (возрастание)",
   sortModeNameDesc: "Имя (убывание)",
+  searchPlaceholder: "Поиск",
+  searchGroup: "Поиск по именам групп",
+  showSearch: "Показать поиск",
+  hideSearch: "Скрыть поиск",
 };
 
 export default ru;

@@ -46,6 +46,10 @@ export interface LocaleStrings {
   readonly sortModeModifiedDesc: string;
   readonly sortModeNameAsc: string;
   readonly sortModeNameDesc: string;
+  readonly searchPlaceholder: string;
+  readonly searchGroup: string;
+  readonly showSearch: string;
+  readonly hideSearch: string;
 }
 
 export type SupportedLocale =

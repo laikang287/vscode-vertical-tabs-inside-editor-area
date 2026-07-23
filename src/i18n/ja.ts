@@ -48,6 +48,10 @@ const ja: LocaleStrings = {
   sortModeModifiedDesc: "更新日時 (降順)",
   sortModeNameAsc: "名前 (昇順)",
   sortModeNameDesc: "名前 (降順)",
+  searchPlaceholder: "検索",
+  searchGroup: "グループ名を検索",
+  showSearch: "検索を表示",
+  hideSearch: "検索を非表示",
 };
 
 export default ja;

@@ -42,6 +42,8 @@ export interface SnapshotBuildOptions {
   readonly sortMode?: SortMode;
   readonly rememberState?: boolean;
   readonly toolbarControlsVisible?: boolean;
+  readonly searchVisible?: boolean;
+  readonly searchGroups?: boolean;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
   readonly localeStrings?: LocaleStrings;
@@ -81,7 +83,7 @@ export function buildSnapshot(
   }));
 
   const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
-  return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, tabs, manualGroups, displayGroups };
+  return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
 }
 
 export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: CloseAction, target?: VerticalTabItem['target']): VerticalTabItem['target'][] {

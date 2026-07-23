@@ -48,6 +48,10 @@ const zhCn: LocaleStrings = {
   sortModeModifiedDesc: '修改时间（降序）',
   sortModeNameAsc: '名称（升序）',
   sortModeNameDesc: '名称（降序）',
+  searchPlaceholder: "搜索",
+  searchGroup: "搜索标签组",
+  showSearch: "显示搜索",
+  hideSearch: "隐藏搜索",
 };
 
 export default zhCn;

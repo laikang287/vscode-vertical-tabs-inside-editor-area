@@ -32,6 +32,8 @@ const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
 const GROUP_MODE_STORAGE_KEY = 'verticalTabs.groupMode';
 const SORT_MODE_STORAGE_KEY = 'verticalTabs.sortMode';
 const TOOLBAR_CONTROLS_VISIBLE_STORAGE_KEY = 'verticalTabs.toolbarControlsVisible';
+const SEARCH_VISIBLE_STORAGE_KEY = 'verticalTabs.searchVisible';
+const SEARCH_GROUPS_STORAGE_KEY = 'verticalTabs.searchGroups';
 const MANUAL_GROUPS_STORAGE_KEY = 'verticalTabs.manualGroups';
 const MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY = 'verticalTabs.manualGroupByIdentity';
 const MANUAL_ORDER_BY_GROUP_STORAGE_KEY = 'verticalTabs.manualOrderByGroup';
@@ -75,10 +77,12 @@ export class VerticalTabsPanel {
   private lastObservedRailWidth: number | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, toolbarControlsVisible: true, tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, tabs: [], manualGroups: [], displayGroups: [] };
   private groupMode: GroupMode;
   private sortMode: SortMode;
   private toolbarControlsVisible: boolean;
+  private searchVisible: boolean;
+  private searchGroups: boolean;
   private readonly manualGroups: ManualTabGroup[];
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
@@ -94,6 +98,8 @@ export class VerticalTabsPanel {
     this.groupMode = readGroupMode(context);
     this.sortMode = readSortMode(context);
     this.toolbarControlsVisible = readToolbarControlsVisible(context);
+    this.searchVisible = readSearchVisible(context);
+    this.searchGroups = readSearchGroups(context);
     this.manualGroups = this.rememberStateEnabled ? readManualGroups(context) : [];
     this.manualGroupByIdentity = this.rememberStateEnabled ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
     this.manualOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
@@ -671,6 +677,8 @@ export class VerticalTabsPanel {
       sortMode: this.sortMode,
       rememberState: shouldRememberState(),
       toolbarControlsVisible: this.toolbarControlsVisible,
+      searchVisible: this.searchVisible,
+      searchGroups: this.searchGroups,
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
     });
@@ -847,6 +855,22 @@ export class VerticalTabsPanel {
       this.toolbarControlsVisible = message.visible;
       await this.persistToolbarControlsVisible();
       logInfo('Toggle vertical tabs toolbar controls visibility', { visible: message.visible });
+     await this.refresh({ reason: 'operation' });
+     return;
+   }
+
+    if (message.type === 'setSearchVisible') {
+      this.searchVisible = message.visible;
+      await this.persistSearchVisible();
+      logInfo('Toggle vertical tabs search visibility', { visible: message.visible });
+      await this.refresh({ reason: 'operation' });
+      return;
+    }
+
+    if (message.type === 'setSearchGroups') {
+      this.searchGroups = message.enabled;
+      await this.persistSearchGroups();
+      logInfo('Toggle vertical tabs search groups', { enabled: message.enabled });
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -1781,6 +1805,16 @@ export class VerticalTabsPanel {
     if (shouldRememberState()) await this.context.workspaceState.update(SORT_MODE_STORAGE_KEY, this.sortMode);
   }
 
+  private async persistSearchVisible(): Promise<void> {
+    if (!shouldRememberState()) return;
+    await this.context.workspaceState.update(SEARCH_VISIBLE_STORAGE_KEY, this.searchVisible);
+  }
+
+  private async persistSearchGroups(): Promise<void> {
+    if (!shouldRememberState()) return;
+    await this.context.workspaceState.update(SEARCH_GROUPS_STORAGE_KEY, this.searchGroups);
+  }
+
   private async persistToolbarControlsVisible(): Promise<void> {
     if (shouldRememberState()) await this.context.workspaceState.update(TOOLBAR_CONTROLS_VISIBLE_STORAGE_KEY, this.toolbarControlsVisible);
   }
@@ -2011,9 +2045,14 @@ export class VerticalTabsPanel {
   <main class="vertical-tabs" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
+        <button id="toggle-search" class="toolbar-icon" type="button" title="" aria-label="">🔍</button>
         <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="" aria-label="">□</button>
         <button id="expand-all" class="toolbar-icon" type="button" title="" aria-label="">⊞</button>
         <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label="">⊟</button>
+      </div>
+      <div id="search-container" class="search-container">
+        <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" />
+        <button id="search-group-toggle" class="search-group-toggle" type="button" title="${i18n.searchGroup}">G</button>
       </div>
       <div id="toolbar-controls" class="toolbar-selects">
         <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
@@ -2625,6 +2664,26 @@ function readSortMode(context: vscode.ExtensionContext): SortMode {
   if (!shouldRememberState()) return readDefaultSortMode();
   const value = context.workspaceState.get<SortMode>(SORT_MODE_STORAGE_KEY);
   return isSortMode(value) ? value : readDefaultSortMode();
+}
+
+function readSearchVisible(context: vscode.ExtensionContext): boolean {
+  if (!shouldRememberState()) return readDefaultSearchVisible();
+  const value = context.workspaceState.get<boolean>(SEARCH_VISIBLE_STORAGE_KEY);
+  return typeof value === 'boolean' ? value : readDefaultSearchVisible();
+}
+
+function readSearchGroups(context: vscode.ExtensionContext): boolean {
+  if (!shouldRememberState()) return readDefaultSearchGroups();
+  const value = context.workspaceState.get<boolean>(SEARCH_GROUPS_STORAGE_KEY);
+  return typeof value === 'boolean' ? value : readDefaultSearchGroups();
+}
+
+function readDefaultSearchVisible(): boolean {
+  return true;
+}
+
+function readDefaultSearchGroups(): boolean {
+  return false;
 }
 
 function readToolbarControlsVisible(context: vscode.ExtensionContext): boolean {

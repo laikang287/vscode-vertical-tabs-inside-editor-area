@@ -25,10 +25,16 @@ const toggleToolbarControlsButton = document.querySelector<HTMLButtonElement>('#
 const expandAllButton = document.querySelector<HTMLButtonElement>('#expand-all');
 const collapseAllButton = document.querySelector<HTMLButtonElement>('#collapse-all');
 const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
+const searchContainer = document.querySelector<HTMLElement>('#search-container');
+const searchInput = document.querySelector<HTMLInputElement>('#search-input');
+const searchGroupToggle = document.querySelector<HTMLButtonElement>('#search-group-toggle');
+const toggleSearchButton = document.querySelector<HTMLButtonElement>('#toggle-search');
 const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 let contextMenu: HTMLElement | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
+let currentSearchQuery = '';
+let currentSearchGroups = false;
 let draggedTarget: TabTarget | undefined;
 let draggedTargets: readonly TabTarget[] = [];
 let draggedGroupId: string | undefined;
@@ -48,6 +54,8 @@ const EN_DEFAULTS: Record<string, string> = {
   previewSuffix: ' (preview)', bestEffortActivation: 'Navigate using VS Code built-in commands',
   unsupportedActivation: 'Cannot be navigated by extension',
   hideToolbarControls: 'Hide grouping and sorting controls', showToolbarControls: 'Show grouping and sorting controls',
+  searchPlaceholder: 'Search', searchGroup: 'Search group names',
+  showSearch: 'Show search', hideSearch: 'Hide search',
   ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root',
   noExtension: 'No extension', editorGroup: 'Editor Group {0}',
 };
@@ -95,6 +103,25 @@ groupModeSelect?.addEventListener('change', () => {
 sortModeSelect?.addEventListener('change', () => {
   vscode.postMessage({ type: 'setSortMode', sortMode: sortModeSelect.value as SortMode });
 });
+
+toggleSearchButton?.addEventListener('click', () => {
+  const visible = !(latestSnapshot?.searchVisible ?? true);
+  vscode.postMessage({ type: 'setSearchVisible', visible });
+  setSearchContainerVisible(visible);
+});
+
+searchGroupToggle?.addEventListener('click', () => {
+  currentSearchGroups = !currentSearchGroups;
+  searchGroupToggle?.classList.toggle('is-active', currentSearchGroups);
+  vscode.postMessage({ type: 'setSearchGroups', enabled: currentSearchGroups });
+  applyCurrentFilter();
+});
+
+searchInput?.addEventListener('input', () => {
+  currentSearchQuery = searchInput?.value ?? '';
+  applyCurrentFilter();
+});
+
 document.addEventListener('click', () => dismissContextMenu());
 document.addEventListener('dragend', () => { clearDropIndicator(); draggedGroupId = undefined; });
 document.addEventListener('drop', () => clearDropIndicator());
@@ -123,10 +150,14 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
   if (sortModeSelect) sortModeSelect.value = message.snapshot.sortMode;
   setToolbarControlsVisible(message.snapshot.toolbarControlsVisible);
+  setSearchContainerVisible(message.snapshot.searchVisible);
+  currentSearchGroups = message.snapshot.searchGroups;
+  searchGroupToggle?.classList.toggle('is-active', message.snapshot.searchGroups);
   groups.replaceChildren();
   const { tabs, displayGroups } = message.snapshot;
   description.textContent = tabs.length === 0 ? i18n.emptyState : '';
-  for (const group of displayGroups) appendDisplayGroup(groups, group);
+  const filteredGroups = applySearchFilter(displayGroups, currentSearchQuery, currentSearchGroups);
+  for (const group of filteredGroups) appendDisplayGroup(groups, group);
   updateTreeActionState();
   correctPendingActivation();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
@@ -962,5 +993,33 @@ function dismissContextMenu(): void {
   contextMenu = undefined;
 }
 
+
 type _GroupModeCheck = GroupMode;
+
+function setSearchContainerVisible(visible: boolean): void {
+  if (searchContainer) { searchContainer.hidden = !visible; }
+  if (toggleSearchButton) { toggleSearchButton.title = visible ? i18n.hideSearch : i18n.showSearch; }
+}
+
+function applyCurrentFilter(): void {
+  if (!latestSnapshot) return;
+  render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
+}
+
+function applySearchFilter(
+  groups: readonly VerticalTabDisplayGroup[],
+  query: string,
+  searchGroups: boolean
+): VerticalTabDisplayGroup[] {
+  if (!query) return groups as VerticalTabDisplayGroup[];
+  const lowerQuery = query.toLowerCase();
+  const result: VerticalTabDisplayGroup[] = [];
+  for (const group of groups) {
+    const groupMatches = searchGroups && group.title.toLowerCase().includes(lowerQuery);
+    if (groupMatches) { result.push(group); continue; }
+    const matchingTabs = group.tabs.filter(tab => tab.label.toLowerCase().includes(lowerQuery));
+    if (matchingTabs.length > 0) { result.push({ ...group, tabs: matchingTabs }); }
+  }
+  return result;
+}
 type _SortModeCheck = SortMode;

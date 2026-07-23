@@ -48,6 +48,10 @@ const zhTw: LocaleStrings = {
   sortModeModifiedDesc: "修改時間 (降序)",
   sortModeNameAsc: "名稱 (升序)",
   sortModeNameDesc: "名稱 (降序)",
+  searchPlaceholder: "搜尋",
+  searchGroup: "搜尋標籤組",
+  showSearch: "顯示搜尋",
+  hideSearch: "隱藏搜尋",
 };
 
 export default zhTw;

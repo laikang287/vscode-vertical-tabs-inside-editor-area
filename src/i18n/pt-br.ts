@@ -48,6 +48,10 @@ const ptBr: LocaleStrings = {
   sortModeModifiedDesc: "Modificação (decrescente)",
   sortModeNameAsc: "Nome (crescente)",
   sortModeNameDesc: "Nome (decrescente)",
+  searchPlaceholder: "Pesquisar",
+  searchGroup: "Pesquisar nomes de grupo",
+  showSearch: "Mostrar pesquisa",
+  hideSearch: "Ocultar pesquisa",
 };
 
 export default ptBr;

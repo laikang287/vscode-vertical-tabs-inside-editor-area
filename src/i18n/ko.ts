@@ -48,6 +48,10 @@ const ko: LocaleStrings = {
   sortModeModifiedDesc: "수정 시간 (내림차순)",
   sortModeNameAsc: "이름 (오름차순)",
   sortModeNameDesc: "이름 (내림차순)",
+  searchPlaceholder: "검색",
+  searchGroup: "그룹 이름 검색",
+  showSearch: "검색 표시",
+  hideSearch: "검색 숨기기",
 };
 
 export default ko;
