@@ -2050,13 +2050,13 @@ export class VerticalTabsPanel {
         <button id="expand-all" class="toolbar-icon" type="button" title="" aria-label="">⊞</button>
         <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label="">⊟</button>
       </div>
-      <div id="search-container" class="search-container">
-        <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" />
-        <button id="search-group-toggle" class="search-group-toggle" type="button" title="${i18n.searchGroup}">G</button>
-      </div>
       <div id="toolbar-controls" class="toolbar-selects">
         <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
         <label class="toolbar-field" for="sort-mode"><span>${i18n.sortModeLabel}</span><select id="sort-mode"><option value="none">${i18n.sortModeNone}</option><option value="modifiedAsc">${i18n.sortModeModifiedAsc}</option><option value="modifiedDesc">${i18n.sortModeModifiedDesc}</option><option value="nameAsc">${i18n.sortModeNameAsc}</option><option value="nameDesc">${i18n.sortModeNameDesc}</option></select></label>
+      </div>
+      <div id="search-container" class="search-container">
+        <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" />
+        <button id="search-group-toggle" class="search-group-toggle" type="button" title="${i18n.searchGroup}">G</button>
       </div>
     </header>
     <p id="description"></p>
