@@ -212,12 +212,38 @@
   },
   "icon": "media/icon.png",
   "keywords": [
+"keywords": [
     "vertical tabs",
+    "vertical tab",
+    "vertical tab bar",
+    "vertical editor tabs",
+    "vertical file tabs",
+    "editor area tabs",
+    "inside editor area",
+    "inside editor",
     "editor tabs",
+    "file tabs",
+    "document tabs",
+    "open tabs",
+    "open editors",
     "tab manager",
+    "tab management",
+    "tab navigator",
     "tab navigation",
+    "tab organizer",
     "tab groups",
-    "tab pinning"
+    "tab grouping",
+    "tab tree",
+    "tree tabs",
+    "tab pinning",
+    "pinned tabs",
+    "tab sorting",
+    "tab switching",
+    "drag and drop tabs",
+    "editor groups",
+    "always visible tabs",
+    "edge vertical tabs"
+]
   ],
   "bugs": {
     "url": "https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/issues"
@@ -228,3 +254,9 @@
     "theme": "dark"
   }
 }
+
+
+
+
+
+
