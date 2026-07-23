@@ -80,7 +80,11 @@ The extension then uses VS Code's editor group locking feature to lock that grou
 1. This project used AI programming tools during development to assist with code writing, testing, and documentation
 2. Documentation is based on README.zh-CN; other language versions are AI-translated
 3. The Simplified Chinese documentation is the primary maintained version of this project
+4. This extension uses an indirect workaround to implement vertical tabs, so it is somewhat of a hack. The best solution would still be for VS Code to support vertical tabs officially.
 
+	Please give the related VS Code issue a thumbs-up so that the VS Code team will recognize the demand and give this feature more attention:
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 ## License
 
 MIT License - see [LICENSE](LICENSE)
