@@ -7,3 +7,4 @@ dist/*.vsix
 .obsidian
 tmp
 .decks-kk
+.codex
