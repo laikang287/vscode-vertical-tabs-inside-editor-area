@@ -116,3 +116,7 @@ source: null
 ```
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 ```
+
+
+## 输出
+- 在你原本的输出的最后，你把这次你在dist目录中构建出来的visx文件的全路径放代码块中输出
