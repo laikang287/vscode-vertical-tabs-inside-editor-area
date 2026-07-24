@@ -435,11 +435,14 @@ body.vscode-high-contrast-light .group-header:focus-visible {
 .tab-context-menu {
   background: var(--vscode-menu-background);
   border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border));
+  box-sizing: border-box;
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   display: grid;
-  min-width: 150px;
+  max-width: calc(100vw - 8px);
+  min-width: min(150px, calc(100vw - 8px));
   padding: 3px;
   position: fixed;
+  width: max-content;
   z-index: 10;
 }
 
@@ -448,8 +451,12 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   cursor: pointer;
   font-size: var(--vscode-font-size);
   line-height: normal;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 5px 8px;
   text-align: left;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -471,8 +478,49 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   margin: 3px 7px;
 }
 
+.tab-context-section-separator {
+  border-color: var(--vscode-menu-separatorBackground, var(--vscode-contrastBorder, var(--vscode-editorWidget-border)));
+  margin: 4px 0;
+}
+
+body.vscode-high-contrast .tab-context-section-separator,
+body.vscode-high-contrast-light .tab-context-section-separator {
+  border-color: var(--vscode-contrastBorder, var(--vscode-focusBorder));
+}
+
+.tab-context-native-section {
+  display: grid;
+  min-width: 0;
+}
+
+.tab-context-native-notice {
+  color: var(--vscode-descriptionForeground);
+  display: grid;
+  font-size: 11px;
+  gap: 2px;
+  line-height: 1.3;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 4px 8px 6px;
+  white-space: normal;
+}
+
+.tab-context-native-title {
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  font-weight: 600;
+}
+
+.tab-context-native-warning {
+  min-width: 0;
+}
+
 .tab-context-submenu {
+  min-width: 0;
   position: relative;
+}
+
+.tab-context-submenu-trigger {
+  width: 100%;
 }
 
 .tab-context-submenu-trigger::after {
@@ -484,13 +532,16 @@ body.vscode-high-contrast-light .group-header:focus-visible {
 .tab-context-submenu-list {
   background: var(--vscode-menu-background);
   border: 1px solid var(--vscode-menu-border, var(--vscode-editorWidget-border));
+  box-sizing: border-box;
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   display: none;
   left: 100%;
-  min-width: 150px;
+  max-width: calc(100vw - 8px);
+  min-width: min(150px, calc(100vw - 8px));
   padding: 3px;
   position: absolute;
   top: -4px;
+  width: max-content;
   z-index: 11;
 }
 

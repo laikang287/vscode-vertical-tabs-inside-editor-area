@@ -124,12 +124,27 @@ test('tab context menus append an optional VS Code action group with secure opaq
 
   assert.match(webviewSource, /if \(tab && snapshot\?\.nativeContextMenuActionsEnabled\)/);
   assert.match(webviewSource, /type: 'requestNativeTabMenu', requestId, target: tab\.target/);
-  assert.match(webviewSource, /pending\.menu\.append\(createContextMenuSeparator\(\), \.\.\.nativeContextMenuElements/);
+  assert.match(panelSource, /nativeContextMenuActionsEnabled: readNativeContextMenuActionsEnabled\(\)/);
+  assert.match(panelSource, /if \(!readNativeContextMenuActionsEnabled\(\)\) \{\s*this\.postMessage\(\{ type: 'nativeTabMenu', requestId: message\.requestId, entries: \[\] \}\)/);
+  assert.match(webviewSource, /if \(!hasNativeMenuAction\(entries\)\) return;\s*pending\.menu\.append\(createContextMenuSeparator\(true\), createNativeContextMenuSection\(entries, pending\.target\)\)/);
+  assert.match(webviewSource, /section\.className = 'tab-context-native-section';\s*section\.setAttribute\('role', 'group'\);\s*section\.setAttribute\('aria-label', i18n\.nativeContextMenuTitle\);\s*section\.setAttribute\('aria-description', i18n\.nativeContextMenuDetails\)/);
+  assert.match(webviewSource, /notice\.className = 'tab-context-native-notice';\s*notice\.title = i18n\.nativeContextMenuDetails;\s*notice\.setAttribute\('aria-hidden', 'true'\)/);
+  assert.match(webviewSource, /title\.textContent = i18n\.nativeContextMenuTitle/);
+  assert.match(webviewSource, /warning\.textContent = i18n\.nativeContextMenuWarning/);
+  assert.doesNotMatch(webviewSource, /tab-context-native-notice[\s\S]{0,200}tabIndex/);
+  assert.match(webviewSource, /const action = button\(entry\.label, entry\.label\)/);
   assert.match(webviewSource, /type: 'runNativeTabMenuAction', actionId: entry\.actionId, target/);
   assert.match(webviewSource, /pending\.requestId !== requestId/);
   assert.match(webviewSource, /event\.key === 'ArrowRight'/);
   assert.match(webviewSource, /event\.key === 'ArrowLeft'/);
+  assert.match(webviewSource, /child\.classList\.contains\('tab-context-native-section'\)[\s\S]+result\.push\(\.\.\.enabledContextMenuItems\(child\)\)/);
   assert.match(style, /\.tab-context-separator/);
+  assert.match(style, /\.tab-context-section-separator \{[\s\S]+margin: 4px 0;/);
+  assert.match(style, /body\.vscode-high-contrast \.tab-context-section-separator,[\s\S]+border-color: var\(--vscode-contrastBorder/);
+  assert.match(style, /\.tab-context-menu \{[\s\S]+max-width: calc\(100vw - 8px\);[\s\S]+width: max-content;/);
+  assert.match(style, /\.tab-context-action \{[\s\S]+overflow: hidden;[\s\S]+text-overflow: ellipsis;[\s\S]+white-space: nowrap;/);
+  assert.match(style, /\.tab-context-native-notice \{[\s\S]+overflow-wrap: anywhere;[\s\S]+white-space: normal;/);
+  assert.match(style, /\.tab-context-submenu-list \{[\s\S]+max-width: calc\(100vw - 8px\);/);
   assert.match(panelSource, /nativeTabMenuProvider\.resolveAction\(actionId\)/);
   assert.doesNotMatch(webviewSource, /executeCommand/);
   assert.match(manifest, /"verticalTabs\.showNativeContextMenuActions"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);

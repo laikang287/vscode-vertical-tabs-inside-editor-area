@@ -28,6 +28,9 @@ export interface LocaleStrings {
   readonly groupName: string;
   readonly newGroup: string;
   readonly newGroupOnlyManual: string;
+  readonly nativeContextMenuTitle: string;
+  readonly nativeContextMenuWarning: string;
+  readonly nativeContextMenuDetails: string;
   readonly previewTab: string;
   readonly pinnedTab: string;
   readonly readonlyResource: string;

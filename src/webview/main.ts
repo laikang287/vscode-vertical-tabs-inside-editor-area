@@ -1318,8 +1318,33 @@ function renderNativeContextMenu(requestId: string, entries: readonly NativeCont
   if (!pending || pending.requestId !== requestId || contextMenu !== pending.menu || !pending.menu.isConnected) return;
   pendingNativeMenuRequest = undefined;
   if (!hasNativeMenuAction(entries)) return;
-  pending.menu.append(createContextMenuSeparator(), ...nativeContextMenuElements(entries, pending.target));
+  pending.menu.append(createContextMenuSeparator(true), createNativeContextMenuSection(entries, pending.target));
   positionContextMenu(pending.menu, pending.x, pending.y);
+}
+
+function createNativeContextMenuSection(entries: readonly NativeContextMenuEntry[], target: TabTarget): HTMLDivElement {
+  const section = document.createElement('div');
+  section.className = 'tab-context-native-section';
+  section.setAttribute('role', 'group');
+  section.setAttribute('aria-label', i18n.nativeContextMenuTitle);
+  section.setAttribute('aria-description', i18n.nativeContextMenuDetails);
+
+  const notice = document.createElement('div');
+  notice.className = 'tab-context-native-notice';
+  notice.title = i18n.nativeContextMenuDetails;
+  notice.setAttribute('aria-hidden', 'true');
+
+  const title = document.createElement('span');
+  title.className = 'tab-context-native-title';
+  title.textContent = i18n.nativeContextMenuTitle;
+
+  const warning = document.createElement('span');
+  warning.className = 'tab-context-native-warning';
+  warning.textContent = i18n.nativeContextMenuWarning;
+
+  notice.append(title, warning);
+  section.append(notice, ...nativeContextMenuElements(entries, target));
+  return section;
 }
 
 function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], target: TabTarget): HTMLElement[] {
@@ -1382,9 +1407,10 @@ function hasNativeMenuAction(entries: readonly NativeContextMenuEntry[]): boolea
   return entries.some((entry) => entry.kind === 'action' || (entry.kind === 'submenu' && hasNativeMenuAction(entry.entries)));
 }
 
-function createContextMenuSeparator(): HTMLDivElement {
+function createContextMenuSeparator(sectionBoundary = false): HTMLDivElement {
   const separator = document.createElement('div');
   separator.className = 'tab-context-separator';
+  if (sectionBoundary) separator.classList.add('tab-context-section-separator');
   separator.setAttribute('role', 'separator');
   return separator;
 }
@@ -1488,6 +1514,8 @@ function enabledContextMenuItems(menu: HTMLElement): HTMLButtonElement[] {
     } else if (child.classList.contains('tab-context-submenu')) {
       const trigger = child.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger:not(:disabled)');
       if (trigger) result.push(trigger);
+    } else if (child instanceof HTMLElement && child.classList.contains('tab-context-native-section')) {
+      result.push(...enabledContextMenuItems(child));
     }
   }
   return result;
