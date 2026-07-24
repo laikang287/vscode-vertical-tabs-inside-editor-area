@@ -1,4 +1,8 @@
 {
+  "verticalTabs.command.open": "Vertikale Tabs anzeigen",
+  "verticalTabs.command.close": "Vertikale Tabs ausblenden",
+  "verticalTabs.launcher.show": "[Anzeigen](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Ausblenden](command:verticalTabs.close)",
   "verticalTabs.command.saveWorkset": "Vertikale Tabs: Arbeitsset speichern",
   "verticalTabs.command.loadWorkset": "Vertikale Tabs: Arbeitsset laden",
   "verticalTabs.command.manageWorksets": "Vertikale Tabs: Arbeitssets verwalten"

@@ -3,6 +3,66 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
+test('sidebar launcher stays compact and localizes show and hide actions in every supported language', () => {
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: {
+      commands: Array<{ command: string; title: string; icon?: string }>;
+      views: Record<string, Array<{ id: string; visibility?: string; initialSize?: number }>>;
+      viewsWelcome: Array<{ view: string; when?: string; contents: string }>;
+      menus: { 'view/title': Array<{ command: string; when: string; group: string }> };
+    };
+  };
+  const launcher = manifest.contributes.views['vertical-tabs-activitybar']?.find((view) => view.id === 'verticalTabs.launcher');
+  const openCommand = manifest.contributes.commands.find((command) => command.command === 'verticalTabs.open');
+  const closeCommand = manifest.contributes.commands.find((command) => command.command === 'verticalTabs.close');
+
+  assert.equal(launcher?.visibility, 'collapsed');
+  assert.equal(launcher?.initialSize, 1);
+  assert.deepEqual(openCommand, {
+    command: 'verticalTabs.open',
+    title: '%verticalTabs.command.open%',
+    icon: '$(eye)',
+  });
+  assert.deepEqual(closeCommand, {
+    command: 'verticalTabs.close',
+    title: '%verticalTabs.command.close%',
+    icon: '$(eye-closed)',
+  });
+  assert.deepEqual(manifest.contributes.viewsWelcome, [
+    {
+      view: 'verticalTabs.launcher',
+      when: '!verticalTabs.visible',
+      contents: '%verticalTabs.launcher.show%',
+    },
+    {
+      view: 'verticalTabs.launcher',
+      when: 'verticalTabs.visible',
+      contents: '%verticalTabs.launcher.hide%',
+    },
+  ]);
+  assert.deepEqual(manifest.contributes.menus['view/title'], [
+    {
+      command: 'verticalTabs.open',
+      when: 'view == verticalTabs.launcher && !verticalTabs.visible',
+      group: 'navigation@1',
+    },
+    {
+      command: 'verticalTabs.close',
+      when: 'view == verticalTabs.launcher && verticalTabs.visible',
+      group: 'navigation@1',
+    },
+  ]);
+
+  for (const locale of ['en', 'zh-cn', 'zh-tw', 'ja', 'ko', 'de', 'fr', 'es', 'pt-br', 'ru']) {
+    const suffix = locale === 'en' ? '' : `.${locale}`;
+    const messages = JSON.parse(readFileSync(path.resolve(__dirname, `../../../package.nls${suffix}.json`), 'utf8')) as Record<string, string>;
+    assert.ok(messages['verticalTabs.command.open'], `${locale} should localize the show command title.`);
+    assert.ok(messages['verticalTabs.command.close'], `${locale} should localize the hide command title.`);
+    assert.match(messages['verticalTabs.launcher.show'] ?? '', /^\[[^\]]+\]\(command:verticalTabs\.open\)$/);
+    assert.match(messages['verticalTabs.launcher.hide'] ?? '', /^\[[^\]]+\]\(command:verticalTabs\.close\)$/);
+  }
+});
+
 test('context menu close actions dismiss the menu after posting', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 

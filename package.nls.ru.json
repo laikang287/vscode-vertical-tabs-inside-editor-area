@@ -1,4 +1,8 @@
 {
+  "verticalTabs.command.open": "Показать вертикальные вкладки",
+  "verticalTabs.command.close": "Скрыть вертикальные вкладки",
+  "verticalTabs.launcher.show": "[Показать](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Скрыть](command:verticalTabs.close)",
   "verticalTabs.command.saveWorkset": "Вертикальные вкладки: сохранить рабочий набор",
   "verticalTabs.command.loadWorkset": "Вертикальные вкладки: загрузить рабочий набор",
   "verticalTabs.command.manageWorksets": "Вертикальные вкладки: управление рабочими наборами"

@@ -1,4 +1,8 @@
 {
+  "verticalTabs.command.open": "세로 탭 표시",
+  "verticalTabs.command.close": "세로 탭 숨기기",
+  "verticalTabs.launcher.show": "[표시](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[숨기기](command:verticalTabs.close)",
   "verticalTabs.command.saveWorkset": "세로 탭: 작업 집합 저장",
   "verticalTabs.command.loadWorkset": "세로 탭: 작업 집합 불러오기",
   "verticalTabs.command.manageWorksets": "세로 탭: 작업 집합 관리"
