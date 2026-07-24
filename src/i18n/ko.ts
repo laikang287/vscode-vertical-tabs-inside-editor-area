@@ -56,15 +56,10 @@ const ko: LocaleStrings = {
   hideSearch: "검색 숨기기",
   regexSearch: "정규식 사용",
   invalidRegex: "잘못된 정규식: {0}",
-  filterTabs: "탭 필터링",
-  filterUnsaved: "저장하지 않은 탭",
-  filterPinned: "고정된 탭",
-  filterCurrentGroup: "현재 편집기 그룹의 탭",
-  filterFileType: "파일 형식으로 필터링",
-  allFileTypes: "모든 파일 형식",
+  searchWorkspaceRelativePaths: "작업 영역 상대 경로 검색",
   searchResultCount: "일치하는 탭 {0}개",
   searchResultCountWithGroups: "일치하는 탭 {0}개 · 그룹 {1}개",
-  noSearchResults: "현재 검색 및 필터와 일치하는 탭이 없습니다.",
+  noSearchResults: "현재 검색과 일치하는 탭이 없습니다.",
 };
 
 export default ko;

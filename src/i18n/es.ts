@@ -56,15 +56,10 @@ const es: LocaleStrings = {
   hideSearch: "Ocultar búsqueda",
   regexSearch: "Usar expresión regular",
   invalidRegex: "Expresión regular no válida: {0}",
-  filterTabs: "Filtrar pestañas",
-  filterUnsaved: "Pestañas sin guardar",
-  filterPinned: "Pestañas fijadas",
-  filterCurrentGroup: "Pestañas del grupo de editores actual",
-  filterFileType: "Filtrar por tipo de archivo",
-  allFileTypes: "Todos los tipos de archivo",
+  searchWorkspaceRelativePaths: "Buscar rutas relativas al área de trabajo",
   searchResultCount: "{0} pestañas coincidentes",
   searchResultCountWithGroups: "{0} pestañas coincidentes · {1} grupos coincidentes",
-  noSearchResults: "Ninguna pestaña coincide con la búsqueda y los filtros actuales.",
+  noSearchResults: "Ninguna pestaña coincide con la búsqueda actual.",
 };
 
 export default es;

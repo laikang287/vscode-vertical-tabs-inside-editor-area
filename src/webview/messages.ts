@@ -18,7 +18,7 @@ export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean; readonly isFocused: boolean;
   readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly activationKind: TabActivationKind; readonly manualGroupId?: string;
   readonly groupId?: string; readonly isFile: boolean; readonly inputKind: TabInputKind; readonly languageId?: string; readonly icon: TabVisualIcon;
-  readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number; readonly lastActivatedAt?: number;
+  readonly resourcePath?: string; readonly workspaceRelativePath?: string; readonly tooltipPath?: string; readonly mtime?: number; readonly lastActivatedAt?: number;
 }
 export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }
 export interface VerticalTabDisplayGroup {

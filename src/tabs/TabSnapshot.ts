@@ -93,6 +93,7 @@ export function buildSnapshot(
       languageId: tab.languageId,
       icon: tab.icon ?? fallbackIcon(tab.inputKind),
       resourcePath: tab.path,
+      workspaceRelativePath: tab.relativePath,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
       lastActivatedAt: tab.lastActivatedAt,

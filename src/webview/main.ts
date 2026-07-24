@@ -5,12 +5,8 @@ import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 import { isKeyboardContextMenuKey, nextVerticalNavigationIndex, type VerticalNavigationKey } from './keyboardNavigation';
 import {
-  NO_EXTENSION_FILE_TYPE,
-  availableFileTypes,
   evaluateTabSearch,
   findTextMatchRanges,
-  tabPathMatches,
-  type TabSearchFilters,
   type TabSearchResult,
 } from './searchFilter';
 
@@ -40,12 +36,9 @@ const searchContainer = document.querySelector<HTMLElement>('#search-container')
 const searchInput = document.querySelector<HTMLInputElement>('#search-input');
 const searchGroupToggle = document.querySelector<HTMLButtonElement>('#search-group-toggle');
 const regexSearchToggle = document.querySelector<HTMLButtonElement>('#regex-search-toggle');
+const searchWorkspaceRelativePathToggle = document.querySelector<HTMLButtonElement>('#search-workspace-relative-path-toggle');
 const searchResultCount = document.querySelector<HTMLElement>('#search-result-count');
 const searchError = document.querySelector<HTMLElement>('#search-error');
-const unsavedFilterToggle = document.querySelector<HTMLButtonElement>('#filter-unsaved');
-const pinnedFilterToggle = document.querySelector<HTMLButtonElement>('#filter-pinned');
-const currentGroupFilterToggle = document.querySelector<HTMLButtonElement>('#filter-current-group');
-const fileTypeFilter = document.querySelector<HTMLSelectElement>('#filter-file-type');
 const toggleSearchButton = document.querySelector<HTMLButtonElement>('#toggle-search');
 const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
@@ -56,11 +49,7 @@ let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'
 let currentSearchQuery = '';
 let currentSearchGroups = false;
 let currentUseRegex = false;
-let currentSearchFilters: TabSearchFilters = {
-  unsavedOnly: false,
-  pinnedOnly: false,
-  currentGroupOnly: false,
-};
+let currentSearchWorkspaceRelativePaths = false;
 let latestSearchResult: TabSearchResult | undefined;
 let draggedTarget: TabTarget | undefined;
 let draggedTargets: readonly TabTarget[] = [];
@@ -84,10 +73,9 @@ const EN_DEFAULTS: Record<string, string> = {
   searchPlaceholder: 'Search', searchGroup: 'Search group names',
   showSearch: 'Show search', hideSearch: 'Hide search',
   regexSearch: 'Use regular expression', invalidRegex: 'Invalid regular expression: {0}',
-  filterUnsaved: 'Unsaved tabs', filterPinned: 'Pinned tabs', filterCurrentGroup: 'Tabs in current editor group',
-  filterFileType: 'Filter by file type', allFileTypes: 'All file types',
+  searchWorkspaceRelativePaths: 'Search workspace-relative paths',
   searchResultCount: '{0} matching tabs', searchResultCountWithGroups: '{0} matching tabs · {1} matching groups',
-  noSearchResults: 'No tabs match the current search and filters.',
+  noSearchResults: 'No tabs match the current search.',
   ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root',
   noExtension: 'No extension', editorGroup: 'Editor Group {0}',
 };
@@ -109,13 +97,7 @@ setAccessibleButtonLabel(expandAllButton, i18n.expand);
 setAccessibleButtonLabel(collapseAllButton, i18n.collapse);
 setAccessibleButtonLabel(searchGroupToggle, i18n.searchGroup);
 setAccessibleButtonLabel(regexSearchToggle, i18n.regexSearch);
-setAccessibleButtonLabel(unsavedFilterToggle, i18n.filterUnsaved);
-setAccessibleButtonLabel(pinnedFilterToggle, i18n.filterPinned);
-setAccessibleButtonLabel(currentGroupFilterToggle, i18n.filterCurrentGroup);
-if (fileTypeFilter) {
-  fileTypeFilter.title = i18n.filterFileType;
-  fileTypeFilter.setAttribute('aria-label', i18n.filterFileType);
-}
+setAccessibleButtonLabel(searchWorkspaceRelativePathToggle, i18n.searchWorkspaceRelativePaths);
 
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
@@ -155,7 +137,7 @@ sortModeSelect?.addEventListener('change', () => {
 
 toggleSearchButton?.addEventListener('click', () => {
   const visible = searchContainer?.hidden ?? false;
-  if (!visible) clearSearchAndFilters(false);
+  if (!visible) clearSearch(false);
   vscode.postMessage({ type: 'setSearchVisible', visible });
   setSearchContainerVisible(visible);
   applyCurrentFilter();
@@ -175,29 +157,8 @@ regexSearchToggle?.addEventListener('click', () => {
   applyCurrentFilter(true);
 });
 
-unsavedFilterToggle?.addEventListener('click', () => {
-  currentSearchFilters = { ...currentSearchFilters, unsavedOnly: !currentSearchFilters.unsavedOnly };
-  updateSearchControlState();
-  applyCurrentFilter(true);
-});
-
-pinnedFilterToggle?.addEventListener('click', () => {
-  currentSearchFilters = { ...currentSearchFilters, pinnedOnly: !currentSearchFilters.pinnedOnly };
-  updateSearchControlState();
-  applyCurrentFilter(true);
-});
-
-currentGroupFilterToggle?.addEventListener('click', () => {
-  currentSearchFilters = { ...currentSearchFilters, currentGroupOnly: !currentSearchFilters.currentGroupOnly };
-  updateSearchControlState();
-  applyCurrentFilter(true);
-});
-
-fileTypeFilter?.addEventListener('change', () => {
-  currentSearchFilters = {
-    ...currentSearchFilters,
-    fileType: fileTypeFilter.value || undefined,
-  };
+searchWorkspaceRelativePathToggle?.addEventListener('click', () => {
+  currentSearchWorkspaceRelativePaths = !currentSearchWorkspaceRelativePaths;
   updateSearchControlState();
   applyCurrentFilter(true);
 });
@@ -211,7 +172,7 @@ searchInput?.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   event.preventDefault();
   event.stopPropagation();
-  clearSearchAndFilters();
+  clearSearch();
 });
 
 document.addEventListener('click', () => dismissContextMenu());
@@ -247,7 +208,6 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   setSearchContainerVisible(message.snapshot.searchVisible);
   currentSearchGroups = message.snapshot.searchGroups;
   updateSearchControlState();
-  updateFileTypeOptions(message.snapshot.tabs);
   renderCurrentTabs();
   correctPendingActivation();
   revealFollowedTab(followedTarget);
@@ -357,15 +317,11 @@ function renderCurrentTabs(): void {
   const previousTreeFocusKey = currentTreeFocusKey();
   groups.replaceChildren();
   const { tabs, displayGroups } = latestSnapshot;
-  const currentGroupIndex = tabs.find((tab) => tab.isFocused)?.target.groupIndex
-    ?? tabs.find((tab) => tab.isActive)?.target.groupIndex;
-  if (currentGroupFilterToggle) currentGroupFilterToggle.disabled = currentGroupIndex === undefined;
   latestSearchResult = evaluateTabSearch(displayGroups, {
     query: currentSearchQuery,
     searchGroups: currentSearchGroups,
+    searchWorkspaceRelativePaths: currentSearchWorkspaceRelativePaths,
     useRegex: currentUseRegex,
-    filters: currentSearchFilters,
-    currentGroupIndex,
   });
   description.textContent = tabs.length === 0
     ? i18n.emptyState
@@ -691,7 +647,11 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   if (displayPath) {
     const detail = document.createElement('span');
     detail.className = 'tab-description';
-    appendHighlightedText(detail, displayPath, true);
+    appendHighlightedText(
+      detail,
+      displayPath,
+      currentSearchWorkspaceRelativePaths && displayPath === tab.workspaceRelativePath,
+    );
     text.append(detail);
   }
   activate.append(icon, pin, text);
@@ -1424,13 +1384,8 @@ function applyCurrentFilter(resetSearchCollapses = false): void {
   renderCurrentTabs();
 }
 
-function clearSearchAndFilters(rerender = true): void {
+function clearSearch(rerender = true): void {
   currentSearchQuery = '';
-  currentSearchFilters = {
-    unsavedOnly: false,
-    pinnedOnly: false,
-    currentGroupOnly: false,
-  };
   searchCollapsedGroups.clear();
   if (searchInput) searchInput.value = '';
   updateSearchControlState();
@@ -1440,10 +1395,7 @@ function clearSearchAndFilters(rerender = true): void {
 function updateSearchControlState(): void {
   setToggleState(searchGroupToggle, currentSearchGroups);
   setToggleState(regexSearchToggle, currentUseRegex);
-  setToggleState(unsavedFilterToggle, currentSearchFilters.unsavedOnly);
-  setToggleState(pinnedFilterToggle, currentSearchFilters.pinnedOnly);
-  setToggleState(currentGroupFilterToggle, currentSearchFilters.currentGroupOnly);
-  if (fileTypeFilter) fileTypeFilter.value = currentSearchFilters.fileType ?? '';
+  setToggleState(searchWorkspaceRelativePathToggle, currentSearchWorkspaceRelativePaths);
 }
 
 function setToggleState(button: HTMLButtonElement | null, active: boolean): void {
@@ -1467,29 +1419,6 @@ function updateSearchFeedback(result: TabSearchResult): void {
   searchInput?.setAttribute('aria-invalid', String(Boolean(result.regexError)));
 }
 
-function updateFileTypeOptions(tabs: readonly VerticalTabItem[]): void {
-  if (!fileTypeFilter) return;
-  const selected = currentSearchFilters.fileType;
-  const fileTypes = [...availableFileTypes(tabs)];
-  if (selected && !fileTypes.includes(selected)) fileTypes.push(selected);
-  fileTypeFilter.replaceChildren();
-  fileTypeFilter.append(createOption('', i18n.allFileTypes));
-  for (const fileType of fileTypes) {
-    fileTypeFilter.append(createOption(
-      fileType,
-      fileType === NO_EXTENSION_FILE_TYPE ? i18n.noExtension : fileType,
-    ));
-  }
-  fileTypeFilter.value = selected ?? '';
-}
-
-function createOption(value: string, label: string): HTMLOptionElement {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = label;
-  return option;
-}
-
 function appendHighlightedText(parent: HTMLElement, value: string, highlightEnabled: boolean): void {
   const ranges = highlightEnabled && latestSearchResult?.queryActive
     ? findTextMatchRanges(value, currentSearchQuery, currentUseRegex)
@@ -1511,15 +1440,11 @@ function appendHighlightedText(parent: HTMLElement, value: string, highlightEnab
 }
 
 function searchDisplayPath(tab: VerticalTabItem): string | undefined {
-  if (!latestSearchResult?.queryActive) return tab.description;
-  const candidates = [tab.description, tab.resourcePath, tab.tooltipPath]
-    .filter((value): value is string => Boolean(value));
-  const matchingPath = candidates.find(
-    (candidate) => findTextMatchRanges(candidate, currentSearchQuery, currentUseRegex).length > 0,
-  );
-  if (matchingPath) return matchingPath;
-  if (!tabPathMatches(tab, currentSearchQuery, currentUseRegex)) return tab.description;
-  return tab.resourcePath ?? tab.tooltipPath ?? tab.description;
+  if (!latestSearchResult?.queryActive || !currentSearchWorkspaceRelativePaths) return tab.description;
+  const path = tab.workspaceRelativePath;
+  return path && findTextMatchRanges(path, currentSearchQuery, currentUseRegex).length > 0
+    ? path
+    : tab.description;
 }
 
 function formatI18n(message: string, ...args: readonly (string | number)[]): string {

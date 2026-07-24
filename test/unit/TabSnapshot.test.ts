@@ -63,6 +63,8 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.deepEqual(snapshot.tabs[0].icon, { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' });
   assert.equal(snapshot.tabs[0].description, undefined);
   assert.equal(snapshot.tabs[1].description, undefined);
+  assert.equal(snapshot.tabs[0].workspaceRelativePath, 'src/index.ts');
+  assert.equal(snapshot.tabs[1].workspaceRelativePath, 'test/index.ts');
   assert.equal(snapshot.tabs[0].activationKind, 'reliable');
   assert.equal(snapshot.tabs[2].activationKind, 'bestEffort');
   assert.equal(snapshot.tabs[2].isActivatable, true);
@@ -113,6 +115,7 @@ test('directory modes support files outside the workspace while relative-path mo
 
   assert.equal(buildSnapshot(outsideSource, 25, [], { relativePathDisplay: 'alwaysDirectory' }).tabs[0]?.description, 'tmp');
   assert.equal(buildSnapshot(outsideSource, 26, [], { relativePathDisplay: 'always' }).tabs[0]?.description, undefined);
+  assert.equal(buildSnapshot(outsideSource, 27, []).tabs[0]?.workspaceRelativePath, undefined);
 });
 
 test('non-file tabs do not make a file name count as duplicated', () => {

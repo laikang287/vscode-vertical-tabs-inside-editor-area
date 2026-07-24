@@ -56,15 +56,10 @@ const ja: LocaleStrings = {
   hideSearch: "検索を非表示",
   regexSearch: "正規表現を使用",
   invalidRegex: "無効な正規表現: {0}",
-  filterTabs: "タブを絞り込む",
-  filterUnsaved: "未保存のタブ",
-  filterPinned: "ピン留めしたタブ",
-  filterCurrentGroup: "現在のエディターグループのタブ",
-  filterFileType: "ファイルの種類で絞り込む",
-  allFileTypes: "すべてのファイルの種類",
+  searchWorkspaceRelativePaths: "ワークスペース相対パスを検索",
   searchResultCount: "一致するタブ: {0}",
   searchResultCountWithGroups: "一致するタブ: {0} · グループ: {1}",
-  noSearchResults: "現在の検索とフィルターに一致するタブはありません。",
+  noSearchResults: "現在の検索に一致するタブはありません。",
 };
 
 export default ja;
