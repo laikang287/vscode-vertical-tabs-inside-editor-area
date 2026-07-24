@@ -209,18 +209,20 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-row.is-unavailable { opacity: .65; }
 
 .tab-main {
+  align-items: center;
   background: transparent;
   cursor: pointer;
   display: flex;
   flex: 1;
   min-width: 0;
-  flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   padding: 5px 4px 5px 6px;
   text-align: left;
 }
 .tab-main:disabled { cursor: not-allowed; }
 .tab-row:hover .tab-main { background: transparent; }
+.tab-pin-slot { flex: 0 0 14px; font-size: 11px; line-height: 14px; text-align: center; }
+.tab-copy { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
 .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-description { color: var(--vscode-descriptionForeground); font-size: 10px; line-height: 1.25; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .is-active .tab-description { color: inherit; opacity: .68; }

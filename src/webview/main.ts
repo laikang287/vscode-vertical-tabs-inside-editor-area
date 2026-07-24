@@ -423,9 +423,16 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       collapsePreservedMultiSelection();
     }
   });
+  const pin = document.createElement('span');
+  pin.className = 'tab-pin-slot';
+  pin.textContent = tab.isPinned ? '📌' : '';
+  pin.setAttribute('aria-hidden', 'true');
+  activate.append(pin);
+  const copy = document.createElement('span');
+  copy.className = 'tab-copy';
   const label = document.createElement('span');
   label.className = 'tab-label';
-  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? i18n.previewSuffix : ''}`;
+  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPreview ? i18n.previewSuffix : ''}`;
   activate.addEventListener("lostpointercapture", () => {
     logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture", JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown }));
     if (preserveMultiSelectionOnPointerDown) {
@@ -443,13 +450,14 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       }
     }
   });
-  activate.append(label);
+  copy.append(label);
   if (tab.description) {
     const detail = document.createElement('span');
     detail.className = 'tab-description';
     detail.textContent = tab.description;
-    activate.append(detail);
+    copy.append(detail);
   }
+  activate.append(copy);
   row.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     event.stopPropagation();
