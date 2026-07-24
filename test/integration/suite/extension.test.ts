@@ -375,6 +375,20 @@ suite('Vertical Tabs extension', () => {
     await vscode.commands.executeCommand('verticalTabs.previousInGroup');
     await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
 
+    await Promise.all([
+      vscode.commands.executeCommand('verticalTabs.nextInGroup'),
+      vscode.commands.executeCommand('verticalTabs.nextInGroup'),
+    ]);
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    assert.equal(
+      activeTextDocumentUri(),
+      documents[1].uri.toString(),
+      'A rapid shortcut burst should preview targets without activating an intermediate editor.',
+    );
+    await waitFor(() => activeTextDocumentUri() === documents[0].uri.toString());
+    await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
+    await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
+
     await vscode.commands.executeCommand('verticalTabs.moveUpInGroup');
     await waitFor(() => textTabUris(sourceGroup)[0] === documents[1].uri.toString());
     assert.deepEqual(textTabUris(sourceGroup), [documents[1], documents[0], documents[2]].map((document) => document.uri.toString()));

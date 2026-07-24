@@ -38,6 +38,7 @@ import {
   selectedDisplayedTabsInAnchorGroup,
   type TabCommandDirection,
 } from '../tabs/TabCommands';
+import { DeferredTargetCommitter } from '../tabs/DeferredTargetCommitter';
 import { TabMruTracker } from '../tabs/TabMruTracker';
 import {
   classifyTabResourceStatus,
@@ -94,6 +95,7 @@ const WEBVIEW_POST_RETRY_DELAY_MS = 250;
 const WEBVIEW_POST_MAX_ATTEMPTS = 8;
 const RENDER_ACK_TIMEOUT_MS = 1200;
 const RENDER_ACK_MAX_ATTEMPTS = 6;
+const SHORTCUT_NAVIGATION_COMMIT_DELAY_MS = 160;
 
 interface PreparedRailGroup {
   readonly ratio: number;
@@ -155,6 +157,12 @@ export class VerticalTabsPanel {
   private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   private renderAckTimer: ReturnType<typeof setTimeout> | undefined;
   private minWidthCorrectionTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly shortcutNavigation: DeferredTargetCommitter<TabTarget>;
+  private shortcutNavigationAnchor: TabTarget | undefined;
+  private shortcutNavigationPreparation: Promise<void> | undefined;
+  private shortcutNavigationActivationDepth = 0;
+  private snapshotGeneration = 0;
+  private appliedSnapshotGeneration = -1;
   private renderAckRevision = 0;
   private renderAckAttempts = 0;
   private disposed = false;
@@ -193,6 +201,15 @@ export class VerticalTabsPanel {
     private readonly context: vscode.ExtensionContext,
   ) {
     this.panel.webview.options = createWebviewOptions(context);
+    this.shortcutNavigation = new DeferredTargetCommitter(
+      SHORTCUT_NAVIGATION_COMMIT_DELAY_MS,
+      {
+        onPreview: (target) => this.postMessage({ type: 'previewTabNavigation', target }),
+        onClear: () => this.postMessage({ type: 'clearTabNavigationPreview' }),
+        onCommit: (target) => this.commitShortcutNavigation(target),
+        onError: (error) => logError('提交快捷键标签导航失败', error),
+      },
+    );
     this.rememberStateEnabled = shouldRememberState();
     this.groupMode = readGroupMode(context);
     this.sortMode = readSortMode(context);
@@ -219,6 +236,9 @@ export class VerticalTabsPanel {
         void this.handleTabChange(event).catch((error) => logError('处理 VS Code 标签变化失败', error));
       }),
       vscode.window.tabGroups.onDidChangeTabGroups(() => {
+        if (this.shortcutNavigationActivationDepth === 0) {
+          this.cancelShortcutNavigation('tabGroupsChanged');
+        }
         this.observeFocusedUserTab();
         this.scheduleRefresh();
         this.scheduleMinimizedWidthCorrection('tabGroupsChanged');
@@ -711,6 +731,8 @@ export class VerticalTabsPanel {
   private dispose(): void {
     logInfo('垂直标签面板实例已释放');
     this.disposed = true;
+    this.shortcutNavigation.dispose();
+    this.shortcutNavigationAnchor = undefined;
     VerticalTabsPanel.panels.clear(this);
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
@@ -877,6 +899,7 @@ export class VerticalTabsPanel {
   }
 
   private scheduleRefresh(): void {
+    this.snapshotGeneration += 1;
     if (this.refreshTimer || this.suppressScheduledRefresh) {
       logTrace('跳过计划刷新：已有刷新定时器');
       return;
@@ -888,6 +911,9 @@ export class VerticalTabsPanel {
   }
 
   private handlePossibleActivation(): void {
+    if (this.shortcutNavigationActivationDepth === 0) {
+      this.cancelShortcutNavigation('activeEditorChanged');
+    }
     this.observeFocusedUserTab();
     this.scheduleRefresh();
   }
@@ -904,6 +930,7 @@ export class VerticalTabsPanel {
 
   private async refresh(options: { readonly reason: string; readonly ensureEmptyLayout?: boolean }): Promise<void> {
     const started = Date.now();
+    const sourceGeneration = this.snapshotGeneration;
     logDebug('开始刷新垂直标签快照', {
       reason: options.reason,
       arrangingRail: this.arrangingRail,
@@ -911,6 +938,7 @@ export class VerticalTabsPanel {
     });
     try {
       this.currentSnapshot = await withTimeout(this.createSnapshot(), SNAPSHOT_REFRESH_TIMEOUT_MS);
+      this.appliedSnapshotGeneration = sourceGeneration;
     } catch (error) {
       logError('刷新垂直标签快照失败，将发送上一份可用快照避免 Webview 停留在加载态', {
         reason: options.reason,
@@ -1018,6 +1046,9 @@ export class VerticalTabsPanel {
   }
 
   private async handleTabChange(event: vscode.TabChangeEvent): Promise<void> {
+    if (this.shortcutNavigationActivationDepth === 0) {
+      this.cancelShortcutNavigation('tabsChanged');
+    }
     let changedState = false;
     for (const tab of event.closed) {
       if (isVerticalTabsPanel(tab)) continue;
@@ -1267,6 +1298,8 @@ export class VerticalTabsPanel {
       await this.saveEditorWidthRatio();
       return;
     }
+
+    this.cancelShortcutNavigation(`webview:${message.type}`);
 
     if (message.type === 'setCollapsedGroups') {
       this.collapsedGroupKeys.clear();
@@ -1562,10 +1595,14 @@ export class VerticalTabsPanel {
         resolved: tab ? describeTab(tab) : undefined,
       });
       if (tab) {
+        const previousSuppression = this.suppressScheduledRefresh;
         this.suppressScheduledRefresh = true;
-        await this.activateTab(tab, message.requestId);
-        await this.refresh({ reason: 'navigate' });
-        this.suppressScheduledRefresh = false;
+        try {
+          await this.activateTab(tab, message.requestId);
+          await this.refresh({ reason: 'navigate' });
+        } finally {
+          this.suppressScheduledRefresh = previousSuppression;
+        }
       } else {
         logWarn('激活标签失败：标签目标已失效', { requestId: message.requestId, target: message.target, groups: describeTabGroups() });
       }
@@ -1650,6 +1687,7 @@ export class VerticalTabsPanel {
   }
 
   private async handleConfigurationChange(event: vscode.ConfigurationChangeEvent): Promise<void> {
+    this.cancelShortcutNavigation('configurationChanged');
     if (event.affectsConfiguration('verticalTabs.position')) {
       await this.handlePositionConfigurationChange();
     }
@@ -3122,26 +3160,93 @@ export class VerticalTabsPanel {
   }
 
   private async navigate(direction: TabCommandDirection, scope: 'group' | 'all'): Promise<void> {
-    await this.refresh({ reason: 'operation' });
-    const anchor = this.commandAnchorTarget();
+    await this.ensureShortcutNavigationSnapshot();
+    if (this.disposed) return;
+
+    const anchor = this.shortcutNavigationAnchor ?? this.commandAnchorTarget();
     const target = adjacentDisplayedTabTarget(this.currentSnapshot, anchor, direction, scope);
     if (!target) {
       logDebug('相邻标签导航无需处理：没有可激活标签', { direction, scope });
       return;
     }
-    const tab = this.resolveTab(target);
-    if (tab) {
-      logDebug('按垂直显示顺序选择相邻标签', {
-        direction,
-        scope,
+
+    this.shortcutNavigationAnchor = target;
+    this.shortcutNavigation.queue(target);
+    logDebug('更新快捷键标签导航候选', {
+      direction,
+      scope,
+      delayMs: SHORTCUT_NAVIGATION_COMMIT_DELAY_MS,
+      target,
+      displayGroupId: this.findDisplayGroupForTarget(target)?.id,
+    });
+  }
+
+  private async ensureShortcutNavigationSnapshot(): Promise<void> {
+    if (this.currentSnapshot.revision > 0 && this.appliedSnapshotGeneration === this.snapshotGeneration) {
+      return;
+    }
+    if (this.shortcutNavigationPreparation) {
+      await this.shortcutNavigationPreparation;
+      return;
+    }
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
+
+    const preparation = this.refresh({ reason: 'shortcutNavigationPrepare', ensureEmptyLayout: false });
+    this.shortcutNavigationPreparation = preparation;
+    try {
+      await preparation;
+    } finally {
+      if (this.shortcutNavigationPreparation === preparation) {
+        this.shortcutNavigationPreparation = undefined;
+      }
+    }
+  }
+
+  private async commitShortcutNavigation(target: TabTarget): Promise<void> {
+    if (this.disposed) return;
+
+    this.shortcutNavigationActivationDepth += 1;
+    const previousSuppression = this.suppressScheduledRefresh;
+    this.suppressScheduledRefresh = true;
+    try {
+      let tab = this.resolveTab(target);
+      if (!tab) {
+        logDebug('快捷键导航候选已过期，刷新快照后重试', { target });
+        await this.refresh({ reason: 'shortcutNavigationRetry', ensureEmptyLayout: false });
+        tab = this.resolveTab(target);
+      }
+      if (!tab) {
+        logWarn('快捷键标签导航失败：最终候选已失效', { target });
+        return;
+      }
+
+      logDebug('提交快捷键标签导航最终候选', {
         label: tab.label,
         inputKind: inputKind(tab.input),
-        displayGroupId: this.findDisplayGroupForTarget(target)?.id,
+        target,
       });
       await this.activateTab(tab);
-    } else {
-      logWarn('按垂直显示顺序导航失败：目标标签已失效', { direction, scope, target });
+      await this.refresh({ reason: 'navigate' });
+    } finally {
+      this.suppressScheduledRefresh = previousSuppression;
+      this.shortcutNavigationActivationDepth -= 1;
+      const anchor = this.shortcutNavigationAnchor;
+      if (!this.shortcutNavigation.hasPendingTarget
+        && anchor?.groupIndex === target.groupIndex
+        && sameIdentity(anchor.identity, target.identity)) {
+        this.shortcutNavigationAnchor = undefined;
+      }
     }
+  }
+
+  private cancelShortcutNavigation(reason: string): void {
+    if (!this.shortcutNavigation.hasPendingTarget && !this.shortcutNavigationAnchor) return;
+    logDebug('取消待提交的快捷键标签导航', { reason });
+    this.shortcutNavigation.cancel();
+    this.shortcutNavigationAnchor = undefined;
   }
 
   private async moveByCommand(direction: TabCommandDirection, scope: 'tab' | 'group'): Promise<void> {

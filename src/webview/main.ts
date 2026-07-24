@@ -112,6 +112,7 @@ let dragRequestSequence = 0;
 let nativeMenuRequestSequence = 0;
 let pendingActivateTarget: TabTarget | undefined;
 let pendingActivateTimestamp = 0;
+let keyboardNavigationPreviewTarget: TabTarget | undefined;
 const selection = new TabSelection();
 const activeTabFollowTracker = new ActiveTabFollowTracker();
 
@@ -125,6 +126,14 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   }
   if (event.data.type === 'nativeTabMenu') {
     renderNativeContextMenu(event.data.requestId, event.data.entries);
+    return;
+  }
+  if (event.data.type === 'previewTabNavigation') {
+    previewKeyboardNavigation(event.data.target);
+    return;
+  }
+  if (event.data.type === 'clearTabNavigationPreview') {
+    clearKeyboardNavigationPreview();
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
@@ -227,6 +236,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   renderCurrentTabs();
   correctPendingActivation();
   revealFollowedTab(followedTarget);
+  applyKeyboardNavigationPreview();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   postSelectionChanged();
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${message.snapshot.tabs.length}, groups=${message.snapshot.displayGroups.length}`);
@@ -1465,6 +1475,29 @@ function markActiveTab(target: TabTarget): void {
     if (candidateTarget?.groupIndex === target.groupIndex) row.classList.remove('is-active');
   }
   findTabRow(target)?.classList.add('is-active', 'is-focused');
+}
+
+function previewKeyboardNavigation(target: TabTarget): void {
+  keyboardNavigationPreviewTarget = target;
+  applyKeyboardNavigationPreview();
+}
+
+function clearKeyboardNavigationPreview(): void {
+  keyboardNavigationPreviewTarget = undefined;
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
+    row.classList.remove('is-keyboard-preview');
+  }
+}
+
+function applyKeyboardNavigationPreview(): void {
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
+    row.classList.remove('is-keyboard-preview');
+  }
+  if (!keyboardNavigationPreviewTarget) return;
+  const row = findTabRow(keyboardNavigationPreviewTarget);
+  if (!row) return;
+  row.classList.add('is-keyboard-preview');
+  row.scrollIntoView({ block: 'nearest' });
 }
 
 function correctPendingActivation(): void {

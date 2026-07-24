@@ -329,6 +329,26 @@ test('adjacent navigation reuses an open panel without stealing the active edito
   );
 });
 
+test('shortcut navigation previews immediately and commits only the latest target after an idle delay', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const messagesSource = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const navigateMethod = panelSource.match(/private async navigate\([\s\S]+?\n  \}\n\n  private async ensureShortcutNavigationSnapshot/)?.[0] ?? '';
+
+  assert.match(panelSource, /const SHORTCUT_NAVIGATION_COMMIT_DELAY_MS = 160/);
+  assert.match(navigateMethod, /this\.shortcutNavigation\.queue\(target\)/);
+  assert.doesNotMatch(navigateMethod, /this\.refresh\(/);
+  assert.match(panelSource, /private async commitShortcutNavigation\(target: TabTarget\)/);
+  assert.match(panelSource, /await this\.activateTab\(tab\);\s*await this\.refresh\(\{ reason: 'navigate' \}\)/);
+  assert.match(messagesSource, /type: 'previewTabNavigation'/);
+  assert.match(messagesSource, /type: 'clearTabNavigationPreview'/);
+  assert.match(webviewSource, /previewKeyboardNavigation\(event\.data\.target\)/);
+  assert.match(webviewSource, /row\.classList\.add\('is-keyboard-preview'\)/);
+  assert.match(webviewSource, /row\.scrollIntoView\(\{ block: 'nearest' \}\)/);
+  assert.match(style, /\.tab-row\.is-keyboard-preview/);
+});
+
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
