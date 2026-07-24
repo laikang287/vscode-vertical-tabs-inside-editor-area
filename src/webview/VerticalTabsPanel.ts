@@ -114,6 +114,7 @@ export class VerticalTabsPanel {
   private rememberStateEnabled: boolean;
   private setiIconResolver: SetiIconResolver;
   private railPosition: RailPosition;
+  private lastFocusedUserGroup: vscode.TabGroup | undefined;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
@@ -783,9 +784,29 @@ export class VerticalTabsPanel {
     this.renderAckTimer = setTimeout(resend, RENDER_ACK_TIMEOUT_MS);
   }
 
+  private updateLastFocusedUserGroup(): void {
+    const groups = vscode.window.tabGroups.all;
+    const activeUserGroup = groups.find(
+      (group) => group.isActive && !group.tabs.some((tab) => isVerticalTabsPanel(tab)),
+    );
+    if (activeUserGroup) {
+      this.lastFocusedUserGroup = activeUserGroup;
+      return;
+    }
+    if (this.lastFocusedUserGroup && groups.includes(this.lastFocusedUserGroup)) return;
+
+    const activeEditorUri = vscode.window.activeTextEditor?.document.uri.toString();
+    this.lastFocusedUserGroup = activeEditorUri
+      ? groups.find((group) => group.tabs.some(
+        (tab) => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === activeEditorUri,
+      ))
+      : undefined;
+  }
+
   private async createSnapshot(): Promise<VerticalTabsSnapshot> {
     this.revision += 1;
     const revision = this.revision;
+    this.updateLastFocusedUserGroup();
     logDebug('开始创建标签快照', {
       revision,
       sourceGroups: vscode.window.tabGroups.all.map((group, index) => ({ index, viewColumn: group.viewColumn, tabCount: group.tabs.length })),
@@ -860,7 +881,7 @@ export class VerticalTabsPanel {
       return {
         label: tab.label || 'Unknown',
         isActive: tab.isActive,
-        isFocused: tab.isActive && tab.group.isActive,
+        isFocused: tab.isActive && (tab.group.isActive || tab.group === this.lastFocusedUserGroup),
         isDirty: tab.isDirty,
         isPinned: tab.isPinned,
         isPreview: tab.isPreview,
@@ -880,7 +901,7 @@ export class VerticalTabsPanel {
     return {
       label: tab.label,
       isActive: tab.isActive,
-      isFocused: tab.isActive && tab.group.isActive,
+      isFocused: tab.isActive && (tab.group.isActive || tab.group === this.lastFocusedUserGroup),
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,
@@ -2295,8 +2316,23 @@ export class VerticalTabsPanel {
         <label class="toolbar-field" for="sort-mode"><span>${i18n.sortModeLabel}</span><select id="sort-mode"><option value="none">${i18n.sortModeNone}</option><option value="modifiedAsc">${i18n.sortModeModifiedAsc}</option><option value="modifiedDesc">${i18n.sortModeModifiedDesc}</option><option value="nameAsc">${i18n.sortModeNameAsc}</option><option value="nameDesc">${i18n.sortModeNameDesc}</option></select></label>
       </div>
       <div id="search-container" class="search-container">
-        <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" />
-        <button id="search-group-toggle" class="search-group-toggle" type="button" title="${i18n.searchGroup}" aria-label="${i18n.searchGroup}"><span class="codicon codicon-group-by-ref-type" aria-hidden="true"></span></button>
+        <div class="search-input-row">
+          <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" aria-describedby="search-result-count search-error" />
+          <div class="search-mode-actions">
+            <button id="regex-search-toggle" class="search-mode-toggle" type="button" title="${i18n.regexSearch}" aria-label="${i18n.regexSearch}" aria-pressed="false">.*</button>
+            <button id="search-group-toggle" class="search-mode-toggle" type="button" title="${i18n.searchGroup}" aria-label="${i18n.searchGroup}" aria-pressed="false"><span class="codicon codicon-group-by-ref-type" aria-hidden="true"></span></button>
+          </div>
+        </div>
+        <div class="search-filters" aria-label="${i18n.filterTabs}">
+          <button id="filter-unsaved" class="search-filter-toggle" type="button" title="${i18n.filterUnsaved}" aria-label="${i18n.filterUnsaved}" aria-pressed="false"><span class="codicon codicon-circle-filled" aria-hidden="true"></span></button>
+          <button id="filter-pinned" class="search-filter-toggle" type="button" title="${i18n.filterPinned}" aria-label="${i18n.filterPinned}" aria-pressed="false"><span class="codicon codicon-pinned" aria-hidden="true"></span></button>
+          <button id="filter-current-group" class="search-filter-toggle" type="button" title="${i18n.filterCurrentGroup}" aria-label="${i18n.filterCurrentGroup}" aria-pressed="false"><span class="codicon codicon-layout" aria-hidden="true"></span></button>
+          <select id="filter-file-type" class="file-type-filter" title="${i18n.filterFileType}" aria-label="${i18n.filterFileType}"><option value="">${i18n.allFileTypes}</option></select>
+        </div>
+        <div class="search-feedback">
+          <span id="search-result-count" class="search-result-count" role="status" hidden></span>
+          <span id="search-error" class="search-error" role="alert" hidden></span>
+        </div>
       </div>
     </header>
     <p id="description"></p>

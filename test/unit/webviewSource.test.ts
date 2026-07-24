@@ -127,7 +127,7 @@ test('tab colors distinguish selection, shown editors, and the focused editor', 
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(panelSource, /isFocused: tab\.isActive && tab\.group\.isActive/);
+  assert.match(panelSource, /isFocused: tab\.isActive && \(tab\.group\.isActive \|\| tab\.group === this\.lastFocusedUserGroup\)/);
   assert.match(source, /tab\.isFocused \? 'is-focused' : ''/);
   assert.match(style, /\.tab-row\.is-selected \{\s*background: var\(--vscode-list-inactiveSelectionBackground/);
   assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-tab-unfocusedActiveBackground/);
@@ -694,23 +694,40 @@ test('parent-directory file collisions require confirmation and replace related 
 });
 
 
-test('search input, group toggle, and search visibility toggle are present in the panel template', () => {
+test('search, combined tab filters, result feedback, and regular-expression controls are present', () => {
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const styleSource = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(panelSource, /id="toggle-search"/);
   assert.match(panelSource, /id="search-container"/);
   assert.match(panelSource, /id="search-input"/);
   assert.match(panelSource, /id="search-group-toggle"/);
+  assert.match(panelSource, /id="regex-search-toggle"/);
+  assert.match(panelSource, /id="filter-unsaved"/);
+  assert.match(panelSource, /id="filter-pinned"/);
+  assert.match(panelSource, /id="filter-current-group"/);
+  assert.match(panelSource, /id="filter-file-type"/);
+  assert.match(panelSource, /id="search-result-count"/);
+  assert.match(panelSource, /id="search-error"/);
   assert.ok(webviewSource.includes("querySelector<HTMLInputElement>('#search-input')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#search-group-toggle')"));
+  assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#regex-search-toggle')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#toggle-search')"));
   assert.ok(webviewSource.includes("querySelector<HTMLElement>('#search-container')"));
   assert.ok(webviewSource.includes("type: 'setSearchVisible'"));
   assert.ok(webviewSource.includes("type: 'setSearchGroups'"));
-  assert.match(webviewSource, /function applySearchFilter/);
+  assert.match(webviewSource, /evaluateTabSearch/);
+  assert.match(webviewSource, /appendHighlightedText/);
+  assert.match(webviewSource, /searchCollapsedGroups/);
+  assert.match(webviewSource, /event\.key !== 'Escape'/);
+  assert.match(webviewSource, /clearSearchAndFilters/);
   assert.match(webviewSource, /function applyCurrentFilter/);
   assert.match(webviewSource, /function setSearchContainerVisible/);
+  assert.match(panelSource, /lastFocusedUserGroup/);
+  assert.match(panelSource, /updateLastFocusedUserGroup/);
+  assert.match(styleSource, /\.search-match/);
+  assert.match(styleSource, /\.search-error/);
   assert.match(panelSource, /searchVisible:/);
   assert.match(panelSource, /searchGroups:/);
   assert.match(panelSource, /SEARCH_VISIBLE_STORAGE_KEY/);

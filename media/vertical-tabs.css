@@ -55,13 +55,20 @@ body {
 .toolbar-selects[hidden] { display: none; }
 
 .search-container {
-  align-items: center;
+  align-items: stretch;
   display: flex;
-  gap: 0;
+  flex-direction: column;
+  gap: 4px;
   padding: 0;
   position: relative;
 }
 .search-container[hidden] { display: none; }
+
+.search-input-row {
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
 
 .search-input {
   background: var(--vscode-input-background);
@@ -71,39 +78,104 @@ body {
   font: inherit;
   font-size: 11px;
   min-width: 0;
-  padding: 3px 28px 3px 5px;
+  padding: 3px 52px 3px 5px;
+  width: 100%;
 }
 
 .search-input::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
 
-.search-group-toggle {
+.search-input[aria-invalid="true"] {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+}
+
+.search-mode-actions {
+  align-items: center;
+  display: flex;
+  gap: 1px;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+}
+
+.search-mode-toggle,
+.search-filter-toggle {
   background: transparent;
   border: 0;
   border-radius: 3px;
   color: var(--vscode-input-foreground);
   cursor: pointer;
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
-  margin-left: -26px;
   min-width: 20px;
   opacity: 0.7;
   padding: 2px 4px;
-  position: absolute;
-  right: 2px;
 }
 
-.search-group-toggle.is-active {
+.search-mode-toggle.is-active,
+.search-filter-toggle.is-active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
 
-.search-group-toggle:hover {
+.search-mode-toggle:hover,
+.search-filter-toggle:hover {
   background: var(--vscode-toolbar-hoverBackground);
   opacity: 1;
+}
+.search-filter-toggle:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
+
+.search-filters {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-filter-toggle {
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-input-foreground));
+  flex: 0 0 24px;
+  font-size: 14px;
+  min-height: 22px;
+}
+
+.file-type-filter {
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  color: var(--vscode-dropdown-foreground);
+  flex: 1;
+  font: inherit;
+  font-size: 11px;
+  min-width: 54px;
+  padding: 1px 3px;
+}
+
+.search-feedback {
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  gap: 2px;
+  line-height: 14px;
+  min-height: 0;
+}
+
+.search-result-count[hidden],
+.search-error[hidden] { display: none; }
+.search-error { color: var(--vscode-errorForeground); }
+
+.search-match {
+  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, .33));
+  border: 1px solid var(--vscode-editor-findMatchHighlightBorder, transparent);
+  border-radius: 2px;
+  color: inherit;
+  padding: 0;
 }
 
 .toolbar-field {
