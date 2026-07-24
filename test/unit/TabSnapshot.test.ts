@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSnapshot, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
+import { buildSnapshot, displayOrderKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
-  { label: 'index.ts', path: 'src/index.ts', directoryName: 'src', relativePath: 'src/index.ts', languageId: 'typescript', icon: { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' }, isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
+  { label: 'index.ts', path: 'src/index.ts', directoryName: 'src', relativePath: 'src/index.ts', resourceStatus: 'readonly', isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
   { label: 'index.ts', path: 'test/index.ts', directoryName: 'test', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
 ] }, { tabs: [
   { label: 'Terminal', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
@@ -14,8 +14,10 @@ const source: SnapshotSourceGroup[] = [{ tabs: [
 test('defaults presentation settings and preserves explicit overrides', () => {
   assert.equal(buildSnapshot(source, 1, []).toolbarPosition, 'top');
   assert.equal(buildSnapshot(source, 1, []).alwaysFollowActiveTab, true);
+  assert.equal(buildSnapshot(source, 1, []).nativeContextMenuActionsEnabled, true);
   assert.equal(buildSnapshot(source, 2, [], { toolbarPosition: 'bottom' }).toolbarPosition, 'bottom');
   assert.equal(buildSnapshot(source, 2, [], { alwaysFollowActiveTab: false }).alwaysFollowActiveTab, false);
+  assert.equal(buildSnapshot(source, 2, [], { nativeContextMenuActionsEnabled: false }).nativeContextMenuActionsEnabled, false);
 });
 
 test('moves single and non-contiguous selected keys to the exact before-target position', () => {
@@ -59,10 +61,11 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.tabs[0].isDirty, true);
   assert.equal(snapshot.tabs[1].isDirty, false);
   assert.equal(snapshot.tabs[0].inputKind, 'text');
-  assert.equal(snapshot.tabs[0].languageId, 'typescript');
-  assert.deepEqual(snapshot.tabs[0].icon, { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' });
+  assert.equal(snapshot.tabs[0].resourceStatus, 'readonly');
   assert.equal(snapshot.tabs[0].description, undefined);
   assert.equal(snapshot.tabs[1].description, undefined);
+  assert.equal(snapshot.tabs[0].workspaceRelativePath, 'src/index.ts');
+  assert.equal(snapshot.tabs[1].workspaceRelativePath, 'test/index.ts');
   assert.equal(snapshot.tabs[0].activationKind, 'reliable');
   assert.equal(snapshot.tabs[2].activationKind, 'bestEffort');
   assert.equal(snapshot.tabs[2].isActivatable, true);
@@ -113,6 +116,7 @@ test('directory modes support files outside the workspace while relative-path mo
 
   assert.equal(buildSnapshot(outsideSource, 25, [], { relativePathDisplay: 'alwaysDirectory' }).tabs[0]?.description, 'tmp');
   assert.equal(buildSnapshot(outsideSource, 26, [], { relativePathDisplay: 'always' }).tabs[0]?.description, undefined);
+  assert.equal(buildSnapshot(outsideSource, 27, []).tabs[0]?.workspaceRelativePath, undefined);
 });
 
 test('non-file tabs do not make a file name count as duplicated', () => {
@@ -364,7 +368,7 @@ test('orders manual tabs from persisted identity order', () => {
     JSON.stringify({ kind: 'text', uri: 'file:///workspace/test/index.ts' }),
     JSON.stringify({ kind: 'text', uri: 'file:///workspace/src/index.ts' }),
   ]]]);
-  const snapshot = buildSnapshot(manualSource, 13, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual', manualOrderByGroup: order });
+  const snapshot = buildSnapshot(manualSource, 13, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual', displayOrderByGroup: order });
   const workGroup = snapshot.displayGroups.find((group) => group.id === 'work');
   assert.deepEqual(workGroup?.tabs.map((tab) => tab.description), [undefined, undefined]);
 });
@@ -400,9 +404,42 @@ test('places newly opened manual-order root tabs after root files and before man
   const snapshot = buildSnapshot(manualSource, 25, [
     { id: 'group-1', name: '分组1', collapsed: false },
     { id: 'group-2', name: '分组2', collapsed: false },
-  ], { groupMode: 'manual', sortMode: 'none', manualOrderByGroup: order });
+  ], { groupMode: 'manual', sortMode: 'none', displayOrderByGroup: order });
 
   assert.deepEqual(snapshot.displayGroups.map((group) => group.id), ['__ungrouped', 'group-1', 'group-2']);
   assert.deepEqual(snapshot.displayGroups[0]?.tabs.map((tab) => tab.label), ['标签1', '标签2', '标签3', '新标签']);
   assert.deepEqual(snapshot.displayGroups.slice(1).map((group) => group.title), ['分组1', '分组2']);
+});
+
+test('applies independent persisted vertical order to automatic groups in manual sorting mode', () => {
+  const automaticSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'b.ts', path: 'src/b.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/b.ts' } },
+    { label: 'a.ts', path: 'src/a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/a.ts' } },
+    { label: 'z.md', path: 'docs/z.md', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/docs/z.md' } },
+    { label: 'y.md', path: 'docs/y.md', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/docs/y.md' } },
+  ] }];
+  const order = new Map<string, string[]>([
+    [displayOrderKey('parentDir', 'src'), [
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/src/a.ts' }),
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/src/b.ts' }),
+    ]],
+    [displayOrderKey('fileType', '.md'), [
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/docs/y.md' }),
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/docs/z.md' }),
+    ]],
+  ]);
+
+  const byParent = buildSnapshot(automaticSource, 31, [], {
+    groupMode: 'parentDir',
+    sortMode: 'none',
+    displayOrderByGroup: order,
+  });
+  const byType = buildSnapshot(automaticSource, 32, [], {
+    groupMode: 'fileType',
+    sortMode: 'none',
+    displayOrderByGroup: order,
+  });
+
+  assert.deepEqual(byParent.displayGroups.find((group) => group.id === 'src')?.tabs.map((tab) => tab.label), ['a.ts', 'b.ts']);
+  assert.deepEqual(byType.displayGroups.find((group) => group.id === '.md')?.tabs.map((tab) => tab.label), ['y.md', 'z.md']);
 });

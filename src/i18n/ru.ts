@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { ruWorksets } from './worksetStrings';
 
 const ru: LocaleStrings = {
+  ...ruWorksets,
   emptyState: 'Нет отображаемых вкладок редактора.',
+  verticalTabsStatusBarName: 'Вертикальные вкладки',
+  showVerticalTabs: 'Показать вертикальные вкладки',
+  hideVerticalTabs: 'Скрыть вертикальные вкладки',
   expand: 'Развернуть',
   collapse: 'Свернуть',
   expandGroup: 'Развернуть группу',
@@ -23,12 +28,19 @@ const ru: LocaleStrings = {
   pinGroup: 'Закрепить группу',
   unpinGroup: 'Открепить группу',
   cannotPinVscodeGroup: 'Нельзя закрепить группу при следовании группам VS Code',
+  moveRequiresManualSort: 'Перед перемещением вкладок вверх или вниз переключитесь на ручную сортировку.',
+  cannotMoveBetweenFileTypeGroups: 'Вкладки нельзя перемещать между группами типов файлов.',
   rename: 'Переименовать',
   renameGroup: 'Переименовать группу',
   groupName: 'Имя группы',
   newGroup: 'Новая группа',
   newGroupOnlyManual: 'Только ручной режим группировки может создавать группы',
-  previewSuffix: ' (предпросмотр)',
+  previewTab: 'Вкладка предварительного просмотра',
+  pinnedTab: 'Закреплённая вкладка',
+  readonlyResource: 'Только для чтения',
+  resourceMissing: 'Ресурс отсутствует или удалён',
+  resourceNoPermissions: 'Нет разрешения на доступ к ресурсу',
+  resourceUnavailable: 'Файловая система ресурса недоступна',
   bestEffortActivation: 'Попытаться перейти с помощью встроенных команд навигации VS Code',
   unsupportedActivation: 'Невозможно перейти из расширения',
   hideToolbarControls: 'Скрыть элементы управления группировкой и сортировкой',
@@ -56,15 +68,10 @@ const ru: LocaleStrings = {
   hideSearch: "Скрыть поиск",
   regexSearch: "Использовать регулярное выражение",
   invalidRegex: "Недопустимое регулярное выражение: {0}",
-  filterTabs: "Фильтровать вкладки",
-  filterUnsaved: "Несохранённые вкладки",
-  filterPinned: "Закреплённые вкладки",
-  filterCurrentGroup: "Вкладки текущей группы редакторов",
-  filterFileType: "Фильтровать по типу файла",
-  allFileTypes: "Все типы файлов",
+  searchWorkspaceRelativePaths: "Искать по относительным путям рабочей области",
   searchResultCount: "Совпавших вкладок: {0}",
   searchResultCountWithGroups: "Совпавших вкладок: {0} · групп: {1}",
-  noSearchResults: "Нет вкладок, соответствующих текущему поиску и фильтрам.",
+  noSearchResults: "Нет вкладок, соответствующих текущему поиску.",
 };
 
 export default ru;

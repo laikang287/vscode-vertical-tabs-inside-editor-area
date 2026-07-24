@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { esWorksets } from './worksetStrings';
 
 const es: LocaleStrings = {
+  ...esWorksets,
   emptyState: 'No hay pestañas de editor mostrables.',
+  verticalTabsStatusBarName: 'Pestañas verticales',
+  showVerticalTabs: 'Mostrar pestañas verticales',
+  hideVerticalTabs: 'Ocultar pestañas verticales',
   expand: 'Expandir',
   collapse: 'Contraer',
   expandGroup: 'Expandir grupo',
@@ -23,12 +28,19 @@ const es: LocaleStrings = {
   pinGroup: 'Fijar grupo',
   unpinGroup: 'Desfijar grupo',
   cannotPinVscodeGroup: 'No se puede fijar grupo al seguir grupos de VS Code',
+  moveRequiresManualSort: 'Cambie a ordenación manual antes de mover pestañas hacia arriba o abajo.',
+  cannotMoveBetweenFileTypeGroups: 'Las pestañas no se pueden mover entre grupos de tipos de archivo.',
   rename: 'Renombrar',
   renameGroup: 'Renombrar grupo',
   groupName: 'Nombre del grupo',
   newGroup: 'Nuevo grupo',
   newGroupOnlyManual: 'Solo el modo de agrupación manual puede crear grupos',
-  previewSuffix: ' (vista previa)',
+  previewTab: 'Pestaña de vista previa',
+  pinnedTab: 'Pestaña fijada',
+  readonlyResource: 'Solo lectura',
+  resourceMissing: 'El recurso no existe o se ha eliminado',
+  resourceNoPermissions: 'Sin permiso para acceder al recurso',
+  resourceUnavailable: 'El sistema de archivos del recurso no está disponible',
   bestEffortActivation: 'Intentar navegar usando comandos de navegación integrados de VS Code',
   unsupportedActivation: 'No se puede navegar desde la extensión',
   hideToolbarControls: 'Ocultar controles de agrupación y ordenación',
@@ -56,15 +68,10 @@ const es: LocaleStrings = {
   hideSearch: "Ocultar búsqueda",
   regexSearch: "Usar expresión regular",
   invalidRegex: "Expresión regular no válida: {0}",
-  filterTabs: "Filtrar pestañas",
-  filterUnsaved: "Pestañas sin guardar",
-  filterPinned: "Pestañas fijadas",
-  filterCurrentGroup: "Pestañas del grupo de editores actual",
-  filterFileType: "Filtrar por tipo de archivo",
-  allFileTypes: "Todos los tipos de archivo",
+  searchWorkspaceRelativePaths: "Buscar rutas relativas al área de trabajo",
   searchResultCount: "{0} pestañas coincidentes",
   searchResultCountWithGroups: "{0} pestañas coincidentes · {1} grupos coincidentes",
-  noSearchResults: "Ninguna pestaña coincide con la búsqueda y los filtros actuales.",
+  noSearchResults: "Ninguna pestaña coincide con la búsqueda actual.",
 };
 
 export default es;

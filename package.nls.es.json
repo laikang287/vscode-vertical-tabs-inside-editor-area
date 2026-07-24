@@ -1,0 +1,9 @@
+{
+  "verticalTabs.command.open": "Mostrar pestañas verticales",
+  "verticalTabs.command.close": "Ocultar pestañas verticales",
+  "verticalTabs.launcher.show": "[Mostrar](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Ocultar](command:verticalTabs.close)",
+  "verticalTabs.command.saveWorkset": "Pestañas verticales: guardar conjunto de trabajo",
+  "verticalTabs.command.loadWorkset": "Pestañas verticales: cargar conjunto de trabajo",
+  "verticalTabs.command.manageWorksets": "Pestañas verticales: administrar conjuntos de trabajo"
+}

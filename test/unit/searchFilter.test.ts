@@ -2,59 +2,80 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { VerticalTabDisplayGroup, VerticalTabItem } from '../../src/webview/messages';
 import {
-  NO_EXTENSION_FILE_TYPE,
-  availableFileTypes,
   evaluateTabSearch,
-  fileTypeForTab,
   findTextMatchRanges,
-  tabPathMatches,
-  type TabSearchFilters,
+  tabWorkspaceRelativePathMatches,
 } from '../../src/webview/searchFilter';
 
-const noFilters: TabSearchFilters = {
-  unsavedOnly: false,
-  pinnedOnly: false,
-  currentGroupOnly: false,
-};
-
-test('searches labels and paths while combining all tab filters', () => {
-  const dirtyPinnedTs = tab('alpha.ts', 0, { isDirty: true, isPinned: true, resourcePath: '/src/alpha.ts' });
-  const cleanPinnedTs = tab('beta.ts', 0, { isPinned: true, resourcePath: '/src/beta.ts' });
-  const dirtyPinnedJson = tab('alpha.json', 1, { isDirty: true, isPinned: true, resourcePath: '/config/alpha.json' });
+test('searches tab labels without matching paths by default', () => {
   const groups = [
-    group('source', 'Source', dirtyPinnedTs, cleanPinnedTs),
-    group('config', 'Config', dirtyPinnedJson),
+    group(
+      'source',
+      'Source',
+      tab('alpha.ts', 0, { workspaceRelativePath: 'src/alpha.ts' }),
+      tab('beta.ts', 0, { workspaceRelativePath: 'test/beta.ts' }),
+    ),
   ];
 
-  const result = evaluateTabSearch(groups, {
-    query: 'src',
+  const labelResult = evaluateTabSearch(groups, {
+    query: 'alpha',
     searchGroups: false,
+    searchWorkspaceRelativePaths: false,
     useRegex: false,
-    currentGroupIndex: 0,
-    filters: { unsavedOnly: true, pinnedOnly: true, currentGroupOnly: true, fileType: '.ts' },
+  });
+  const disabledPathResult = evaluateTabSearch(groups, {
+    query: 'src/',
+    searchGroups: false,
+    searchWorkspaceRelativePaths: false,
+    useRegex: false,
+  });
+
+  assert.deepEqual(labelResult.groups[0]?.group.tabs.map((candidate) => candidate.label), ['alpha.ts']);
+  assert.equal(disabledPathResult.matchedTabCount, 0);
+  assert.deepEqual(disabledPathResult.groups, []);
+});
+
+test('searches workspace-relative paths only when enabled', () => {
+  const workspaceFile = tab('index.ts', 0, {
+    resourcePath: 'src/index.ts',
+    workspaceRelativePath: 'packages/app/src/index.ts',
+    tooltipPath: '/workspace/packages/app/src/index.ts',
+  });
+  const outsideFile = tab('outside.ts', 0, {
+    resourcePath: '/tmp/outside.ts',
+    tooltipPath: '/tmp/outside.ts',
+  });
+  const groups = [group('source', 'Source', workspaceFile, outsideFile)];
+
+  const result = evaluateTabSearch(groups, {
+    query: '^packages/app/',
+    searchGroups: false,
+    searchWorkspaceRelativePaths: true,
+    useRegex: true,
   });
 
   assert.equal(result.matchedTabCount, 1);
-  assert.deepEqual(result.groups.map(({ group: item }) => item.tabs.map((candidate) => candidate.label)), [['alpha.ts']]);
-  assert.equal(result.groups[0]?.autoExpand, true);
+  assert.deepEqual(result.groups[0]?.group.tabs.map((candidate) => candidate.label), ['index.ts']);
+  assert.equal(tabWorkspaceRelativePathMatches(workspaceFile, 'app/src', false), true);
+  assert.equal(tabWorkspaceRelativePathMatches(outsideFile, '/tmp', false), false);
 });
 
-test('group-name search counts matching groups and applies filters to their tabs', () => {
+test('group-name search counts matching groups and includes their tabs', () => {
   const groups = [
-    group('source', 'Source Files', tab('alpha.ts', 0, { isDirty: true }), tab('beta.ts', 0)),
-    group('tests', 'Tests', tab('alpha.test.ts', 1, { isDirty: true })),
+    group('source', 'Source Files', tab('alpha.ts', 0), tab('beta.ts', 0)),
+    group('tests', 'Tests', tab('alpha.test.ts', 1)),
   ];
   const result = evaluateTabSearch(groups, {
     query: 'source',
     searchGroups: true,
+    searchWorkspaceRelativePaths: false,
     useRegex: false,
-    filters: { ...noFilters, unsavedOnly: true },
   });
 
   assert.equal(result.matchedGroupCount, 1);
-  assert.equal(result.matchedTabCount, 1);
+  assert.equal(result.matchedTabCount, 2);
   assert.deepEqual(result.groups.map(({ group: item }) => item.id), ['source']);
-  assert.deepEqual(result.groups[0]?.group.tabs.map((candidate) => candidate.label), ['alpha.ts']);
+  assert.deepEqual(result.groups[0]?.group.tabs.map((candidate) => candidate.label), ['alpha.ts', 'beta.ts']);
 });
 
 test('invalid regular expressions report an error without filtering the tab list', () => {
@@ -62,8 +83,8 @@ test('invalid regular expressions report an error without filtering the tab list
   const result = evaluateTabSearch(groups, {
     query: '[',
     searchGroups: true,
+    searchWorkspaceRelativePaths: true,
     useRegex: true,
-    filters: noFilters,
   });
 
   assert.ok(result.regexError);
@@ -84,19 +105,6 @@ test('finds every literal and regular-expression highlight range', () => {
     { start: 8, end: 12 },
   ]);
   assert.deepEqual(findTextMatchRanges('anything', '[', true), []);
-});
-
-test('derives available file extensions and detects path-only matches', () => {
-  const typescript = tab('index.ts', 0, { resourcePath: '/workspace/src/index.ts' });
-  const extensionless = tab('LICENSE', 0, { resourcePath: '/workspace/LICENSE' });
-  const nonFile = tab('Settings', 0, { isFile: false, inputKind: 'webview' });
-
-  assert.equal(fileTypeForTab(typescript), '.ts');
-  assert.equal(fileTypeForTab(extensionless), NO_EXTENSION_FILE_TYPE);
-  assert.equal(fileTypeForTab(nonFile), undefined);
-  assert.deepEqual(availableFileTypes([extensionless, nonFile, typescript]), ['.ts', NO_EXTENSION_FILE_TYPE]);
-  assert.equal(tabPathMatches(typescript, 'workspace/src', false), true);
-  assert.equal(tabPathMatches(typescript, '^/workspace/.+\\.ts$', true), true);
 });
 
 function group(id: string, title: string, ...tabs: VerticalTabItem[]): VerticalTabDisplayGroup {
@@ -129,7 +137,6 @@ function tab(
     activationKind: 'reliable',
     isFile: true,
     inputKind: 'text',
-    icon: { kind: 'codicon', name: 'file' },
     ...overrides,
   };
 }

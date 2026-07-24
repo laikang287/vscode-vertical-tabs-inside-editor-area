@@ -1,11 +1,10 @@
 ﻿:root {
   --vertical-tab-action-size: 22px;
-  --vertical-tab-dirty-width: 8px;
-  --vertical-tab-icon-size: 16px;
   --vertical-tab-inline-padding: 6px;
-  --vertical-tab-item-gap: 2px;
-  --vertical-tab-pin-slot-width: 12px;
-  --vertical-tab-tree-indent: 12px;
+  --vertical-tab-status-gap: 2px;
+  --vertical-tab-status-size: 14px;
+  --vertical-tab-group-accent: var(--vscode-textLink-foreground, var(--vscode-focusBorder, #007fd4));
+  --vertical-tab-group-active-accent: var(--vscode-textLink-activeForeground, var(--vertical-tab-group-accent));
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
@@ -85,7 +84,7 @@ body {
   font: inherit;
   font-size: 11px;
   min-width: 0;
-  padding: 3px 52px 3px 5px;
+  padding: 3px 74px 3px 5px;
   width: 100%;
 }
 
@@ -106,8 +105,7 @@ body {
   top: 2px;
 }
 
-.search-mode-toggle,
-.search-filter-toggle {
+.search-mode-toggle {
   background: transparent;
   border: 0;
   border-radius: 3px;
@@ -121,46 +119,15 @@ body {
   padding: 2px 4px;
 }
 
-.search-mode-toggle.is-active,
-.search-filter-toggle.is-active {
+.search-mode-toggle.is-active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
 
-.search-mode-toggle:hover,
-.search-filter-toggle:hover {
+.search-mode-toggle:hover {
   background: var(--vscode-toolbar-hoverBackground);
   opacity: 1;
-}
-.search-filter-toggle:disabled {
-  cursor: not-allowed;
-  opacity: .35;
-}
-
-.search-filters {
-  display: flex;
-  gap: 2px;
-  min-width: 0;
-}
-
-.search-filter-toggle {
-  background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, var(--vscode-input-foreground));
-  flex: 0 0 24px;
-  font-size: 14px;
-  min-height: 22px;
-}
-
-.file-type-filter {
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border, transparent);
-  color: var(--vscode-dropdown-foreground);
-  flex: 1;
-  font: inherit;
-  font-size: 11px;
-  min-width: 54px;
-  padding: 1px 3px;
 }
 
 .search-feedback {
@@ -233,8 +200,18 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 #groups {
   flex: 1 1 auto;
   min-height: 0;
+  scrollbar-width: none;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+#groups::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-anchor-spacer {
+  pointer-events: none;
+  width: 1px;
 }
 
 .tab-group { margin-top: 0; }
@@ -242,19 +219,21 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-group.empty-manual-root { min-height: 22px; }
 .group-header {
   align-items: center;
-  background: var(--vscode-sideBarSectionHeader-background, transparent);
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--vertical-tab-group-accent) 45%, transparent);
   color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
   cursor: pointer;
   display: flex;
   height: 22px;
   padding: 0 0 0 8px;
 }
-.group-header[draggable="true"] { cursor: grab; }
-.group-header[draggable="true"]:active { cursor: grabbing; }
 .group-header:hover {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-list-hoverForeground, inherit);
+}
+.group-header:hover .group-toggle,
+.group-header:hover .group-name {
+  color: var(--vertical-tab-group-active-accent);
 }
 .tab-group.has-focused-tab > .group-header {
   border-left: 2px solid var(--vscode-focusBorder);
@@ -279,17 +258,20 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   gap: 4px;
   min-width: 0;
 }
-.group-toggle { color: inherit; flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
+.group-toggle { color: var(--vertical-tab-group-accent); flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
 .group-actions, .tab-actions { align-items: center; display: flex; justify-content: center; }
-.group-actions { flex: 0 0 23px; padding-right: 3px; }
-.tab-actions { flex: 0 0 auto; min-width: var(--vertical-tab-action-size); padding-right: 0; }
+.group-actions { flex: 0 0 23px; opacity: 0; padding-right: 3px; pointer-events: none; }
+.group-header:hover .group-actions { opacity: 1; pointer-events: auto; }
+.tab-actions { flex: 0 0 auto; min-width: 0; padding-right: 0; }
 .group-action { color: inherit; }
 .group-header .tab-action { height: 20px; line-height: 20px; min-width: 20px; padding: 0; }
 .group-name {
+  color: var(--vertical-tab-group-accent);
   flex: 1;
   font-size: 11px;
   font-weight: 600;
   overflow: hidden;
+  text-align: center;
   text-overflow: ellipsis;
   text-transform: none;
   white-space: nowrap;
@@ -307,13 +289,12 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   align-items: stretch;
   border: 1px solid transparent;
   box-sizing: border-box;
+  cursor: pointer;
   display: flex;
   min-height: 24px;
   min-width: 0;
   position: relative;
 }
-.tab-row[draggable="true"] { cursor: grab; }
-.tab-row[draggable="true"]:active { cursor: grabbing; }
 .tab-drop-indicator {
   background: var(--vscode-focusBorder, #007fd4);
   box-shadow: 0 0 4px 1px var(--vscode-focusBorder, #007fd4);
@@ -324,7 +305,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   z-index: 20;
 }
 .tab-drop-indicator[hidden] { display: none; }
-.tab-row.tree-level-1 { padding-left: var(--vertical-tab-tree-indent); }
 .tab-row:hover {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-list-hoverForeground, inherit);
@@ -351,6 +331,11 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   right: 0;
   top: 0;
 }
+.tab-row.is-keyboard-preview {
+  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
+  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
+  color: var(--vscode-list-inactiveSelectionForeground, inherit);
+}
 .tab-row.is-unavailable { opacity: .65; }
 
 .tab-main {
@@ -360,24 +345,12 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: var(--vertical-tab-item-gap);
   padding: 2px 0 2px var(--vertical-tab-inline-padding);
   text-align: left;
 }
 .tab-row.has-description .tab-main { padding-bottom: 3px; padding-top: 3px; }
 .tab-main[aria-disabled="true"] { cursor: not-allowed; }
 .tab-row:hover .tab-main { background: transparent; }
-.tab-icon {
-  flex: 0 0 var(--vertical-tab-icon-size);
-  height: 18px;
-  line-height: 18px;
-  margin: 0;
-  text-align: center;
-  width: var(--vertical-tab-icon-size);
-}
-.tab-seti-icon { font-family: "seti"; font-size: 150%; }
-.tab-product-icon { color: var(--vscode-icon-foreground, inherit); font-size: 16px; }
-.tab-pin-slot { flex: 0 0 var(--vertical-tab-pin-slot-width); font-size: 12px; line-height: 18px; text-align: center; }
 .tab-text {
   display: flex;
   flex: 1;
@@ -387,24 +360,38 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-primary {
   align-items: center;
   display: flex;
-  gap: 5px;
   line-height: 18px;
   min-width: 0;
 }
 .tab-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-row.is-preview .tab-label { font-style: italic; }
-.tab-status { flex: 0 0 auto; font-size: 12px; opacity: .9; }
-.tab-dirty-indicator {
+.tab-status-list {
   align-items: center;
-  color: var(--vscode-tab-unfocusedActiveModifiedBorder, var(--vscode-tab-activeModifiedBorder, currentColor));
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--vertical-tab-status-gap);
+}
+.tab-status-list:empty { display: none; }
+.tab-status {
+  align-items: center;
   display: inline-flex;
-  flex: 0 0 var(--vertical-tab-dirty-width);
-  font-size: 10px;
+  flex: 0 0 var(--vertical-tab-status-size);
+  font-size: 12px;
+  height: 20px;
   justify-content: center;
   line-height: 20px;
-  pointer-events: none;
+  opacity: .9;
   user-select: none;
+  width: var(--vertical-tab-status-size);
 }
+.tab-status-dirty {
+  color: var(--vscode-tab-unfocusedActiveModifiedBorder, var(--vscode-tab-activeModifiedBorder, currentColor));
+  font-size: 10px;
+}
+.tab-status-missing,
+.tab-status-no-permissions { color: var(--vscode-errorForeground); }
+.tab-status-resource-unavailable,
+.tab-status-navigation-unavailable { color: var(--vscode-notificationsWarningIcon-foreground, var(--vscode-editorWarning-foreground)); }
 .tab-description {
   color: var(--vscode-descriptionForeground);
   font-size: 10px;
@@ -416,10 +403,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 }
 .is-active .tab-description,
 .is-focused .tab-description { color: inherit; opacity: .68; }
-.tab-row.is-focused .tab-product-icon {
-  color: var(--vscode-list-activeSelectionIconForeground, inherit);
-}
-
 .tab-actions { opacity: 1; }
 .tab-action {
   font-size: 16px;
@@ -428,9 +411,23 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   min-width: var(--vertical-tab-action-size);
   padding: 0;
 }
+.tab-close-action { display: none; }
+.tab-row:hover .tab-close-action,
+.tab-row:focus-within .tab-close-action {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+body.vscode-high-contrast .group-header,
+body.vscode-high-contrast-light .group-header {
+  border-bottom-color: var(--vscode-contrastBorder, var(--vertical-tab-group-accent));
+}
 
 body.vscode-high-contrast .tab-row.is-focused,
 body.vscode-high-contrast-light .tab-row.is-focused,
+body.vscode-high-contrast .tab-row.is-keyboard-preview,
+body.vscode-high-contrast-light .tab-row.is-keyboard-preview,
 body.vscode-high-contrast .group-header:focus-visible,
 body.vscode-high-contrast-light .group-header:focus-visible {
   border-color: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
@@ -469,6 +466,12 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   outline-offset: -1px;
 }
 
+.tab-context-separator {
+  border-top: 1px solid var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
+  height: 0;
+  margin: 3px 7px;
+}
+
 .tab-context-submenu {
   position: relative;
 }
@@ -489,9 +492,15 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   padding: 3px;
   position: absolute;
   top: -4px;
+  z-index: 11;
 }
 
 .tab-context-submenu:hover .tab-context-submenu-list,
-.tab-context-submenu:focus-within .tab-context-submenu-list {
+.tab-context-submenu.is-open .tab-context-submenu-list {
   display: grid;
+}
+
+.tab-context-submenu.opens-left > .tab-context-submenu-list {
+  left: auto;
+  right: 100%;
 }

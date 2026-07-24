@@ -1,16 +1,13 @@
-import type { ExtensionMessage, GroupMode, ProductIconName, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import type { ExtensionMessage, GroupMode, NativeContextMenuEntry, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
 import { TabSelection } from './TabSelection';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 import { isKeyboardContextMenuKey, nextVerticalNavigationIndex, type VerticalNavigationKey } from './keyboardNavigation';
+import { calculateScrollAnchorRestoration, isWithinNaturalScrollRange } from './scrollAnchor';
 import {
-  NO_EXTENSION_FILE_TYPE,
-  availableFileTypes,
   evaluateTabSearch,
   findTextMatchRanges,
-  tabPathMatches,
-  type TabSearchFilters,
   type TabSearchResult,
 } from './searchFilter';
 
@@ -33,6 +30,7 @@ const groups = document.querySelector<HTMLElement>('#groups');
 const verticalTabs = document.querySelector<HTMLElement>('.vertical-tabs');
 const toolbarControls = document.querySelector<HTMLElement>('#toolbar-controls');
 const toggleToolbarControlsButton = document.querySelector<HTMLButtonElement>('#toggle-toolbar-controls');
+const worksetsButton = document.querySelector<HTMLButtonElement>('#worksets');
 const expandAllButton = document.querySelector<HTMLButtonElement>('#expand-all');
 const collapseAllButton = document.querySelector<HTMLButtonElement>('#collapse-all');
 const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
@@ -40,27 +38,21 @@ const searchContainer = document.querySelector<HTMLElement>('#search-container')
 const searchInput = document.querySelector<HTMLInputElement>('#search-input');
 const searchGroupToggle = document.querySelector<HTMLButtonElement>('#search-group-toggle');
 const regexSearchToggle = document.querySelector<HTMLButtonElement>('#regex-search-toggle');
+const searchWorkspaceRelativePathToggle = document.querySelector<HTMLButtonElement>('#search-workspace-relative-path-toggle');
 const searchResultCount = document.querySelector<HTMLElement>('#search-result-count');
 const searchError = document.querySelector<HTMLElement>('#search-error');
-const unsavedFilterToggle = document.querySelector<HTMLButtonElement>('#filter-unsaved');
-const pinnedFilterToggle = document.querySelector<HTMLButtonElement>('#filter-pinned');
-const currentGroupFilterToggle = document.querySelector<HTMLButtonElement>('#filter-current-group');
-const fileTypeFilter = document.querySelector<HTMLSelectElement>('#filter-file-type');
 const toggleSearchButton = document.querySelector<HTMLButtonElement>('#toggle-search');
 const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 const searchCollapsedGroups = new Set<string>();
 let contextMenu: HTMLElement | undefined;
 let contextMenuInvoker: HTMLElement | undefined;
+let pendingNativeMenuRequest: { readonly requestId: string; readonly target: TabTarget; readonly menu: HTMLElement; readonly x: number; readonly y: number } | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let currentSearchQuery = '';
 let currentSearchGroups = false;
 let currentUseRegex = false;
-let currentSearchFilters: TabSearchFilters = {
-  unsavedOnly: false,
-  pinnedOnly: false,
-  currentGroupOnly: false,
-};
+let currentSearchWorkspaceRelativePaths = false;
 let latestSearchResult: TabSearchResult | undefined;
 let draggedTarget: TabTarget | undefined;
 let draggedTargets: readonly TabTarget[] = [];
@@ -78,16 +70,19 @@ const EN_DEFAULTS: Record<string, string> = {
   pinGroup: 'Pin group', unpinGroup: 'Unpin group', cannotPinVscodeGroup: 'Cannot pin group when following VS Code groups',
   rename: 'Rename', renameGroup: 'Rename group', groupName: 'Group name',
   newGroup: 'New group', newGroupOnlyManual: 'Only manual grouping mode can create groups',
-  previewSuffix: ' (preview)', bestEffortActivation: 'Navigate using VS Code built-in commands',
+  previewTab: 'Preview tab', pinnedTab: 'Pinned tab', readonlyResource: 'Read-only',
+  resourceMissing: 'Resource is missing or deleted', resourceNoPermissions: 'No permission to access resource',
+  resourceUnavailable: 'Resource file system is unavailable',
+  bestEffortActivation: 'Navigate using VS Code built-in commands',
   unsupportedActivation: 'Cannot be navigated by extension',
+  worksets: 'Worksets',
   hideToolbarControls: 'Hide grouping and sorting controls', showToolbarControls: 'Show grouping and sorting controls',
   searchPlaceholder: 'Search', searchGroup: 'Search group names',
   showSearch: 'Show search', hideSearch: 'Hide search',
   regexSearch: 'Use regular expression', invalidRegex: 'Invalid regular expression: {0}',
-  filterUnsaved: 'Unsaved tabs', filterPinned: 'Pinned tabs', filterCurrentGroup: 'Tabs in current editor group',
-  filterFileType: 'Filter by file type', allFileTypes: 'All file types',
+  searchWorkspaceRelativePaths: 'Search workspace-relative paths',
   searchResultCount: '{0} matching tabs', searchResultCountWithGroups: '{0} matching tabs · {1} matching groups',
-  noSearchResults: 'No tabs match the current search and filters.',
+  noSearchResults: 'No tabs match the current search.',
   ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root',
   noExtension: 'No extension', editorGroup: 'Editor Group {0}',
 };
@@ -107,21 +102,18 @@ const i18n = new Proxy(resolveI18n(), {
 
 setAccessibleButtonLabel(expandAllButton, i18n.expand);
 setAccessibleButtonLabel(collapseAllButton, i18n.collapse);
+setAccessibleButtonLabel(worksetsButton, i18n.worksets);
 setAccessibleButtonLabel(searchGroupToggle, i18n.searchGroup);
 setAccessibleButtonLabel(regexSearchToggle, i18n.regexSearch);
-setAccessibleButtonLabel(unsavedFilterToggle, i18n.filterUnsaved);
-setAccessibleButtonLabel(pinnedFilterToggle, i18n.filterPinned);
-setAccessibleButtonLabel(currentGroupFilterToggle, i18n.filterCurrentGroup);
-if (fileTypeFilter) {
-  fileTypeFilter.title = i18n.filterFileType;
-  fileTypeFilter.setAttribute('aria-label', i18n.filterFileType);
-}
+setAccessibleButtonLabel(searchWorkspaceRelativePathToggle, i18n.searchWorkspaceRelativePaths);
 
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
+let nativeMenuRequestSequence = 0;
 let pendingActivateTarget: TabTarget | undefined;
 let pendingActivateTimestamp = 0;
+let keyboardNavigationPreviewTarget: TabTarget | undefined;
 const selection = new TabSelection();
 const activeTabFollowTracker = new ActiveTabFollowTracker();
 
@@ -131,10 +123,23 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   if (event.data.type === 'renderTabs') {
     logToExtension('debug', '收到标签渲染消息', `revision=${event.data.snapshot.revision}, tabs=${event.data.snapshot.tabs.length}`);
     render(event.data);
+    return;
+  }
+  if (event.data.type === 'nativeTabMenu') {
+    renderNativeContextMenu(event.data.requestId, event.data.entries);
+    return;
+  }
+  if (event.data.type === 'previewTabNavigation') {
+    previewKeyboardNavigation(event.data.target);
+    return;
+  }
+  if (event.data.type === 'clearTabNavigationPreview') {
+    clearKeyboardNavigationPreview();
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
 groups?.addEventListener('keydown', handleTreeKeyDown);
+groups?.addEventListener('scroll', clearScrollAnchorCompensationWhenSafe, { passive: true });
 groups?.addEventListener('focusin', (event) => {
   const item = treeItemFromEventTarget(event.target);
   if (item) setTreeTabStop(item);
@@ -143,6 +148,9 @@ toggleToolbarControlsButton?.addEventListener('click', () => {
   const visible = toolbarControls?.hidden ?? false;
   setToolbarControlsVisible(visible);
   vscode.postMessage({ type: 'setToolbarControlsVisible', visible });
+});
+worksetsButton?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'manageWorksets' });
 });
 expandAllButton?.addEventListener('click', () => setAllGroupsCollapsed(false));
 collapseAllButton?.addEventListener('click', () => setAllGroupsCollapsed(true));
@@ -155,7 +163,7 @@ sortModeSelect?.addEventListener('change', () => {
 
 toggleSearchButton?.addEventListener('click', () => {
   const visible = searchContainer?.hidden ?? false;
-  if (!visible) clearSearchAndFilters(false);
+  if (!visible) clearSearch(false);
   vscode.postMessage({ type: 'setSearchVisible', visible });
   setSearchContainerVisible(visible);
   applyCurrentFilter();
@@ -175,29 +183,8 @@ regexSearchToggle?.addEventListener('click', () => {
   applyCurrentFilter(true);
 });
 
-unsavedFilterToggle?.addEventListener('click', () => {
-  currentSearchFilters = { ...currentSearchFilters, unsavedOnly: !currentSearchFilters.unsavedOnly };
-  updateSearchControlState();
-  applyCurrentFilter(true);
-});
-
-pinnedFilterToggle?.addEventListener('click', () => {
-  currentSearchFilters = { ...currentSearchFilters, pinnedOnly: !currentSearchFilters.pinnedOnly };
-  updateSearchControlState();
-  applyCurrentFilter(true);
-});
-
-currentGroupFilterToggle?.addEventListener('click', () => {
-  currentSearchFilters = { ...currentSearchFilters, currentGroupOnly: !currentSearchFilters.currentGroupOnly };
-  updateSearchControlState();
-  applyCurrentFilter(true);
-});
-
-fileTypeFilter?.addEventListener('change', () => {
-  currentSearchFilters = {
-    ...currentSearchFilters,
-    fileType: fileTypeFilter.value || undefined,
-  };
+searchWorkspaceRelativePathToggle?.addEventListener('click', () => {
+  currentSearchWorkspaceRelativePaths = !currentSearchWorkspaceRelativePaths;
   updateSearchControlState();
   applyCurrentFilter(true);
 });
@@ -211,7 +198,7 @@ searchInput?.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
   event.preventDefault();
   event.stopPropagation();
-  clearSearchAndFilters();
+  clearSearch();
 });
 
 document.addEventListener('click', () => dismissContextMenu());
@@ -233,11 +220,12 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
     return;
   }
   latestSnapshot = message.snapshot;
-  clearDropIndicator();
-  if (!message.snapshot.rememberState && collapsedGroups.size > 0) {
+  if (message.snapshot.collapsedGroupKeys) {
     collapsedGroups.clear();
-    vscode.setState({});
+    for (const key of message.snapshot.collapsedGroupKeys) collapsedGroups.add(key);
+    if (message.snapshot.rememberState) vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
   }
+  clearDropIndicator();
   const followedTarget = prepareActiveTabFollow(message.snapshot);
   pruneSelectedTabs(message.snapshot.tabs);
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
@@ -247,10 +235,10 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   setSearchContainerVisible(message.snapshot.searchVisible);
   currentSearchGroups = message.snapshot.searchGroups;
   updateSearchControlState();
-  updateFileTypeOptions(message.snapshot.tabs);
-  renderCurrentTabs();
+  renderCurrentTabs({ preserveScroll: followedTarget === undefined });
   correctPendingActivation();
   revealFollowedTab(followedTarget);
+  applyKeyboardNavigationPreview();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   postSelectionChanged();
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${message.snapshot.tabs.length}, groups=${message.snapshot.displayGroups.length}`);
@@ -351,21 +339,30 @@ function treeFocusKeyForTab(tab: VerticalTabItem): string {
   return `tab:${tab.target.groupIndex}:${JSON.stringify(tab.target.identity)}`;
 }
 
-function renderCurrentTabs(): void {
+interface TreeScrollAnchor {
+  readonly focusKey: string;
+  readonly viewportOffset: number;
+}
+
+interface RenderCurrentTabsOptions {
+  readonly preferredFocusKey?: string;
+  readonly preserveScroll?: boolean;
+}
+
+function renderCurrentTabs(options: RenderCurrentTabsOptions = {}): void {
   if (!latestSnapshot || !groups || !description) return;
   const hadTreeFocus = groups.contains(document.activeElement);
   const previousTreeFocusKey = currentTreeFocusKey();
-  groups.replaceChildren();
+  const scrollAnchor = options.preserveScroll === false
+    ? undefined
+    : captureTreeScrollAnchor(options.preferredFocusKey);
+  const nextTree = document.createDocumentFragment();
   const { tabs, displayGroups } = latestSnapshot;
-  const currentGroupIndex = tabs.find((tab) => tab.isFocused)?.target.groupIndex
-    ?? tabs.find((tab) => tab.isActive)?.target.groupIndex;
-  if (currentGroupFilterToggle) currentGroupFilterToggle.disabled = currentGroupIndex === undefined;
   latestSearchResult = evaluateTabSearch(displayGroups, {
     query: currentSearchQuery,
     searchGroups: currentSearchGroups,
+    searchWorkspaceRelativePaths: currentSearchWorkspaceRelativePaths,
     useRegex: currentUseRegex,
-    filters: currentSearchFilters,
-    currentGroupIndex,
   });
   description.textContent = tabs.length === 0
     ? i18n.emptyState
@@ -373,16 +370,20 @@ function renderCurrentTabs(): void {
       ? i18n.noSearchResults
       : '';
   for (const resultGroup of latestSearchResult.groups) {
-    appendDisplayGroup(groups, resultGroup.group, resultGroup.autoExpand);
+    appendDisplayGroup(nextTree, resultGroup.group, resultGroup.autoExpand);
   }
+  groups.replaceChildren(nextTree);
   initializeTreeFocus(previousTreeFocusKey, hadTreeFocus);
   updateSearchFeedback(latestSearchResult);
   updateTreeActionState();
+  restoreTreeScrollAnchor(scrollAnchor);
 }
 
 function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
   logToExtension('debug', '请求标签快照', `type=${type}, attempt=${refreshAttempts + 1}`);
-  vscode.postMessage({ type });
+  vscode.postMessage(type === 'ready'
+    ? { type, collapsedGroupKeys: Array.from(collapsedGroups) }
+    : { type });
   refreshAttempts += 1;
   window.setTimeout(() => {
     if (!latestSnapshot && refreshAttempts < 5) {
@@ -411,7 +412,7 @@ function stringifyDetails(value: unknown): string {
   }
 }
 
-function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup, autoExpand = false): void {
+function appendDisplayGroup(parent: HTMLElement | DocumentFragment, group: VerticalTabDisplayGroup, autoExpand = false): void {
   const section = document.createElement('section');
   const collapsed = autoExpand
     ? searchCollapsedGroups.has(groupCollapseKey(group))
@@ -656,11 +657,6 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       collapsePreservedMultiSelection();
     }
   });
-  const icon = createTabIcon(tab);
-  const pin = document.createElement('span');
-  pin.className = 'tab-pin-slot';
-  pin.setAttribute('aria-hidden', 'true');
-  if (tab.isPinned) pin.append(codicon('pinned'));
   const text = document.createElement('span');
   text.className = 'tab-text';
   const primary = document.createElement('span');
@@ -668,7 +664,6 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   const label = document.createElement('span');
   label.className = 'tab-label';
   appendHighlightedText(label, tab.label, true);
-  if (tab.isPreview) label.append(document.createTextNode(i18n.previewSuffix));
   primary.append(label);
   text.append(primary);
   activate.addEventListener("lostpointercapture", () => {
@@ -691,10 +686,14 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   if (displayPath) {
     const detail = document.createElement('span');
     detail.className = 'tab-description';
-    appendHighlightedText(detail, displayPath, true);
+    appendHighlightedText(
+      detail,
+      displayPath,
+      currentSearchWorkspaceRelativePaths && displayPath === tab.workspaceRelativePath,
+    );
     text.append(detail);
   }
-  activate.append(icon, pin, text);
+  activate.append(text);
   row.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -703,16 +702,15 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   });
   const actions = document.createElement('div');
   actions.className = 'tab-actions';
-  if (tab.isDirty) {
-    const dirty = document.createElement('span');
-    dirty.className = 'tab-dirty-indicator';
-    dirty.textContent = '●';
-    dirty.title = i18n.unsavedChanges;
-    dirty.setAttribute('aria-label', i18n.unsavedChanges);
-    dirty.setAttribute('role', 'img');
-    actions.append(dirty);
+  const statuses = document.createElement('span');
+  statuses.className = 'tab-status-list';
+  for (const status of tabStatusDescriptors(tab)) {
+    const statusIcon = codicon(status.icon);
+    statusIcon.classList.add('tab-status', `tab-status-${status.kind}`);
+    statusIcon.title = status.label;
+    statuses.append(statusIcon);
   }
-  actions.append(closeSelectionButton(tab));
+  actions.append(statuses, closeSelectionButton(tab));
   row.append(activate, actions);
   return row;
 }
@@ -729,7 +727,7 @@ function toggleRenderedDisplayGroup(group: VerticalTabDisplayGroup, autoExpanded
   const key = groupCollapseKey(group);
   if (searchCollapsedGroups.has(key)) searchCollapsedGroups.delete(key);
   else searchCollapsedGroups.add(key);
-  applyCurrentFilter();
+  applyCurrentFilter(false, treeFocusKeyForGroup(group));
 }
 
 function setAllGroupsCollapsed(collapsed: boolean): void {
@@ -739,7 +737,7 @@ function setAllGroupsCollapsed(collapsed: boolean): void {
     if (group.showHeader) setDisplayGroupCollapsed(group, collapsed, false);
   }
   saveCollapsedGroups();
-  render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot });
+  renderCurrentTabs();
 }
 
 function setDisplayGroupCollapsed(group: VerticalTabDisplayGroup, collapsed: boolean, rerender = true): void {
@@ -748,7 +746,9 @@ function setDisplayGroupCollapsed(group: VerticalTabDisplayGroup, collapsed: boo
   collapsedGroups.delete(collapsed ? openKey : closedKey);
   collapsedGroups.add(collapsed ? closedKey : openKey);
   saveCollapsedGroups();
-  if (rerender && latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
+  if (rerender && latestSnapshot) {
+    renderCurrentTabs({ preferredFocusKey: treeFocusKeyForGroup(group) });
+  }
 }
 
 function isGroupCollapsed(group: VerticalTabDisplayGroup): boolean {
@@ -770,8 +770,76 @@ function openGroupCollapseKey(group: VerticalTabDisplayGroup): string {
 }
 
 function saveCollapsedGroups(): void {
-  if (latestSnapshot?.rememberState) vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
+  const keys = Array.from(collapsedGroups);
+  if (latestSnapshot) latestSnapshot = { ...latestSnapshot, collapsedGroupKeys: keys };
+  if (latestSnapshot?.rememberState) vscode.setState({ collapsedGroups: keys });
   else vscode.setState({});
+  vscode.postMessage({ type: 'setCollapsedGroups', keys });
+}
+
+function captureTreeScrollAnchor(preferredFocusKey?: string): TreeScrollAnchor | undefined {
+  if (!groups) return undefined;
+  const containerBounds = groups.getBoundingClientRect();
+  const items = treeNavigationItems();
+  const preferred = preferredFocusKey
+    ? items.find((item) => item.dataset.focusKey === preferredFocusKey)
+    : undefined;
+  const anchor = preferred ?? items.find((item) => {
+    const bounds = item.getBoundingClientRect();
+    return bounds.bottom > containerBounds.top && bounds.top < containerBounds.bottom;
+  });
+  const focusKey = anchor?.dataset.focusKey;
+  if (!anchor || !focusKey) return undefined;
+
+  return {
+    focusKey,
+    viewportOffset: anchor.getBoundingClientRect().top - containerBounds.top,
+  };
+}
+
+function restoreTreeScrollAnchor(anchor: TreeScrollAnchor | undefined): void {
+  if (!groups || !anchor) return;
+  const target = treeNavigationItems().find((item) => item.dataset.focusKey === anchor.focusKey);
+  if (!target) return;
+  const containerBounds = groups.getBoundingClientRect();
+  const restoration = calculateScrollAnchorRestoration({
+    currentScrollTop: groups.scrollTop,
+    anchorOffsetBefore: anchor.viewportOffset,
+    anchorOffsetAfter: target.getBoundingClientRect().top - containerBounds.top,
+    scrollHeight: groups.scrollHeight,
+    clientHeight: groups.clientHeight,
+  });
+
+  if (restoration.trailingSpace > 0) {
+    const spacer = document.createElement('div');
+    spacer.className = 'scroll-anchor-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.height = `${restoration.trailingSpace}px`;
+    groups.append(spacer);
+  }
+
+  groups.scrollTop = restoration.scrollTop;
+  const residualOffset = target.getBoundingClientRect().top
+    - groups.getBoundingClientRect().top
+    - anchor.viewportOffset;
+  if (Math.abs(residualOffset) > 0.5) groups.scrollTop += residualOffset;
+}
+
+function clearScrollAnchorCompensationWhenSafe(): void {
+  if (!groups) return;
+  const spacer = groups.querySelector<HTMLElement>('.scroll-anchor-spacer');
+  if (
+    !spacer
+    || !isWithinNaturalScrollRange(
+      groups.scrollTop,
+      groups.scrollHeight,
+      groups.clientHeight,
+      spacer.offsetHeight,
+    )
+  ) {
+    return;
+  }
+  spacer.remove();
 }
 
 function updateTreeActionState(): void {
@@ -791,10 +859,10 @@ function setToolbarControlsVisible(visible: boolean): void {
 }
 
 function activationTitle(tab: VerticalTabItem): string {
-  const title = tab.tooltipPath ?? tab.label;
+  const title = [tab.tooltipPath ?? tab.label, ...tabStatusLabels(tab)].join(' · ');
   if (tab.activationKind === 'reliable') return title;
-  if (tab.activationKind === 'bestEffort') return `${title}：使用 VS Code 内置导航命令尝试跳转`;
-  return `${title} 无法由扩展跳转`;
+  if (tab.activationKind === 'bestEffort') return `${title} · ${i18n.bestEffortActivation}`;
+  return `${title} · ${i18n.unsupportedActivation}`;
 }
 
 function dragImageOffsetWithin(row: HTMLElement, clientX: number, clientY: number): DragImageOffset {
@@ -1044,21 +1112,6 @@ function codicon(name: string): HTMLSpanElement {
   return icon;
 }
 
-function createTabIcon(tab: VerticalTabItem): HTMLSpanElement {
-  if (tab.icon.kind === 'codicon') {
-    const icon = codicon(tab.icon.name satisfies ProductIconName);
-    icon.classList.add('tab-icon', 'tab-product-icon');
-    return icon;
-  }
-  const icon = document.createElement('span');
-  icon.className = 'tab-icon tab-seti-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = tab.icon.fontCharacter;
-  if (tab.icon.fontColor) icon.style.color = tab.icon.fontColor;
-  if (tab.icon.fontSize) icon.style.fontSize = tab.icon.fontSize;
-  return icon;
-}
-
 function setAccessibleButtonLabel(target: HTMLButtonElement | null, label: string): void {
   if (!target) return;
   target.title = label;
@@ -1066,9 +1119,32 @@ function setAccessibleButtonLabel(target: HTMLButtonElement | null, label: strin
 }
 
 function tabAccessibleLabel(tab: VerticalTabItem): string {
-  return [tab.label, tab.description]
+  return [tab.label, tab.description, ...tabStatusLabels(tab)]
     .filter((part): part is string => Boolean(part))
     .join(', ');
+}
+
+interface TabStatusDescriptor {
+  readonly kind: string;
+  readonly icon: string;
+  readonly label: string;
+}
+
+function tabStatusDescriptors(tab: VerticalTabItem): readonly TabStatusDescriptor[] {
+  const statuses: TabStatusDescriptor[] = [];
+  if (tab.isPreview) statuses.push({ kind: 'preview', icon: 'preview', label: i18n.previewTab });
+  if (tab.isPinned) statuses.push({ kind: 'pinned', icon: 'pinned', label: i18n.pinnedTab });
+  if (tab.resourceStatus === 'readonly') statuses.push({ kind: 'readonly', icon: 'lock-small', label: i18n.readonlyResource });
+  if (tab.isDirty) statuses.push({ kind: 'dirty', icon: 'circle-filled', label: i18n.unsavedChanges });
+  if (tab.resourceStatus === 'missing') statuses.push({ kind: 'missing', icon: 'error-small', label: i18n.resourceMissing });
+  if (tab.resourceStatus === 'noPermissions') statuses.push({ kind: 'no-permissions', icon: 'shield', label: i18n.resourceNoPermissions });
+  if (tab.resourceStatus === 'unavailable') statuses.push({ kind: 'resource-unavailable', icon: 'debug-disconnect', label: i18n.resourceUnavailable });
+  if (!tab.isActivatable) statuses.push({ kind: 'navigation-unavailable', icon: 'circle-slash', label: i18n.unsupportedActivation });
+  return statuses;
+}
+
+function tabStatusLabels(tab: VerticalTabItem): readonly string[] {
+  return tabStatusDescriptors(tab).map((status) => status.label);
 }
 
 function actionButton(label: string, title: string, type: 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget, dismissAfterClick = false): HTMLButtonElement {
@@ -1080,7 +1156,7 @@ function actionButton(label: string, title: string, type: 'closeTab' | 'closeOth
 
 function closeSelectionButton(tab: VerticalTabItem): HTMLButtonElement {
   const result = iconButton('close', i18n.closeTab);
-  result.className = 'tab-action';
+  result.className = 'tab-action tab-close-action';
   result.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -1149,6 +1225,11 @@ function nextActivateRequestId(): string {
 function nextDragRequestId(): string {
   dragRequestSequence = (dragRequestSequence % Number.MAX_SAFE_INTEGER) + 1;
   return `drag-${dragRequestSequence}`;
+}
+
+function nextNativeMenuRequestId(): string {
+  nativeMenuRequestSequence = (nativeMenuRequestSequence % Number.MAX_SAFE_INTEGER) + 1;
+  return `native-menu-${nativeMenuRequestSequence}`;
 }
 
 function targetDetails(target: TabTarget, label: string, requestId?: string): string {
@@ -1221,12 +1302,110 @@ function showContextMenu(
   });
   menu.addEventListener('keydown', handleContextMenuKeyDown);
   document.body.append(menu);
-  const bounds = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
-  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+  positionContextMenu(menu, x, y);
   contextMenu = menu;
   contextMenuInvoker = invoker;
   focusContextMenuItem(menu, 0);
+  if (tab && snapshot?.nativeContextMenuActionsEnabled) {
+    const requestId = nextNativeMenuRequestId();
+    pendingNativeMenuRequest = { requestId, target: tab.target, menu, x, y };
+    vscode.postMessage({ type: 'requestNativeTabMenu', requestId, target: tab.target });
+  }
+}
+
+function renderNativeContextMenu(requestId: string, entries: readonly NativeContextMenuEntry[]): void {
+  const pending = pendingNativeMenuRequest;
+  if (!pending || pending.requestId !== requestId || contextMenu !== pending.menu || !pending.menu.isConnected) return;
+  pendingNativeMenuRequest = undefined;
+  if (!hasNativeMenuAction(entries)) return;
+  pending.menu.append(createContextMenuSeparator(), ...nativeContextMenuElements(entries, pending.target));
+  positionContextMenu(pending.menu, pending.x, pending.y);
+}
+
+function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], target: TabTarget): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'separator') {
+      if (elements.length > 0 && !elements[elements.length - 1]?.classList.contains('tab-context-separator')) {
+        elements.push(createContextMenuSeparator());
+      }
+      continue;
+    }
+    if (entry.kind === 'submenu') {
+      const children = nativeContextMenuElements(entry.entries, target);
+      if (!children.some((element) => !element.classList.contains('tab-context-separator'))) continue;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'tab-context-submenu';
+      const trigger = button(entry.label, entry.label);
+      trigger.classList.add('tab-context-action', 'tab-context-submenu-trigger');
+      trigger.setAttribute('role', 'menuitem');
+      trigger.setAttribute('aria-haspopup', 'menu');
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.tabIndex = -1;
+      const submenu = document.createElement('div');
+      submenu.className = 'tab-context-submenu-list';
+      submenu.setAttribute('role', 'menu');
+      submenu.append(...children);
+      trigger.addEventListener('click', () => {
+        openContextSubmenu(trigger, submenu);
+        focusContextMenuItem(submenu, 0);
+      });
+      wrapper.addEventListener('mouseenter', () => openContextSubmenu(trigger, submenu));
+      wrapper.addEventListener('mouseleave', () => {
+        if (!wrapper.contains(document.activeElement)) closeContextSubmenu(trigger);
+      });
+      wrapper.addEventListener('focusout', (event) => {
+        if (!(event.relatedTarget instanceof Node) || !wrapper.contains(event.relatedTarget)) closeContextSubmenu(trigger);
+      });
+      wrapper.append(trigger, submenu);
+      elements.push(wrapper);
+      continue;
+    }
+    const action = button(entry.label, entry.label);
+    action.classList.add('tab-context-action');
+    action.setAttribute('role', 'menuitem');
+    action.tabIndex = -1;
+    action.disabled = !entry.enabled;
+    action.addEventListener('click', () => {
+      if (!entry.enabled) return;
+      vscode.postMessage({ type: 'runNativeTabMenuAction', actionId: entry.actionId, target });
+      dismissContextMenu();
+    });
+    elements.push(action);
+  }
+  while (elements[0]?.classList.contains('tab-context-separator')) elements.shift();
+  while (elements[elements.length - 1]?.classList.contains('tab-context-separator')) elements.pop();
+  return elements;
+}
+
+function hasNativeMenuAction(entries: readonly NativeContextMenuEntry[]): boolean {
+  return entries.some((entry) => entry.kind === 'action' || (entry.kind === 'submenu' && hasNativeMenuAction(entry.entries)));
+}
+
+function createContextMenuSeparator(): HTMLDivElement {
+  const separator = document.createElement('div');
+  separator.className = 'tab-context-separator';
+  separator.setAttribute('role', 'separator');
+  return separator;
+}
+
+function positionContextMenu(menu: HTMLElement, x: number, y: number): void {
+  const bounds = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+}
+
+function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement): void {
+  const wrapper = trigger.parentElement;
+  if (!wrapper) return;
+  trigger.setAttribute('aria-expanded', 'true');
+  wrapper.classList.add('is-open');
+  wrapper.classList.toggle('opens-left', submenu.getBoundingClientRect().right > window.innerWidth - 4);
+}
+
+function closeContextSubmenu(trigger: HTMLButtonElement): void {
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.parentElement?.classList.remove('is-open', 'opens-left');
 }
 
 function openKeyboardContextMenu(
@@ -1266,17 +1445,52 @@ function handleContextMenuKeyDown(event: KeyboardEvent): void {
     action.click();
     return;
   }
+  if (event.key === 'ArrowRight') {
+    const action = event.target;
+    if (!(action instanceof HTMLButtonElement) || !action.classList.contains('tab-context-submenu-trigger')) return;
+    const submenu = action.nextElementSibling;
+    if (!(submenu instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openContextSubmenu(action, submenu);
+    focusContextMenuItem(submenu, 0);
+    return;
+  }
+  if (event.key === 'ArrowLeft') {
+    const action = event.target;
+    if (!(action instanceof HTMLButtonElement)) return;
+    const submenu = action.closest<HTMLElement>('.tab-context-submenu-list');
+    const trigger = submenu?.parentElement?.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger');
+    if (!trigger) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeContextSubmenu(trigger);
+    trigger.focus();
+    return;
+  }
   if (!isVerticalNavigationKey(event.key)) return;
   event.preventDefault();
   event.stopPropagation();
-  const actions = enabledContextMenuItems(menu);
+  const level = event.target instanceof HTMLElement
+    ? event.target.closest<HTMLElement>('.tab-context-submenu-list') ?? menu
+    : menu;
+  const actions = enabledContextMenuItems(level);
   const currentIndex = actions.findIndex((item) => item === document.activeElement);
   const nextIndex = nextVerticalNavigationIndex(currentIndex, actions.length, event.key, true);
-  focusContextMenuItem(menu, nextIndex);
+  focusContextMenuItem(level, nextIndex);
 }
 
 function enabledContextMenuItems(menu: HTMLElement): HTMLButtonElement[] {
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+  const result: HTMLButtonElement[] = [];
+  for (const child of Array.from(menu.children)) {
+    if (child instanceof HTMLButtonElement && !child.disabled) {
+      result.push(child);
+    } else if (child.classList.contains('tab-context-submenu')) {
+      const trigger = child.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger:not(:disabled)');
+      if (trigger) result.push(trigger);
+    }
+  }
+  return result;
 }
 
 function focusContextMenuItem(menu: HTMLElement, index: number): void {
@@ -1347,6 +1561,29 @@ function markActiveTab(target: TabTarget): void {
   findTabRow(target)?.classList.add('is-active', 'is-focused');
 }
 
+function previewKeyboardNavigation(target: TabTarget): void {
+  keyboardNavigationPreviewTarget = target;
+  applyKeyboardNavigationPreview();
+}
+
+function clearKeyboardNavigationPreview(): void {
+  keyboardNavigationPreviewTarget = undefined;
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
+    row.classList.remove('is-keyboard-preview');
+  }
+}
+
+function applyKeyboardNavigationPreview(): void {
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
+    row.classList.remove('is-keyboard-preview');
+  }
+  if (!keyboardNavigationPreviewTarget) return;
+  const row = findTabRow(keyboardNavigationPreviewTarget);
+  if (!row) return;
+  row.classList.add('is-keyboard-preview');
+  row.scrollIntoView({ block: 'nearest' });
+}
+
 function correctPendingActivation(): void {
   const PENDING_WINDOW_MS = 300;
   if (!pendingActivateTarget || Date.now() - pendingActivateTimestamp > PENDING_WINDOW_MS) {
@@ -1405,6 +1642,7 @@ function dismissContextMenu(restoreFocus = false): void {
   contextMenu?.remove();
   contextMenu = undefined;
   contextMenuInvoker = undefined;
+  pendingNativeMenuRequest = undefined;
   if (!restoreFocus || !invoker?.isConnected) return;
   if (invoker.classList.contains('tree-navigation-item')) setTreeTabStop(invoker);
   invoker.focus({ preventScroll: true });
@@ -1419,18 +1657,13 @@ function setSearchContainerVisible(visible: boolean): void {
   toggleSearchButton?.setAttribute('aria-pressed', String(visible));
 }
 
-function applyCurrentFilter(resetSearchCollapses = false): void {
+function applyCurrentFilter(resetSearchCollapses = false, preferredFocusKey?: string): void {
   if (resetSearchCollapses) searchCollapsedGroups.clear();
-  renderCurrentTabs();
+  renderCurrentTabs({ preferredFocusKey });
 }
 
-function clearSearchAndFilters(rerender = true): void {
+function clearSearch(rerender = true): void {
   currentSearchQuery = '';
-  currentSearchFilters = {
-    unsavedOnly: false,
-    pinnedOnly: false,
-    currentGroupOnly: false,
-  };
   searchCollapsedGroups.clear();
   if (searchInput) searchInput.value = '';
   updateSearchControlState();
@@ -1440,10 +1673,7 @@ function clearSearchAndFilters(rerender = true): void {
 function updateSearchControlState(): void {
   setToggleState(searchGroupToggle, currentSearchGroups);
   setToggleState(regexSearchToggle, currentUseRegex);
-  setToggleState(unsavedFilterToggle, currentSearchFilters.unsavedOnly);
-  setToggleState(pinnedFilterToggle, currentSearchFilters.pinnedOnly);
-  setToggleState(currentGroupFilterToggle, currentSearchFilters.currentGroupOnly);
-  if (fileTypeFilter) fileTypeFilter.value = currentSearchFilters.fileType ?? '';
+  setToggleState(searchWorkspaceRelativePathToggle, currentSearchWorkspaceRelativePaths);
 }
 
 function setToggleState(button: HTMLButtonElement | null, active: boolean): void {
@@ -1467,29 +1697,6 @@ function updateSearchFeedback(result: TabSearchResult): void {
   searchInput?.setAttribute('aria-invalid', String(Boolean(result.regexError)));
 }
 
-function updateFileTypeOptions(tabs: readonly VerticalTabItem[]): void {
-  if (!fileTypeFilter) return;
-  const selected = currentSearchFilters.fileType;
-  const fileTypes = [...availableFileTypes(tabs)];
-  if (selected && !fileTypes.includes(selected)) fileTypes.push(selected);
-  fileTypeFilter.replaceChildren();
-  fileTypeFilter.append(createOption('', i18n.allFileTypes));
-  for (const fileType of fileTypes) {
-    fileTypeFilter.append(createOption(
-      fileType,
-      fileType === NO_EXTENSION_FILE_TYPE ? i18n.noExtension : fileType,
-    ));
-  }
-  fileTypeFilter.value = selected ?? '';
-}
-
-function createOption(value: string, label: string): HTMLOptionElement {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = label;
-  return option;
-}
-
 function appendHighlightedText(parent: HTMLElement, value: string, highlightEnabled: boolean): void {
   const ranges = highlightEnabled && latestSearchResult?.queryActive
     ? findTextMatchRanges(value, currentSearchQuery, currentUseRegex)
@@ -1511,15 +1718,11 @@ function appendHighlightedText(parent: HTMLElement, value: string, highlightEnab
 }
 
 function searchDisplayPath(tab: VerticalTabItem): string | undefined {
-  if (!latestSearchResult?.queryActive) return tab.description;
-  const candidates = [tab.description, tab.resourcePath, tab.tooltipPath]
-    .filter((value): value is string => Boolean(value));
-  const matchingPath = candidates.find(
-    (candidate) => findTextMatchRanges(candidate, currentSearchQuery, currentUseRegex).length > 0,
-  );
-  if (matchingPath) return matchingPath;
-  if (!tabPathMatches(tab, currentSearchQuery, currentUseRegex)) return tab.description;
-  return tab.resourcePath ?? tab.tooltipPath ?? tab.description;
+  if (!latestSearchResult?.queryActive || !currentSearchWorkspaceRelativePaths) return tab.description;
+  const path = tab.workspaceRelativePath;
+  return path && findTextMatchRanges(path, currentSearchQuery, currentUseRegex).length > 0
+    ? path
+    : tab.description;
 }
 
 function formatI18n(message: string, ...args: readonly (string | number)[]): string {

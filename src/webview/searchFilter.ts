@@ -1,20 +1,10 @@
 import type { VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 
-export const NO_EXTENSION_FILE_TYPE = '__no_extension__';
-
-export interface TabSearchFilters {
-  readonly unsavedOnly: boolean;
-  readonly pinnedOnly: boolean;
-  readonly currentGroupOnly: boolean;
-  readonly fileType?: string;
-}
-
 export interface TabSearchCriteria {
   readonly query: string;
   readonly searchGroups: boolean;
+  readonly searchWorkspaceRelativePaths: boolean;
   readonly useRegex: boolean;
-  readonly filters: TabSearchFilters;
-  readonly currentGroupIndex?: number;
 }
 
 export interface TextMatchRange {
@@ -50,22 +40,20 @@ export function evaluateTabSearch(
   criteria: TabSearchCriteria,
 ): TabSearchResult {
   const compiled = compileQuery(criteria.query, criteria.useRegex);
-  const filtersActive = hasActiveFilters(criteria.filters);
-  const active = compiled.active || filtersActive;
+  const active = compiled.active;
   const queryCanFilter = compiled.active && !compiled.error;
-  const affectsList = queryCanFilter || filtersActive;
+  const affectsList = queryCanFilter;
   const resultGroups: SearchDisplayGroup[] = [];
   let matchedTabCount = 0;
   let matchedGroupCount = 0;
 
   for (const group of groups) {
-    const eligibleTabs = group.tabs.filter((tab) => matchesFilters(tab, criteria.filters, criteria.currentGroupIndex));
     const groupMatches = queryCanFilter && criteria.searchGroups && compiled.test(group.title);
     if (groupMatches) matchedGroupCount += 1;
 
     const visibleTabs = queryCanFilter && !groupMatches
-      ? eligibleTabs.filter((tab) => tabMatchesQuery(tab, compiled))
-      : eligibleTabs;
+      ? group.tabs.filter((tab) => tabMatchesQuery(tab, compiled, criteria.searchWorkspaceRelativePaths))
+      : group.tabs;
     const includeGroup = !affectsList || visibleTabs.length > 0 || groupMatches;
     if (!includeGroup) continue;
 
@@ -92,52 +80,18 @@ export function findTextMatchRanges(value: string, query: string, useRegex: bool
   return compileQuery(query, useRegex).ranges(value);
 }
 
-export function tabPathMatches(tab: VerticalTabItem, query: string, useRegex: boolean): boolean {
+export function tabWorkspaceRelativePathMatches(tab: VerticalTabItem, query: string, useRegex: boolean): boolean {
   const compiled = compileQuery(query, useRegex);
-  return !compiled.error && tabPathCandidates(tab).some((candidate) => compiled.test(candidate));
+  return !compiled.error && compiled.test(tab.workspaceRelativePath);
 }
 
-export function availableFileTypes(tabs: readonly VerticalTabItem[]): readonly string[] {
-  return Array.from(new Set(tabs.map(fileTypeForTab).filter((value): value is string => value !== undefined)))
-    .sort((left, right) => {
-      if (left === NO_EXTENSION_FILE_TYPE) return 1;
-      if (right === NO_EXTENSION_FILE_TYPE) return -1;
-      return left.localeCompare(right);
-    });
-}
-
-export function fileTypeForTab(tab: VerticalTabItem): string | undefined {
-  if (!tab.isFile) return undefined;
-  const path = tab.resourcePath ?? tab.tooltipPath ?? tab.label;
-  const basename = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
-  const lastDot = basename.lastIndexOf('.');
-  if (lastDot <= 0 || lastDot === basename.length - 1) return NO_EXTENSION_FILE_TYPE;
-  return basename.slice(lastDot).toLowerCase();
-}
-
-function hasActiveFilters(filters: TabSearchFilters): boolean {
-  return filters.unsavedOnly
-    || filters.pinnedOnly
-    || filters.currentGroupOnly
-    || filters.fileType !== undefined;
-}
-
-function matchesFilters(tab: VerticalTabItem, filters: TabSearchFilters, currentGroupIndex: number | undefined): boolean {
-  if (filters.unsavedOnly && !tab.isDirty) return false;
-  if (filters.pinnedOnly && !tab.isPinned) return false;
-  if (filters.currentGroupOnly && tab.target.groupIndex !== currentGroupIndex) return false;
-  if (filters.fileType !== undefined && fileTypeForTab(tab) !== filters.fileType) return false;
-  return true;
-}
-
-function tabMatchesQuery(tab: VerticalTabItem, compiled: CompiledQuery): boolean {
-  return compiled.test(tab.label) || tabPathCandidates(tab).some((candidate) => compiled.test(candidate));
-}
-
-function tabPathCandidates(tab: VerticalTabItem): readonly string[] {
-  return Array.from(new Set(
-    [tab.description, tab.resourcePath, tab.tooltipPath].filter((value): value is string => Boolean(value)),
-  ));
+function tabMatchesQuery(
+  tab: VerticalTabItem,
+  compiled: CompiledQuery,
+  searchWorkspaceRelativePaths: boolean,
+): boolean {
+  return compiled.test(tab.label)
+    || (searchWorkspaceRelativePaths && compiled.test(tab.workspaceRelativePath));
 }
 
 function compileQuery(query: string, useRegex: boolean): CompiledQuery {

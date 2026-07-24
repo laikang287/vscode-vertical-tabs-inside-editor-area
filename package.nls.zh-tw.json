@@ -1,0 +1,9 @@
+{
+  "verticalTabs.command.open": "顯示垂直分頁",
+  "verticalTabs.command.close": "隱藏垂直分頁",
+  "verticalTabs.launcher.show": "[顯示](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[隱藏](command:verticalTabs.close)",
+  "verticalTabs.command.saveWorkset": "垂直標籤頁: 儲存工作集",
+  "verticalTabs.command.loadWorkset": "垂直標籤頁: 載入工作集",
+  "verticalTabs.command.manageWorksets": "垂直標籤頁: 管理工作集"
+}

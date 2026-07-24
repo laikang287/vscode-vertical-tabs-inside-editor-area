@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { jaWorksets } from './worksetStrings';
 
 const ja: LocaleStrings = {
+  ...jaWorksets,
   emptyState: '表示可能なエディタータブはありません。',
+  verticalTabsStatusBarName: '垂直タブ',
+  showVerticalTabs: '垂直タブを表示',
+  hideVerticalTabs: '垂直タブを非表示',
   expand: '展開',
   collapse: '折りたたむ',
   expandGroup: 'グループを展開',
@@ -23,12 +28,19 @@ const ja: LocaleStrings = {
   pinGroup: 'グループを固定',
   unpinGroup: 'グループの固定を解除',
   cannotPinVscodeGroup: 'VS Code グループ追従時はグループを固定できません',
+  moveRequiresManualSort: 'タブを上下に移動する前に、並べ替えを「手動」に切り替えてください。',
+  cannotMoveBetweenFileTypeGroups: 'ファイル種類グループ間でタブを移動することはできません。',
   rename: '名前を変更',
   renameGroup: 'グループ名を変更',
   groupName: 'グループ名',
   newGroup: '新しいグループ',
   newGroupOnlyManual: '手動グループモードのみ新しいグループを作成できます',
-  previewSuffix: '（プレビュー）',
+  previewTab: 'プレビュー タブ',
+  pinnedTab: '固定されたタブ',
+  readonlyResource: '読み取り専用',
+  resourceMissing: 'リソースが存在しないか削除されています',
+  resourceNoPermissions: 'リソースにアクセスする権限がありません',
+  resourceUnavailable: 'リソースのファイル システムを利用できません',
   bestEffortActivation: 'VS Code 組み込みナビゲーションコマンドで移動を試行',
   unsupportedActivation: '拡張機能から移動できません',
   hideToolbarControls: 'グループ化と並べ替えコントロールを非表示',
@@ -56,15 +68,10 @@ const ja: LocaleStrings = {
   hideSearch: "検索を非表示",
   regexSearch: "正規表現を使用",
   invalidRegex: "無効な正規表現: {0}",
-  filterTabs: "タブを絞り込む",
-  filterUnsaved: "未保存のタブ",
-  filterPinned: "ピン留めしたタブ",
-  filterCurrentGroup: "現在のエディターグループのタブ",
-  filterFileType: "ファイルの種類で絞り込む",
-  allFileTypes: "すべてのファイルの種類",
+  searchWorkspaceRelativePaths: "ワークスペース相対パスを検索",
   searchResultCount: "一致するタブ: {0}",
   searchResultCountWithGroups: "一致するタブ: {0} · グループ: {1}",
-  noSearchResults: "現在の検索とフィルターに一致するタブはありません。",
+  noSearchResults: "現在の検索に一致するタブはありません。",
 };
 
 export default ja;

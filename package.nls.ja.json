@@ -1,0 +1,9 @@
+{
+  "verticalTabs.command.open": "垂直タブを表示",
+  "verticalTabs.command.close": "垂直タブを非表示",
+  "verticalTabs.launcher.show": "[表示](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[非表示](command:verticalTabs.close)",
+  "verticalTabs.command.saveWorkset": "垂直タブ: ワークセットを保存",
+  "verticalTabs.command.loadWorkset": "垂直タブ: ワークセットを読み込む",
+  "verticalTabs.command.manageWorksets": "垂直タブ: ワークセットを管理"
+}

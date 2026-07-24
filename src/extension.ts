@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { initializeLogging, logDebug, logError, logInfo, showLogs } from './logging/extensionLogger';
+import { VerticalTabsStatusBar } from './statusbar/VerticalTabsStatusBar';
 import { VerticalTabsPanel } from './webview/VerticalTabsPanel';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -27,10 +28,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const moveDownInGroupCommand = registerLoggedCommand('verticalTabs.moveDownInGroup', () => VerticalTabsPanel.moveTab(context, 1, 'tab'));
   const moveToPreviousGroupCommand = registerLoggedCommand('verticalTabs.moveToPreviousGroup', () => VerticalTabsPanel.moveTab(context, -1, 'group'));
   const moveToNextGroupCommand = registerLoggedCommand('verticalTabs.moveToNextGroup', () => VerticalTabsPanel.moveTab(context, 1, 'group'));
+  const saveWorksetCommand = registerLoggedCommand('verticalTabs.saveWorkset', () => VerticalTabsPanel.saveWorkset(context));
+  const loadWorksetCommand = registerLoggedCommand('verticalTabs.loadWorkset', () => VerticalTabsPanel.loadWorkset(context));
+  const manageWorksetsCommand = registerLoggedCommand('verticalTabs.manageWorksets', () => VerticalTabsPanel.manageWorksets(context));
   const showLogsCommand = registerLoggedCommand('verticalTabs.showLogs', async () => showLogs());
   const launcherProvider = new EmptyLauncherProvider();
   const launcher = vscode.window.registerTreeDataProvider('verticalTabs.launcher', launcherProvider);
   const launcherVisibility = VerticalTabsPanel.onDidChangeVisibility(() => launcherProvider.refresh());
+  const statusBar = new VerticalTabsStatusBar();
 
   context.subscriptions.push(
     openCommand,
@@ -47,10 +52,14 @@ export function activate(context: vscode.ExtensionContext): void {
     moveDownInGroupCommand,
     moveToPreviousGroupCommand,
     moveToNextGroupCommand,
+    saveWorksetCommand,
+    loadWorksetCommand,
+    manageWorksetsCommand,
     showLogsCommand,
     launcher,
     launcherVisibility,
     launcherProvider,
+    statusBar,
   );
   VerticalTabsPanel.initialize(context);
   logInfo('扩展激活完成');

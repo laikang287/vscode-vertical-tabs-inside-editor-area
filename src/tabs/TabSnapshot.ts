@@ -8,7 +8,7 @@ import type {
   TabTargetIdentity,
   TabActivationKind,
   TabInputKind,
-  TabVisualIcon,
+  TabResourceStatus,
   ToolbarPosition,
   VerticalTabDisplayGroup,
   VerticalTabItem,
@@ -23,8 +23,7 @@ export interface SnapshotSourceTab {
   readonly isPinned: boolean;
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
-  readonly languageId?: string;
-  readonly icon?: TabVisualIcon;
+  readonly resourceStatus?: TabResourceStatus;
   readonly path?: string;
   readonly directoryName?: string;
   readonly relativePath?: string;
@@ -53,9 +52,11 @@ export interface SnapshotBuildOptions {
   readonly searchVisible?: boolean;
   readonly searchGroups?: boolean;
   readonly alwaysFollowActiveTab?: boolean;
+  readonly nativeContextMenuActionsEnabled?: boolean;
   readonly relativePathDisplay?: RelativePathDisplay;
-  readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
+  readonly displayOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
+  readonly collapsedGroupKeys?: readonly string[];
   readonly localeStrings?: LocaleStrings;
 }
 
@@ -90,16 +91,16 @@ export function buildSnapshot(
       groupId: tab.manualGroupId,
       isFile: isFileTab(tab),
       inputKind: tab.inputKind,
-      languageId: tab.languageId,
-      icon: tab.icon ?? fallbackIcon(tab.inputKind),
+      resourceStatus: tab.resourceStatus,
       resourcePath: tab.path,
+      workspaceRelativePath: tab.relativePath,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
       lastActivatedAt: tab.lastActivatedAt,
     }];
   }));
 
-  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
+  const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.displayOrderByGroup, options.pinnedGroupIds, options.localeStrings);
   return {
     revision,
     groupMode,
@@ -110,9 +111,11 @@ export function buildSnapshot(
     searchVisible: options.searchVisible ?? true,
     searchGroups: options.searchGroups ?? false,
     alwaysFollowActiveTab: options.alwaysFollowActiveTab ?? true,
+    nativeContextMenuActionsEnabled: options.nativeContextMenuActionsEnabled ?? true,
     tabs,
     manualGroups,
     displayGroups,
+    collapsedGroupKeys: options.collapsedGroupKeys ?? [],
   };
 }
 
@@ -234,13 +237,13 @@ function buildDisplayGroups(
   manualGroups: readonly ManualTabGroup[],
   groupMode: GroupMode,
   sortMode: SortMode,
-  manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+  displayOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
   pinnedGroupIds: ReadonlySet<string> | undefined,
   localeStrings?: LocaleStrings,
 ): VerticalTabDisplayGroup[] {
-  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, manualOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
-  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, pinnedGroupIds, localeStrings), sortMode);
-  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, pinnedGroupIds, localeStrings), sortMode);
+  if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
+  if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
+  if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
   return buildVsCodeGroups(sourceGroups, tabs, sortMode, localeStrings);
 }
 
@@ -275,12 +278,12 @@ function buildManualGroups(
   tabs: readonly VerticalTabItem[],
   manualGroups: readonly ManualTabGroup[],
   sortMode: SortMode,
-  manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+  displayOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
   pinnedGroupIds: ReadonlySet<string> | undefined,
   localeStrings?: LocaleStrings,
 ): VerticalTabDisplayGroup[] {
   const knownGroups = new Set(manualGroups.map((group) => group.id));
-  const ungrouped = orderManualTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), '__ungrouped', manualOrderByGroup);
+  const ungrouped = orderDisplayTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), displayOrderKey('manual', '__ungrouped'), displayOrderByGroup);
   const displayGroups: VerticalTabDisplayGroup[] = [];
   displayGroups.push({
       id: '__ungrouped',
@@ -293,7 +296,7 @@ function buildManualGroups(
       isPinned: false,
   });
   for (const group of manualGroups) {
-    const groupTabs = orderManualTabs(tabs.filter((tab) => tab.manualGroupId === group.id), group.id, manualOrderByGroup);
+    const groupTabs = orderDisplayTabs(tabs.filter((tab) => tab.manualGroupId === group.id), displayOrderKey('manual', group.id), displayOrderByGroup);
     displayGroups.push({
       id: group.id,
       title: group.name,
@@ -308,7 +311,14 @@ function buildManualGroups(
   return displayGroups;
 }
 
-function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir' | 'fileType', sortMode: SortMode, pinnedGroupIds: ReadonlySet<string> | undefined, localeStrings?: LocaleStrings): VerticalTabDisplayGroup[] {
+function buildAutoGroups(
+  tabs: readonly VerticalTabItem[],
+  groupMode: 'parentDir' | 'fileType',
+  sortMode: SortMode,
+  displayOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+  pinnedGroupIds: ReadonlySet<string> | undefined,
+  localeStrings?: LocaleStrings,
+): VerticalTabDisplayGroup[] {
   const buckets = new Map<string, VerticalTabItem[]>();
   for (const tab of tabs) {
     const id = groupMode === 'parentDir' ? parentDirKey(tab) : fileTypeKey(tab);
@@ -334,7 +344,7 @@ function buildAutoGroups(tabs: readonly VerticalTabItem[], groupMode: 'parentDir
       description: groupMode === 'parentDir' && parentNameCounts.get(title) !== 1 ? parentDescriptions.get(id) : undefined,
       collapsed: false,
       mode: groupMode,
-      tabs: sortTabs(groupTabs, sortMode),
+      tabs: sortTabs(orderDisplayTabs(groupTabs, displayOrderKey(groupMode, id), displayOrderByGroup), sortMode),
       showHeader: true,
       isManual: false,
       isPinned: pinnedGroupIds?.has(id) ?? false,
@@ -437,11 +447,20 @@ function tabSortValue(tab: VerticalTabItem, sortMode: SortMode): string | undefi
   return value.toString().padStart(16, '0');
 }
 
-function orderManualTabs(tabs: readonly VerticalTabItem[], groupId: string, manualOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined): readonly VerticalTabItem[] {
-  const order = manualOrderByGroup?.get(groupId);
+function orderDisplayTabs(tabs: readonly VerticalTabItem[], groupId: string, displayOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined): readonly VerticalTabItem[] {
+  const order = displayOrderByGroup?.get(groupId);
   if (!order) return tabs;
   const rank = new Map(order.map((key, index) => [key, index]));
   return [...tabs].sort((left, right) => (rank.get(identityKey(left.target.identity)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(identityKey(right.target.identity)) ?? Number.MAX_SAFE_INTEGER));
+}
+
+/**
+ * Manual-group keys retain their legacy shape so existing workspace state is
+ * read without migration. Automatic grouping keys are namespaced to prevent a
+ * directory or extension from colliding with a manual group id.
+ */
+export function displayOrderKey(groupMode: GroupMode, groupId: string): string {
+  return groupMode === 'manual' ? groupId : `${groupMode}:${groupId}`;
 }
 
 function findDisplayBucket(snapshot: VerticalTabsSnapshot, selected: VerticalTabItem): readonly VerticalTabItem[] | undefined {
@@ -489,15 +508,6 @@ function activationKind(tab: SnapshotSourceTab): TabActivationKind {
     return 'bestEffort';
   }
   return 'unsupported';
-}
-
-function fallbackIcon(inputKind: TabInputKind): TabVisualIcon {
-  if (inputKind === 'diff') return { kind: 'codicon', name: 'diff' };
-  if (inputKind === 'notebook' || inputKind === 'notebookDiff') return { kind: 'codicon', name: 'notebook' };
-  if (inputKind === 'terminal') return { kind: 'codicon', name: 'terminal' };
-  if (inputKind === 'webview') return { kind: 'codicon', name: 'preview' };
-  if (inputKind === 'unknown') return { kind: 'codicon', name: 'symbol-misc' };
-  return { kind: 'codicon', name: 'file' };
 }
 
 function isFileTab(tab: SnapshotSourceTab): boolean {

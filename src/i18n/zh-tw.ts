@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { zhTwWorksets } from './worksetStrings';
 
 const zhTw: LocaleStrings = {
+  ...zhTwWorksets,
   emptyState: '沒有可顯示的編輯器標籤。',
+  verticalTabsStatusBarName: '垂直分頁',
+  showVerticalTabs: '顯示垂直分頁',
+  hideVerticalTabs: '隱藏垂直分頁',
   expand: '展開',
   collapse: '折疊',
   expandGroup: '展開群組',
@@ -23,12 +28,19 @@ const zhTw: LocaleStrings = {
   pinGroup: '固定群組',
   unpinGroup: '取消固定群組',
   cannotPinVscodeGroup: '跟隨 VS Code 群組時不能固定群組',
+  moveRequiresManualSort: '請先將排序方式切換為「手動排序」，再向上或向下移動標籤。',
+  cannotMoveBetweenFileTypeGroups: '不能在不同檔案類型分組之間移動標籤。',
   rename: '重新命名',
   renameGroup: '重新命名群組',
   groupName: '群組名稱',
   newGroup: '新增群組',
   newGroupOnlyManual: '只有手動群組模式可以新增群組',
-  previewSuffix: '（預覽）',
+  previewTab: '預覽標籤',
+  pinnedTab: '固定標籤',
+  readonlyResource: '唯讀',
+  resourceMissing: '資源不存在或已刪除',
+  resourceNoPermissions: '沒有權限存取資源',
+  resourceUnavailable: '資源檔案系統無法使用',
   bestEffortActivation: '使用 VS Code 內建導覽命令嘗試跳轉',
   unsupportedActivation: '無法由擴充功能跳轉',
   hideToolbarControls: '隱藏分組和排序控制項',
@@ -56,15 +68,10 @@ const zhTw: LocaleStrings = {
   hideSearch: "隱藏搜尋",
   regexSearch: "使用規則運算式",
   invalidRegex: "規則運算式無效：{0}",
-  filterTabs: "篩選標籤",
-  filterUnsaved: "未儲存標籤",
-  filterPinned: "已釘選標籤",
-  filterCurrentGroup: "目前編輯器群組中的標籤",
-  filterFileType: "依檔案類型篩選",
-  allFileTypes: "所有檔案類型",
+  searchWorkspaceRelativePaths: "搜尋工作區相對路徑",
   searchResultCount: "符合 {0} 個標籤",
   searchResultCountWithGroups: "符合 {0} 個標籤 · {1} 個群組",
-  noSearchResults: "沒有標籤符合目前的搜尋和篩選條件。",
+  noSearchResults: "沒有標籤符合目前的搜尋。",
 };
 
 export default zhTw;

@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { frWorksets } from './worksetStrings';
 
 const fr: LocaleStrings = {
+  ...frWorksets,
   emptyState: 'Aucun onglet éditeur affichable.',
+  verticalTabsStatusBarName: 'Onglets verticaux',
+  showVerticalTabs: 'Afficher les onglets verticaux',
+  hideVerticalTabs: 'Masquer les onglets verticaux',
   expand: 'Développer',
   collapse: 'Réduire',
   expandGroup: 'Développer le groupe',
@@ -23,12 +28,19 @@ const fr: LocaleStrings = {
   pinGroup: 'Épingler le groupe',
   unpinGroup: 'Désépingler le groupe',
   cannotPinVscodeGroup: 'Impossible d\'épingler le groupe en suivant les groupes VS Code',
+  moveRequiresManualSort: 'Passez au tri manuel avant de déplacer les onglets vers le haut ou le bas.',
+  cannotMoveBetweenFileTypeGroups: 'Les onglets ne peuvent pas être déplacés entre les groupes de types de fichiers.',
   rename: 'Renommer',
   renameGroup: 'Renommer le groupe',
   groupName: 'Nom du groupe',
   newGroup: 'Nouveau groupe',
   newGroupOnlyManual: 'Seul le mode de groupement manuel peut créer des groupes',
-  previewSuffix: ' (aperçu)',
+  previewTab: "Onglet d'aperçu",
+  pinnedTab: 'Onglet épinglé',
+  readonlyResource: 'Lecture seule',
+  resourceMissing: 'La ressource est absente ou supprimée',
+  resourceNoPermissions: "Autorisation d'accès à la ressource refusée",
+  resourceUnavailable: 'Le système de fichiers de la ressource est indisponible',
   bestEffortActivation: 'Essayer de naviguer avec les commandes de navigation intégrées de VS Code',
   unsupportedActivation: "Navigation impossible depuis l'extension",
   hideToolbarControls: 'Masquer les contrôles de groupement et de tri',
@@ -56,15 +68,10 @@ const fr: LocaleStrings = {
   hideSearch: "Masquer la recherche",
   regexSearch: "Utiliser une expression régulière",
   invalidRegex: "Expression régulière non valide : {0}",
-  filterTabs: "Filtrer les onglets",
-  filterUnsaved: "Onglets non enregistrés",
-  filterPinned: "Onglets épinglés",
-  filterCurrentGroup: "Onglets du groupe d’éditeurs actuel",
-  filterFileType: "Filtrer par type de fichier",
-  allFileTypes: "Tous les types de fichiers",
+  searchWorkspaceRelativePaths: "Rechercher les chemins relatifs à l’espace de travail",
   searchResultCount: "{0} onglets correspondants",
   searchResultCountWithGroups: "{0} onglets correspondants · {1} groupes correspondants",
-  noSearchResults: "Aucun onglet ne correspond à la recherche et aux filtres actuels.",
+  noSearchResults: "Aucun onglet ne correspond à la recherche actuelle.",
 };
 
 export default fr;

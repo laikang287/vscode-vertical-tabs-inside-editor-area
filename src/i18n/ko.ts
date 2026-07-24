@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { koWorksets } from './worksetStrings';
 
 const ko: LocaleStrings = {
+  ...koWorksets,
   emptyState: '표시 가능한 편집기 탭이 없습니다.',
+  verticalTabsStatusBarName: '세로 탭',
+  showVerticalTabs: '세로 탭 표시',
+  hideVerticalTabs: '세로 탭 숨기기',
   expand: '펼치기',
   collapse: '접기',
   expandGroup: '그룹 펼치기',
@@ -23,12 +28,19 @@ const ko: LocaleStrings = {
   pinGroup: '그룹 고정',
   unpinGroup: '그룹 고정 해제',
   cannotPinVscodeGroup: 'VS Code 그룹을 따를 때 그룹을 고정할 수 없습니다',
+  moveRequiresManualSort: '탭을 위아래로 이동하기 전에 정렬을 수동으로 전환하세요.',
+  cannotMoveBetweenFileTypeGroups: '파일 형식 그룹 간에는 탭을 이동할 수 없습니다.',
   rename: '이름 바꾸기',
   renameGroup: '그룹 이름 바꾸기',
   groupName: '그룹 이름',
   newGroup: '새 그룹',
   newGroupOnlyManual: '수동 그룹 모드만 새 그룹을 만들 수 있습니다',
-  previewSuffix: ' (미리보기)',
+  previewTab: '미리 보기 탭',
+  pinnedTab: '고정된 탭',
+  readonlyResource: '읽기 전용',
+  resourceMissing: '리소스가 없거나 삭제됨',
+  resourceNoPermissions: '리소스에 액세스할 권한 없음',
+  resourceUnavailable: '리소스 파일 시스템을 사용할 수 없음',
   bestEffortActivation: 'VS Code 내장 탐색 명령으로 이동 시도',
   unsupportedActivation: '확장에서 이동할 수 없음',
   hideToolbarControls: '그룹화 및 정렬 컨트롤 숨기기',
@@ -56,15 +68,10 @@ const ko: LocaleStrings = {
   hideSearch: "검색 숨기기",
   regexSearch: "정규식 사용",
   invalidRegex: "잘못된 정규식: {0}",
-  filterTabs: "탭 필터링",
-  filterUnsaved: "저장하지 않은 탭",
-  filterPinned: "고정된 탭",
-  filterCurrentGroup: "현재 편집기 그룹의 탭",
-  filterFileType: "파일 형식으로 필터링",
-  allFileTypes: "모든 파일 형식",
+  searchWorkspaceRelativePaths: "작업 영역 상대 경로 검색",
   searchResultCount: "일치하는 탭 {0}개",
   searchResultCountWithGroups: "일치하는 탭 {0}개 · 그룹 {1}개",
-  noSearchResults: "현재 검색 및 필터와 일치하는 탭이 없습니다.",
+  noSearchResults: "현재 검색과 일치하는 탭이 없습니다.",
 };
 
 export default ko;

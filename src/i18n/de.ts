@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { deWorksets } from './worksetStrings';
 
 const de: LocaleStrings = {
+  ...deWorksets,
   emptyState: 'Keine anzeigbaren Editor-Tabs.',
+  verticalTabsStatusBarName: 'Vertikale Tabs',
+  showVerticalTabs: 'Vertikale Tabs anzeigen',
+  hideVerticalTabs: 'Vertikale Tabs ausblenden',
   expand: 'Erweitern',
   collapse: 'Zuklappen',
   expandGroup: 'Gruppe erweitern',
@@ -23,12 +28,19 @@ const de: LocaleStrings = {
   pinGroup: 'Gruppe anheften',
   unpinGroup: 'Gruppe lösen',
   cannotPinVscodeGroup: 'Gruppe kann nicht angeheftet werden, wenn VS Code-Gruppen gefolgt wird',
+  moveRequiresManualSort: 'Wechseln Sie vor dem Verschieben von Tabs nach oben oder unten zur manuellen Sortierung.',
+  cannotMoveBetweenFileTypeGroups: 'Tabs können nicht zwischen Dateitypgruppen verschoben werden.',
   rename: 'Umbenennen',
   renameGroup: 'Gruppe umbenennen',
   groupName: 'Gruppenname',
   newGroup: 'Neue Gruppe',
   newGroupOnlyManual: 'Nur im manuellen Gruppenmodus können neue Gruppen erstellt werden',
-  previewSuffix: ' (Vorschau)',
+  previewTab: 'Vorschau-Tab',
+  pinnedTab: 'Angehefteter Tab',
+  readonlyResource: 'Schreibgeschützt',
+  resourceMissing: 'Ressource fehlt oder wurde gelöscht',
+  resourceNoPermissions: 'Keine Berechtigung für den Zugriff auf die Ressource',
+  resourceUnavailable: 'Dateisystem der Ressource ist nicht verfügbar',
   bestEffortActivation: 'Mit integrierten VS Code-Navigationsbefehlen versuchen zu navigieren',
   unsupportedActivation: 'Kann nicht von Erweiterung navigiert werden',
   hideToolbarControls: 'Gruppierungs- und Sortiersteuerelemente ausblenden',
@@ -56,15 +68,10 @@ const de: LocaleStrings = {
   hideSearch: "Suche ausblenden",
   regexSearch: "Regulären Ausdruck verwenden",
   invalidRegex: "Ungültiger regulärer Ausdruck: {0}",
-  filterTabs: "Tabs filtern",
-  filterUnsaved: "Nicht gespeicherte Tabs",
-  filterPinned: "Angeheftete Tabs",
-  filterCurrentGroup: "Tabs in der aktuellen Editorgruppe",
-  filterFileType: "Nach Dateityp filtern",
-  allFileTypes: "Alle Dateitypen",
+  searchWorkspaceRelativePaths: "Workspace-relative Pfade durchsuchen",
   searchResultCount: "{0} passende Tabs",
   searchResultCountWithGroups: "{0} passende Tabs · {1} passende Gruppen",
-  noSearchResults: "Keine Tabs entsprechen der aktuellen Suche und den Filtern.",
+  noSearchResults: "Keine Tabs entsprechen der aktuellen Suche.",
 };
 
 export default de;

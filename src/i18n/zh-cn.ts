@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { zhCnWorksets } from './worksetStrings';
 
 const zhCn: LocaleStrings = {
+  ...zhCnWorksets,
   emptyState: '没有可显示的编辑器标签。',
+  verticalTabsStatusBarName: '垂直标签页',
+  showVerticalTabs: '显示垂直标签页',
+  hideVerticalTabs: '隐藏垂直标签页',
   expand: '展开',
   collapse: '折叠',
   expandGroup: '展开分组',
@@ -23,12 +28,19 @@ const zhCn: LocaleStrings = {
   pinGroup: '固定分组',
   unpinGroup: '取消固定分组',
   cannotPinVscodeGroup: '跟随 VS Code 分组时不能固定分组',
+  moveRequiresManualSort: '请先将排序方式切换为“手动排序”，再向上或向下移动标签。',
+  cannotMoveBetweenFileTypeGroups: '不能在不同文件类型分组之间移动标签。',
   rename: '重命名',
   renameGroup: '重命名分组',
   groupName: '分组名称',
   newGroup: '新建分组',
   newGroupOnlyManual: '只有手动分组模式可以新建分组',
-  previewSuffix: '（预览）',
+  previewTab: '预览标签',
+  pinnedTab: '固定标签',
+  readonlyResource: '只读',
+  resourceMissing: '资源不存在或已删除',
+  resourceNoPermissions: '无权访问资源',
+  resourceUnavailable: '资源文件系统不可用',
   bestEffortActivation: '使用 VS Code 内置导航命令尝试跳转',
   unsupportedActivation: '无法由扩展跳转',
   hideToolbarControls: '隐藏分组和排序控件',
@@ -56,15 +68,10 @@ const zhCn: LocaleStrings = {
   hideSearch: "隐藏搜索",
   regexSearch: "使用正则表达式",
   invalidRegex: "正则表达式无效：{0}",
-  filterTabs: "过滤标签",
-  filterUnsaved: "未保存标签",
-  filterPinned: "已固定标签",
-  filterCurrentGroup: "当前编辑器组中的标签",
-  filterFileType: "按文件类型过滤",
-  allFileTypes: "所有文件类型",
+  searchWorkspaceRelativePaths: "搜索工作区相对路径",
   searchResultCount: "匹配 {0} 个标签",
   searchResultCountWithGroups: "匹配 {0} 个标签 · {1} 个分组",
-  noSearchResults: "没有标签与当前搜索和过滤条件匹配。",
+  noSearchResults: "没有标签与当前搜索匹配。",
 };
 
 export default zhCn;

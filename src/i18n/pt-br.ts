@@ -1,7 +1,12 @@
 import type { LocaleStrings } from './locale';
+import { ptBrWorksets } from './worksetStrings';
 
 const ptBr: LocaleStrings = {
+  ...ptBrWorksets,
   emptyState: 'Nenhuma aba de editor exibível.',
+  verticalTabsStatusBarName: 'Abas verticais',
+  showVerticalTabs: 'Mostrar abas verticais',
+  hideVerticalTabs: 'Ocultar abas verticais',
   expand: 'Expandir',
   collapse: 'Recolher',
   expandGroup: 'Expandir grupo',
@@ -23,12 +28,19 @@ const ptBr: LocaleStrings = {
   pinGroup: 'Fixar grupo',
   unpinGroup: 'Desafixar grupo',
   cannotPinVscodeGroup: 'Não é possível fixar grupo ao seguir grupos do VS Code',
+  moveRequiresManualSort: 'Altere para ordenação manual antes de mover abas para cima ou para baixo.',
+  cannotMoveBetweenFileTypeGroups: 'As abas não podem ser movidas entre grupos de tipos de arquivo.',
   rename: 'Renomear',
   renameGroup: 'Renomear grupo',
   groupName: 'Nome do grupo',
   newGroup: 'Novo grupo',
   newGroupOnlyManual: 'Apenas o modo de agrupamento manual pode criar grupos',
-  previewSuffix: ' (pré-visualização)',
+  previewTab: 'Aba de pré-visualização',
+  pinnedTab: 'Aba fixada',
+  readonlyResource: 'Somente leitura',
+  resourceMissing: 'O recurso está ausente ou foi excluído',
+  resourceNoPermissions: 'Sem permissão para acessar o recurso',
+  resourceUnavailable: 'O sistema de arquivos do recurso está indisponível',
   bestEffortActivation: 'Tentar navegar usando comandos de navegação integrados do VS Code',
   unsupportedActivation: 'Não é possível navegar pela extensão',
   hideToolbarControls: 'Ocultar controles de agrupamento e ordenação',
@@ -56,15 +68,10 @@ const ptBr: LocaleStrings = {
   hideSearch: "Ocultar pesquisa",
   regexSearch: "Usar expressão regular",
   invalidRegex: "Expressão regular inválida: {0}",
-  filterTabs: "Filtrar abas",
-  filterUnsaved: "Abas não salvas",
-  filterPinned: "Abas fixadas",
-  filterCurrentGroup: "Abas do grupo de editores atual",
-  filterFileType: "Filtrar por tipo de arquivo",
-  allFileTypes: "Todos os tipos de arquivo",
+  searchWorkspaceRelativePaths: "Pesquisar caminhos relativos ao espaço de trabalho",
   searchResultCount: "{0} abas correspondentes",
   searchResultCountWithGroups: "{0} abas correspondentes · {1} grupos correspondentes",
-  noSearchResults: "Nenhuma aba corresponde à pesquisa e aos filtros atuais.",
+  noSearchResults: "Nenhuma aba corresponde à pesquisa atual.",
 };
 
 export default ptBr;
