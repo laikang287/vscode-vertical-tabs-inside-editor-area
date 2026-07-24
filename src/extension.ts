@@ -17,8 +17,16 @@ export function activate(context: vscode.ExtensionContext): void {
   const closeCommand = registerLoggedCommand('verticalTabs.close', () => VerticalTabsPanel.close());
 
   const focusCommand = registerLoggedCommand('verticalTabs.focus', () => VerticalTabsPanel.focus(context));
-  const previousCommand = registerLoggedCommand('verticalTabs.previous', () => VerticalTabsPanel.navigate(context, -1));
-  const nextCommand = registerLoggedCommand('verticalTabs.next', () => VerticalTabsPanel.navigate(context, 1));
+  const previousCommand = registerLoggedCommand('verticalTabs.previous', () => VerticalTabsPanel.navigate(context, -1, 'all'));
+  const nextCommand = registerLoggedCommand('verticalTabs.next', () => VerticalTabsPanel.navigate(context, 1, 'all'));
+  const previousInGroupCommand = registerLoggedCommand('verticalTabs.previousInGroup', () => VerticalTabsPanel.navigate(context, -1, 'group'));
+  const nextInGroupCommand = registerLoggedCommand('verticalTabs.nextInGroup', () => VerticalTabsPanel.navigate(context, 1, 'group'));
+  const previousAcrossGroupsCommand = registerLoggedCommand('verticalTabs.previousAcrossGroups', () => VerticalTabsPanel.navigate(context, -1, 'all'));
+  const nextAcrossGroupsCommand = registerLoggedCommand('verticalTabs.nextAcrossGroups', () => VerticalTabsPanel.navigate(context, 1, 'all'));
+  const moveUpInGroupCommand = registerLoggedCommand('verticalTabs.moveUpInGroup', () => VerticalTabsPanel.moveTab(context, -1, 'tab'));
+  const moveDownInGroupCommand = registerLoggedCommand('verticalTabs.moveDownInGroup', () => VerticalTabsPanel.moveTab(context, 1, 'tab'));
+  const moveToPreviousGroupCommand = registerLoggedCommand('verticalTabs.moveToPreviousGroup', () => VerticalTabsPanel.moveTab(context, -1, 'group'));
+  const moveToNextGroupCommand = registerLoggedCommand('verticalTabs.moveToNextGroup', () => VerticalTabsPanel.moveTab(context, 1, 'group'));
   const showLogsCommand = registerLoggedCommand('verticalTabs.showLogs', async () => showLogs());
   const launcherProvider = new EmptyLauncherProvider();
   const launcher = vscode.window.registerTreeDataProvider('verticalTabs.launcher', launcherProvider);
@@ -31,6 +39,14 @@ export function activate(context: vscode.ExtensionContext): void {
     focusCommand,
     previousCommand,
     nextCommand,
+    previousInGroupCommand,
+    nextInGroupCommand,
+    previousAcrossGroupsCommand,
+    nextAcrossGroupsCommand,
+    moveUpInGroupCommand,
+    moveDownInGroupCommand,
+    moveToPreviousGroupCommand,
+    moveToNextGroupCommand,
     showLogsCommand,
     launcher,
     launcherVisibility,

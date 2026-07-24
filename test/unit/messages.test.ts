@@ -42,6 +42,8 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'moveTab', target, groupId: 'work_1', beforeTarget: target }), { type: 'moveTab', target, groupId: 'work_1', beforeTarget: target });
   assert.deepEqual(parseWebviewMessage({ type: 'moveTab', target, groupId: 'apps/web/src' }), { type: 'moveTab', target, groupId: 'apps/web/src' });
   assert.deepEqual(parseWebviewMessage({ type: 'moveTabs', targets: [target], groupId: 'vscode-1', beforeTarget: target }), { type: 'moveTabs', targets: [target], groupId: 'vscode-1', beforeTarget: target });
+  assert.deepEqual(parseWebviewMessage({ type: 'selectionChanged', targets: [target] }), { type: 'selectionChanged', targets: [target] });
+  assert.deepEqual(parseWebviewMessage({ type: 'selectionChanged', targets: [] }), { type: 'selectionChanged', targets: [] });
   assert.deepEqual(parseWebviewMessage({ type: 'closeTabs', targets: [target] }), { type: 'closeTabs', targets: [target] });
   assert.deepEqual(parseWebviewMessage({ type: 'closeOthersForTabs', targets: [target] }), { type: 'closeOthersForTabs', targets: [target] });
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelowForTabs', targets: [target] }), { type: 'closeBelowForTabs', targets: [target] });
