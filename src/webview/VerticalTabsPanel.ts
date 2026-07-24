@@ -41,7 +41,6 @@ const MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY = 'verticalTabs.manualGroupByIdentity
 const MANUAL_ORDER_BY_GROUP_STORAGE_KEY = 'verticalTabs.manualOrderByGroup';
 const PINNED_GROUP_IDS_STORAGE_KEY = 'verticalTabs.pinnedGroupIds';
 const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
-const RAIL_SETTLE_DELAY_MS = 150;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_WAIT_INTERVAL_MS = 10;
 const INPUT_MTIME_TIMEOUT_MS = 250;
@@ -316,11 +315,10 @@ export class VerticalTabsPanel {
   private async settleAndEnsureRail(previousEditor?: vscode.TextEditor, preparedRailGroup?: PreparedRailGroup): Promise<void> {
     await VerticalTabsPanel.enqueueLayout(async () => {
       this.arrangingRail = true;
-      logDebug('等待编辑器状态稳定后安排左侧标签栏', {
-        delayMs: RAIL_SETTLE_DELAY_MS,
+      logDebug('根据已发布的编辑器组立即安排左侧标签栏', {
+        preparedLayout: preparedRailGroup?.previousLayout !== undefined,
         previousEditor: previousEditor?.document.uri.toString(),
       });
-      await new Promise<void>((resolve) => setTimeout(resolve, RAIL_SETTLE_DELAY_MS));
       if (VerticalTabsPanel.panels.current !== this) {
         logWarn('安排左侧标签栏时面板实例已变化，终止本次操作');
         return;

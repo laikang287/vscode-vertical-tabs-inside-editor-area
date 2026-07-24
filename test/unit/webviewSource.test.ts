@@ -260,6 +260,14 @@ test('extension registers the webview message listener before setting html and k
   assert.match(source, /private async toSnapshotTabSafe\(tab: vscode\.Tab\): Promise<SnapshotSourceTab>/);
 });
 
+test('extension restores the prepared rail layout without a fixed visible delay', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /RAIL_SETTLE_DELAY_MS/);
+  assert.match(source, /const initialGroupIndex = await this\.waitForOwnGroup\(\)/);
+  assert.match(source, /setTimeout\(resolve, GROUP_WAIT_INTERVAL_MS\)[\s\S]+applyLeadingRailRatio\(preparedRailGroup\.ratio, preparedRailGroup\.previousLayout\)/);
+});
+
 test('extension avoids persisting and restoring transient empty-rail widths', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
