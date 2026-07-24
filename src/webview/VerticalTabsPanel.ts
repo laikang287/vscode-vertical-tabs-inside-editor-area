@@ -36,6 +36,7 @@ import { TabMruTracker } from '../tabs/TabMruTracker';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { NativeTabMenuProvider } from './NativeTabMenuProvider';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
@@ -113,7 +114,7 @@ export class VerticalTabsPanel {
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
   private suppressMruTracking = false;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, nativeContextMenuActionsEnabled: true, tabs: [], manualGroups: [], displayGroups: [] };
   private commandSelectedTargets: readonly TabTarget[] = [];
   private groupMode: GroupMode;
   private sortMode: SortMode;
@@ -126,6 +127,7 @@ export class VerticalTabsPanel {
   private readonly manualOrderByGroup: Map<string, string[]>;
   private readonly pinnedGroupIds: Set<string>;
   private readonly mruTracker = new TabMruTracker<vscode.Tab>();
+  private readonly nativeTabMenuProvider = new NativeTabMenuProvider();
   private localeStrings: LocaleStrings;
   private rememberStateEnabled: boolean;
   private setiIconResolver: SetiIconResolver;
@@ -153,6 +155,7 @@ export class VerticalTabsPanel {
     this.railPosition = readRailPosition();
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn, position: this.railPosition });
     this.disposables.push(
+      this.nativeTabMenuProvider,
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: unknown) => {
         void this.handleMessage(message).catch((error) => logError('处理 Webview 消息失败', error));
@@ -933,6 +936,7 @@ export class VerticalTabsPanel {
       searchVisible: this.searchVisible,
       searchGroups: this.searchGroups,
       alwaysFollowActiveTab: readAlwaysFollowActiveTab(),
+      nativeContextMenuActionsEnabled: readNativeContextMenuActionsEnabled(),
       relativePathDisplay: readRelativePathDisplay(),
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
@@ -1102,6 +1106,24 @@ export class VerticalTabsPanel {
       }
       logDebug('Webview 请求刷新标签快照', { type: message.type });
       await this.refresh({ reason: message.type });
+      return;
+    }
+
+    if (message.type === 'requestNativeTabMenu') {
+      if (!readNativeContextMenuActionsEnabled()) {
+        this.postMessage({ type: 'nativeTabMenu', requestId: message.requestId, entries: [] });
+        return;
+      }
+      const tab = this.resolveTab(message.target);
+      const entries = tab
+        ? await this.nativeTabMenuProvider.createMenu(tab, this.resolveConfiguredLanguage())
+        : [];
+      this.postMessage({ type: 'nativeTabMenu', requestId: message.requestId, entries });
+      return;
+    }
+
+    if (message.type === 'runNativeTabMenuAction') {
+      await this.runNativeTabMenuAction(message.actionId, message.target);
       return;
     }
 
@@ -1394,6 +1416,48 @@ export class VerticalTabsPanel {
       }
     }
     await this.refresh({ reason: 'navigate' });
+  }
+
+  private async runNativeTabMenuAction(actionId: string, target: TabTarget): Promise<void> {
+    if (!readNativeContextMenuActionsEnabled()) {
+      logWarn('拒绝执行已关闭的 VS Code 标签右键菜单操作', { actionId });
+      return;
+    }
+    const action = this.nativeTabMenuProvider.resolveAction(actionId);
+    const tab = this.resolveTab(target);
+    if (!action || !tab) {
+      logWarn('拒绝无效或过期的 VS Code 标签右键菜单操作', { actionId, targetResolved: Boolean(tab) });
+      return;
+    }
+    const uri = inputUri(tab.input);
+    try {
+      if (isActivatableTabForCommands(tab)) {
+        await this.activateTab(tab, `native-menu-${actionId}`);
+      }
+      const position = findTabPosition(tab);
+      const active = position ? activeTabMatches(position, tab) : false;
+      if (action.invocation === 'editor' && !active) {
+        logWarn('VS Code 标签右键菜单操作已取消：无法可靠激活目标标签', { actionId, command: action.command, target: describeTab(tab) });
+        return;
+      }
+      if (action.invocation === 'resource' && uri) {
+        await vscode.commands.executeCommand(action.command, uri);
+      } else if (active) {
+        await vscode.commands.executeCommand(action.command);
+      } else {
+        logWarn('VS Code 标签右键菜单操作已取消：目标既无资源地址也未能激活', { actionId, command: action.command, target: describeTab(tab) });
+        return;
+      }
+      logInfo('已调用 VS Code 标签右键菜单操作', { command: action.command, invocation: action.invocation, target: describeTab(tab) });
+    } catch (error) {
+      logError('调用 VS Code 标签右键菜单操作失败', { command: action.command, target: describeTab(tab), error });
+      const chinese = this.resolveConfiguredLanguage().toLowerCase().startsWith('zh');
+      void vscode.window.showWarningMessage(chinese
+        ? `无法执行标签菜单操作“${action.command}”，详情请查看 Vertical Tabs 输出日志。`
+        : `Could not run tab menu action "${action.command}". See the Vertical Tabs output log for details.`);
+    } finally {
+      await this.refresh({ reason: 'operation' });
+    }
   }
 
   private async handleConfigurationChange(event: vscode.ConfigurationChangeEvent): Promise<void> {
@@ -3719,6 +3783,10 @@ function readToolbarPosition(): ToolbarPosition {
 
 function readAlwaysFollowActiveTab(): boolean {
   return vscode.workspace.getConfiguration('verticalTabs').get<boolean>('alwaysFollowActiveTab', true);
+}
+
+function readNativeContextMenuActionsEnabled(): boolean {
+  return vscode.workspace.getConfiguration('verticalTabs').get<boolean>('showNativeContextMenuActions', true);
 }
 
 function isGroupMode(value: unknown): value is GroupMode {

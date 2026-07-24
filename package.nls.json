@@ -1,4 +1,5 @@
 {
+  "verticalTabs.config.showNativeContextMenuActions": "Show VS Code and installed-extension actions as a second group in a tab's context menu. Vertical Tabs removes duplicate close and pin actions. Changes apply immediately.",
   "verticalTabs.config.alwaysFollowActiveTab": "Always follow the active tab. When enabled, switching the focused editor automatically expands its group and scrolls the tab into view. Disable this to preserve the current list position while browsing tabs manually.",
   "verticalTabs.config.position": "Position of the vertical tab bar inside the editor area. Changes are applied immediately.",
   "verticalTabs.config.position.left": "Place the vertical tab bar at the left edge of the editor area.",

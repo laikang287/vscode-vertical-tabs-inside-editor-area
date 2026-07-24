@@ -29,8 +29,12 @@ export interface VerticalTabDisplayGroup {
 export interface VerticalTabsSnapshot {
   readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
-  readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean;
+  readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean; readonly nativeContextMenuActionsEnabled: boolean;
 }
+export type NativeContextMenuEntry =
+  | { readonly kind: 'separator' }
+  | { readonly kind: 'action'; readonly actionId: string; readonly label: string; readonly enabled: boolean }
+  | { readonly kind: 'submenu'; readonly label: string; readonly entries: readonly NativeContextMenuEntry[] };
 export type WebviewMessage =
   | { readonly type: 'ready' } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
   | { readonly type: 'selectionChanged'; readonly targets: readonly TabTarget[] }
@@ -54,9 +58,13 @@ export type WebviewMessage =
   | { readonly type: 'moveToPreviousGroup' | 'moveToNextGroup' | 'moveToNewGroup'; readonly target: TabTarget }
   | { readonly type: 'moveToGroup'; readonly target: TabTarget; readonly groupIndex: number }
   | { readonly type: 'reorderManualGroup'; readonly groupId: string; readonly beforeGroupId?: string }
+  | { readonly type: 'requestNativeTabMenu'; readonly requestId: string; readonly target: TabTarget }
+  | { readonly type: 'runNativeTabMenuAction'; readonly actionId: string; readonly target: TabTarget }
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
-export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot };
+export type ExtensionMessage =
+  | { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot }
+  | { readonly type: 'nativeTabMenu'; readonly requestId: string; readonly entries: readonly NativeContextMenuEntry[] };
 const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
@@ -90,6 +98,12 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if ((value.type === 'moveToPreviousGroup' || value.type === 'moveToNextGroup' || value.type === 'moveToNewGroup') && isTabTarget(value.target)) return { type: value.type, target: value.target };
   if (value.type === 'reorderManualGroup' && isId(value.groupId) && (value.beforeGroupId === undefined || isId(value.beforeGroupId))) return { type: 'reorderManualGroup', groupId: value.groupId, ...(value.beforeGroupId === undefined ? {} : { beforeGroupId: value.beforeGroupId }) };
   if (value.type === 'moveToGroup' && isTabTarget(value.target) && isNonNegativeInteger(value.groupIndex)) return { type: 'moveToGroup', target: value.target, groupIndex: value.groupIndex };
+  if (value.type === 'requestNativeTabMenu' && isRequestId(value.requestId) && isTabTarget(value.target)) {
+    return { type: 'requestNativeTabMenu', requestId: value.requestId, target: value.target };
+  }
+  if (value.type === 'runNativeTabMenuAction' && isActionId(value.actionId) && isTabTarget(value.target)) {
+    return { type: 'runNativeTabMenuAction', actionId: value.actionId, target: value.target };
+  }
   if (value.type === 'activateTab' && isTabTarget(value.target) && (value.requestId === undefined || isRequestId(value.requestId))) {
     return { type: 'activateTab', target: value.target, ...(value.requestId === undefined ? {} : { requestId: value.requestId }) };
   }
@@ -110,6 +124,7 @@ function isMoveDisplayGroupId(value: unknown): value is string {
 function isLogMessage(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
 function isLogDetails(value: unknown): value is string { return typeof value === 'string' && value.length <= 2000; }
 function isRequestId(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 80; }
+function isActionId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value); }
 function isTabTarget(value: unknown): value is TabTarget {
   return isRecord(value)
     && isNonNegativeInteger(value.revision)

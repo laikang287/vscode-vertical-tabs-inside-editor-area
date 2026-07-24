@@ -58,6 +58,8 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'createGroupFromTabs', source: target, target }), { type: 'createGroupFromTabs', source: target, target });
   assert.deepEqual(parseWebviewMessage({ type: 'moveToPreviousGroup', target }), { type: 'moveToPreviousGroup', target });
   assert.deepEqual(parseWebviewMessage({ type: 'moveToGroup', target, groupIndex: 2 }), { type: 'moveToGroup', target, groupIndex: 2 });
+  assert.deepEqual(parseWebviewMessage({ type: 'requestNativeTabMenu', requestId: 'native-menu-1', target }), { type: 'requestNativeTabMenu', requestId: 'native-menu-1', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'runNativeTabMenuAction', actionId: 'opaque_1_2', target }), { type: 'runNativeTabMenuAction', actionId: 'opaque_1_2', target });
 });
 
 test('rejects malformed and unknown messages', () => {
@@ -99,6 +101,10 @@ test('rejects malformed and unknown messages', () => {
     { type: 'createGroupFromTabs', source: target },
     { type: 'moveToGroup', target, groupIndex: -1 },
     { type: 'moveToGroup', target, groupIndex: 1.5 },
+    { type: 'requestNativeTabMenu', requestId: '', target },
+    { type: 'requestNativeTabMenu', requestId: 'x'.repeat(81), target },
+    { type: 'runNativeTabMenuAction', actionId: 'workbench.action.closeActiveEditor', target },
+    { type: 'runNativeTabMenuAction', actionId: 'bad value', target },
   ]) {
     assert.equal(parseWebviewMessage(value), undefined);
   }
