@@ -45,6 +45,7 @@ const ptBr: LocaleStrings = {
   groupModeFileType: "Tipo de arquivo",
   sortModeLabel: "Ordenação",
   sortModeNone: "Manual",
+  sortModeMru: "Usados recentemente",
   sortModeModifiedAsc: "Modificação (crescente)",
   sortModeModifiedDesc: "Modificação (decrescente)",
   sortModeNameAsc: "Nome (crescente)",
@@ -53,6 +54,17 @@ const ptBr: LocaleStrings = {
   searchGroup: "Pesquisar nomes de grupo",
   showSearch: "Mostrar pesquisa",
   hideSearch: "Ocultar pesquisa",
+  regexSearch: "Usar expressão regular",
+  invalidRegex: "Expressão regular inválida: {0}",
+  filterTabs: "Filtrar abas",
+  filterUnsaved: "Abas não salvas",
+  filterPinned: "Abas fixadas",
+  filterCurrentGroup: "Abas do grupo de editores atual",
+  filterFileType: "Filtrar por tipo de arquivo",
+  allFileTypes: "Todos os tipos de arquivo",
+  searchResultCount: "{0} abas correspondentes",
+  searchResultCountWithGroups: "{0} abas correspondentes · {1} grupos correspondentes",
+  noSearchResults: "Nenhuma aba corresponde à pesquisa e aos filtros atuais.",
 };
 
 export default ptBr;

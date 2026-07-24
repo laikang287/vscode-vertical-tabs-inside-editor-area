@@ -10,6 +10,11 @@ export const SAFE_RAIL_WIDTH = 222;
 
 export type RailPosition = 'left' | 'right';
 
+export interface RailWidthContribution {
+  readonly editorGroupIndex: number;
+  readonly contribution: number;
+}
+
 export interface EditorLayoutGroup {
   readonly size?: number;
   readonly groups?: readonly EditorLayoutGroup[];
@@ -60,8 +65,9 @@ export function prependRailPreservingEditorWidths(
 
 /**
  * Adds a rail at the configured edge while taking its width only from the
- * original editor group at that edge. Other root groups and nested sizes are
- * preserved exactly.
+ * original editor group at that edge whenever it can provide a safe rail.
+ * Otherwise, width is taken from the widest root groups without shrinking any
+ * editor group below VS Code's native minimum. Nested sizes are preserved.
  */
 export function insertRailPreservingEditorWidths(
   layout: EditorLayout,
@@ -75,26 +81,134 @@ export function insertRailPreservingEditorWidths(
   }
 
   const edgeIndex = position === 'left' ? 0 : layout.groups.length - 1;
-  const edgeGroup = layout.groups[edgeIndex];
-  const edgeWidth = edgeGroup?.size;
-  if (typeof edgeWidth !== 'number' || !Number.isFinite(edgeWidth) || edgeWidth <= 0) {
-    return undefined;
-  }
-
   const requestedRailWidth = Math.max(minimumRailWidth, normalizeRailWidth(width));
-  const railWidth = Math.min(requestedRailWidth, Math.floor(edgeWidth - minimumEditorWidth));
+  const donors = layout.groups.flatMap((group, index) => {
+    const groupWidth = group.size;
+    if (typeof groupWidth !== 'number' || !Number.isFinite(groupWidth) || groupWidth <= 0) {
+      return [];
+    }
+    const availableWidth = Math.max(0, Math.floor(groupWidth - minimumEditorWidth));
+    return [{ index, groupWidth, availableWidth }];
+  });
+  const edgeDonor = donors.find((donor) => donor.index === edgeIndex);
+  const orderedDonors = edgeDonor && edgeDonor.availableWidth >= minimumRailWidth
+    ? [edgeDonor]
+    : donors
+      .filter((donor) => donor.availableWidth > 0)
+      .sort((left, right) => {
+        if (right.availableWidth !== left.availableWidth) {
+          return right.availableWidth - left.availableWidth;
+        }
+        const leftDistance = position === 'left' ? left.index : layout.groups.length - 1 - left.index;
+        const rightDistance = position === 'left' ? right.index : layout.groups.length - 1 - right.index;
+        return leftDistance - rightDistance;
+      });
+  const availableRailWidth = orderedDonors.reduce((sum, donor) => sum + donor.availableWidth, 0);
+  const railWidth = Math.min(requestedRailWidth, availableRailWidth);
   if (railWidth < minimumRailWidth) {
     return undefined;
   }
 
-  const resizedEdgeGroup = { ...copyGroup(edgeGroup), size: edgeWidth - railWidth };
+  let remainingRailWidth = railWidth;
+  const resizedGroups = layout.groups.map(copyGroup);
+  for (const donor of orderedDonors) {
+    if (remainingRailWidth <= 0) break;
+    const contribution = Math.min(remainingRailWidth, donor.availableWidth);
+    resizedGroups[donor.index] = {
+      ...resizedGroups[donor.index],
+      size: donor.groupWidth - contribution,
+    };
+    remainingRailWidth -= contribution;
+  }
   const rail = { size: railWidth };
   return {
     orientation: 0,
     groups: position === 'left'
-      ? [rail, resizedEdgeGroup, ...layout.groups.slice(1).map(copyGroup)]
-      : [...layout.groups.slice(0, -1).map(copyGroup), resizedEdgeGroup, rail],
+      ? [rail, ...resizedGroups]
+      : [...resizedGroups, rail],
   };
+}
+
+/**
+ * Removes an edge rail and returns its width to the editor groups that
+ * originally supplied it. When no valid contribution history is available,
+ * the widest editor group receives the released width so native proportional
+ * redistribution is avoided.
+ */
+export function removeRailRestoringEditorWidths(
+  layout: EditorLayout,
+  position: RailPosition,
+  contributions: readonly RailWidthContribution[] = [],
+): EditorLayout | undefined {
+  if ((layout.orientation ?? 0) !== 0 || layout.groups.length < 2) {
+    return undefined;
+  }
+
+  const railIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const railWidth = layout.groups[railIndex]?.size;
+  if (typeof railWidth !== 'number' || !Number.isFinite(railWidth) || railWidth <= 0) {
+    return undefined;
+  }
+
+  const editorGroups = layout.groups
+    .filter((_, index) => index !== railIndex)
+    .map(copyGroup);
+  const contributionByIndex = new Map<number, number>();
+  for (const item of contributions) {
+    const editorWidth = editorGroups[item.editorGroupIndex]?.size;
+    if (
+      !Number.isInteger(item.editorGroupIndex)
+      || item.editorGroupIndex < 0
+      || typeof item.contribution !== 'number'
+      || !Number.isFinite(item.contribution)
+      || item.contribution <= 0
+      || typeof editorWidth !== 'number'
+      || !Number.isFinite(editorWidth)
+      || editorWidth <= 0
+    ) {
+      continue;
+    }
+    contributionByIndex.set(
+      item.editorGroupIndex,
+      (contributionByIndex.get(item.editorGroupIndex) ?? 0) + item.contribution,
+    );
+  }
+
+  let recipients = [...contributionByIndex.entries()].map(([index, weight]) => ({ index, weight }));
+  if (recipients.length === 0) {
+    recipients = editorGroups
+      .flatMap((group, index) => (
+        typeof group.size === 'number' && Number.isFinite(group.size) && group.size > 0
+          ? [{ index, weight: group.size }]
+          : []
+      ))
+      .sort((left, right) => {
+        if (right.weight !== left.weight) return right.weight - left.weight;
+        const leftDistance = position === 'left' ? left.index : editorGroups.length - 1 - left.index;
+        const rightDistance = position === 'left' ? right.index : editorGroups.length - 1 - right.index;
+        return leftDistance - rightDistance;
+      })
+      .slice(0, 1);
+  }
+  if (recipients.length === 0) {
+    return undefined;
+  }
+
+  let remainingWidth = railWidth;
+  let remainingWeight = recipients.reduce((sum, recipient) => sum + recipient.weight, 0);
+  recipients.forEach((recipient, index) => {
+    const editorGroup = editorGroups[recipient.index];
+    const editorWidth = editorGroup?.size;
+    if (typeof editorWidth !== 'number' || !Number.isFinite(editorWidth)) return;
+    const returnedWidth = index === recipients.length - 1
+      ? remainingWidth
+      : Math.round(remainingWidth * recipient.weight / remainingWeight);
+    editorGroups[recipient.index] = { ...editorGroup, size: editorWidth + returnedWidth };
+    remainingWidth -= returnedWidth;
+    remainingWeight -= recipient.weight;
+  });
+
+  return { orientation: 0, groups: editorGroups };
 }
 
 /** Updates the first leaf, which is the rail after it has been moved left. */
@@ -148,6 +262,89 @@ export function getEditorGroupWidth(layout: EditorLayout, viewColumn: number): n
   const location = findHorizontalWidthLocation(layout, viewColumn);
   const width = location?.groups[location.targetIndex]?.size;
   return typeof width === 'number' && Number.isFinite(width) ? width : undefined;
+}
+
+/**
+ * Chooses a wide editor group as the temporary anchor used to create a new
+ * rail group. Activating an existing minimized group can make VS Code expand
+ * it, so the active group is only preferred when it ties for the widest width.
+ */
+export function selectWidestEditorGroupViewColumn(
+  layout: EditorLayout,
+  viewColumns: readonly number[],
+  activeViewColumn?: number,
+): number | undefined {
+  const candidates = viewColumns.flatMap((viewColumn) => {
+    const width = getEditorGroupWidth(layout, viewColumn);
+    return typeof width === 'number' && Number.isFinite(width) && width > 0
+      ? [{ viewColumn, width }]
+      : [];
+  });
+  candidates.sort((left, right) => {
+    if (right.width !== left.width) {
+      return right.width - left.width;
+    }
+    if (left.viewColumn === activeViewColumn) return -1;
+    if (right.viewColumn === activeViewColumn) return 1;
+    return left.viewColumn - right.viewColumn;
+  });
+  return candidates[0]?.viewColumn;
+}
+
+/**
+ * Moves a narrow edge editor group just above its minimized width before VS
+ * Code creates the rail group. The delta is taken from the widest other root
+ * group so total width, ordering, and nested layout content remain unchanged.
+ */
+export function nudgeNarrowEdgeEditorGroupWidth(
+  layout: EditorLayout,
+  position: RailPosition,
+  delta = 1,
+  maximumNarrowWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+): EditorLayout | undefined {
+  if (
+    (layout.orientation ?? 0) !== 0
+    || layout.groups.length < 2
+    || !Number.isFinite(delta)
+    || delta <= 0
+  ) {
+    return undefined;
+  }
+
+  const edgeIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const edgeWidth = layout.groups[edgeIndex]?.size;
+  if (
+    typeof edgeWidth !== 'number'
+    || !Number.isFinite(edgeWidth)
+    || edgeWidth <= 0
+    || edgeWidth > maximumNarrowWidth
+  ) {
+    return undefined;
+  }
+
+  const donor = layout.groups
+    .flatMap((group, index) => {
+      const width = group.size;
+      return index !== edgeIndex
+        && typeof width === 'number'
+        && Number.isFinite(width)
+        && width - delta >= edgeWidth
+        ? [{ index, width }]
+        : [];
+    })
+    .sort((left, right) => right.width - left.width || left.index - right.index)[0];
+  if (!donor) {
+    return undefined;
+  }
+
+  return {
+    ...layout,
+    groups: layout.groups.map((group, index) => {
+      if (index === edgeIndex) return { ...copyGroup(group), size: edgeWidth + delta };
+      if (index === donor.index) return { ...copyGroup(group), size: donor.width - delta };
+      return copyGroup(group);
+    }),
+  };
 }
 
 /**

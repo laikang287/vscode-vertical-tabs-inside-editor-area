@@ -5,8 +5,8 @@
   | { readonly kind: 'terminal' | 'unknown'; readonly label: string };
 export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
 export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
-export type SortMode = 'none' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
-export type RelativePathDisplay = 'off' | 'duplicates' | 'always';
+export type SortMode = 'none' | 'mru' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
+export type RelativePathDisplay = 'off' | 'duplicatesDirectory' | 'duplicates' | 'alwaysDirectory' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
 export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
@@ -18,7 +18,7 @@ export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean; readonly isFocused: boolean;
   readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly activationKind: TabActivationKind; readonly manualGroupId?: string;
   readonly groupId?: string; readonly isFile: boolean; readonly inputKind: TabInputKind; readonly languageId?: string; readonly icon: TabVisualIcon;
-  readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number;
+  readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number; readonly lastActivatedAt?: number;
 }
 export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }
 export interface VerticalTabDisplayGroup {
@@ -29,10 +29,11 @@ export interface VerticalTabDisplayGroup {
 export interface VerticalTabsSnapshot {
   readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
-  readonly searchVisible: boolean; readonly searchGroups: boolean;
+  readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean;
 }
 export type WebviewMessage =
   | { readonly type: 'ready' } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
+  | { readonly type: 'selectionChanged'; readonly targets: readonly TabTarget[] }
   | { readonly type: 'renderAck'; readonly revision: number }
   | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
   | { readonly type: 'closeAll' } | { readonly type: 'requestCreateGroup' } | { readonly type: 'setGroupMode'; readonly groupMode: GroupMode }
@@ -61,6 +62,7 @@ const MAX_BATCH_TAB_TARGETS = 2000;
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
   if (value.type === 'ready' || value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll' || value.type === 'requestCreateGroup') return { type: value.type };
+  if (value.type === 'selectionChanged' && isTabTargetArray(value.targets)) return { type: 'selectionChanged', targets: value.targets };
   if (value.type === 'renderAck' && isNonNegativeInteger(value.revision)) return { type: 'renderAck', revision: value.revision };
   if (value.type === 'webviewLog' && isWebviewLogLevel(value.level) && isLogMessage(value.message) && (value.details === undefined || isLogDetails(value.details))) {
     return { type: 'webviewLog', level: value.level, message: value.message, ...(value.details === undefined ? {} : { details: value.details }) };
@@ -96,7 +98,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
-function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
+function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
 function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
@@ -116,7 +118,10 @@ function isTabTarget(value: unknown): value is TabTarget {
     && isTabTargetIdentity(value.identity);
 }
 function isTabTargets(value: unknown): value is readonly TabTarget[] {
-  return Array.isArray(value) && value.length > 0 && value.length <= MAX_BATCH_TAB_TARGETS && value.every(isTabTarget);
+  return isTabTargetArray(value) && value.length > 0;
+}
+function isTabTargetArray(value: unknown): value is readonly TabTarget[] {
+  return Array.isArray(value) && value.length <= MAX_BATCH_TAB_TARGETS && value.every(isTabTarget);
 }
 function isTabTargetIdentity(value: unknown): value is TabTargetIdentity {
   if (!isRecord(value) || typeof value.kind !== 'string') return false;

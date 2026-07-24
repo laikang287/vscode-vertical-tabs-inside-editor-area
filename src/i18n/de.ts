@@ -45,6 +45,7 @@ const de: LocaleStrings = {
   groupModeFileType: "Dateityp",
   sortModeLabel: "Sortierung",
   sortModeNone: "Manuell",
+  sortModeMru: "Zuletzt verwendet",
   sortModeModifiedAsc: "Änderungsdatum (aufsteigend)",
   sortModeModifiedDesc: "Änderungsdatum (absteigend)",
   sortModeNameAsc: "Name (aufsteigend)",
@@ -53,6 +54,17 @@ const de: LocaleStrings = {
   searchGroup: "Gruppennamen durchsuchen",
   showSearch: "Suche anzeigen",
   hideSearch: "Suche ausblenden",
+  regexSearch: "Regulären Ausdruck verwenden",
+  invalidRegex: "Ungültiger regulärer Ausdruck: {0}",
+  filterTabs: "Tabs filtern",
+  filterUnsaved: "Nicht gespeicherte Tabs",
+  filterPinned: "Angeheftete Tabs",
+  filterCurrentGroup: "Tabs in der aktuellen Editorgruppe",
+  filterFileType: "Nach Dateityp filtern",
+  allFileTypes: "Alle Dateitypen",
+  searchResultCount: "{0} passende Tabs",
+  searchResultCountWithGroups: "{0} passende Tabs · {1} passende Gruppen",
+  noSearchResults: "Keine Tabs entsprechen der aktuellen Suche und den Filtern.",
 };
 
 export default de;

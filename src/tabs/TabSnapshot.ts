@@ -26,10 +26,12 @@ export interface SnapshotSourceTab {
   readonly languageId?: string;
   readonly icon?: TabVisualIcon;
   readonly path?: string;
+  readonly directoryName?: string;
   readonly relativePath?: string;
   readonly tooltipPath?: string;
   readonly uri?: string;
   readonly mtime?: number;
+  readonly lastActivatedAt?: number;
   readonly targetIdentity: TabTargetIdentity;
   readonly isActivatable?: boolean;
   readonly isVerticalTabsPanel?: boolean;
@@ -50,6 +52,7 @@ export interface SnapshotBuildOptions {
   readonly toolbarControlsVisible?: boolean;
   readonly searchVisible?: boolean;
   readonly searchGroups?: boolean;
+  readonly alwaysFollowActiveTab?: boolean;
   readonly relativePathDisplay?: RelativePathDisplay;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
@@ -75,7 +78,7 @@ export function buildSnapshot(
     return [{
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
-      description: shouldShowRelativePath(tab, relativePathDisplay, labelOccurrences) ? tab.relativePath : undefined,
+      description: tabDescription(tab, relativePathDisplay, labelOccurrences),
       isActive: tab.isActive,
       isFocused: Boolean(tab.isFocused),
       isDirty: tab.isDirty,
@@ -92,30 +95,48 @@ export function buildSnapshot(
       resourcePath: tab.path,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
+      lastActivatedAt: tab.lastActivatedAt,
     }];
   }));
 
   const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
-  return { revision, groupMode, sortMode, toolbarPosition: options.toolbarPosition ?? 'top', rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
+  return {
+    revision,
+    groupMode,
+    sortMode,
+    toolbarPosition: options.toolbarPosition ?? 'top',
+    rememberState: options.rememberState ?? true,
+    toolbarControlsVisible: options.toolbarControlsVisible ?? true,
+    searchVisible: options.searchVisible ?? true,
+    searchGroups: options.searchGroups ?? false,
+    alwaysFollowActiveTab: options.alwaysFollowActiveTab ?? true,
+    tabs,
+    manualGroups,
+    displayGroups,
+  };
 }
 
 function countVisibleTabLabels(groups: readonly SnapshotSourceGroup[]): ReadonlyMap<string, number> {
   const occurrences = new Map<string, number>();
   for (const tab of groups.flatMap((group) => group.tabs)) {
-    if (tab.isVerticalTabsPanel) continue;
+    if (tab.isVerticalTabsPanel || !isFileTab(tab)) continue;
     const key = normalizeTabLabel(tab.label);
     occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
   }
   return occurrences;
 }
 
-function shouldShowRelativePath(
+function tabDescription(
   tab: SnapshotSourceTab,
   mode: RelativePathDisplay,
   labelOccurrences: ReadonlyMap<string, number>,
-): boolean {
-  if (!tab.relativePath || mode === 'off') return false;
-  return mode === 'always' || (labelOccurrences.get(normalizeTabLabel(tab.label)) ?? 0) > 1;
+): string | undefined {
+  if (mode === 'off' || !isFileTab(tab)) return undefined;
+  const isDuplicate = (labelOccurrences.get(normalizeTabLabel(tab.label)) ?? 0) > 1;
+  if ((mode === 'duplicatesDirectory' || mode === 'duplicates') && !isDuplicate) return undefined;
+  return mode === 'duplicatesDirectory' || mode === 'alwaysDirectory'
+    ? tab.directoryName
+    : tab.relativePath;
 }
 
 function normalizeTabLabel(label: string): string {
@@ -386,18 +407,27 @@ function suffix(segments: readonly string[], suffixLength: number): string {
 
 function sortTabs(tabs: readonly VerticalTabItem[], sortMode: SortMode): readonly VerticalTabItem[] {
   return tabs
-    .map((tab, index) => ({ tab, index, fileSort: fileSortValue(tab, sortMode) }))
+    .map((tab, index) => ({ tab, index, sortValue: tabSortValue(tab, sortMode) }))
     .sort((left, right) => {
       if (left.tab.isPinned !== right.tab.isPinned) return left.tab.isPinned ? -1 : 1;
       if (sortMode === 'none') return left.index - right.index;
-      if (left.fileSort === undefined || right.fileSort === undefined) return left.index - right.index;
-      const compared = left.fileSort.localeCompare(right.fileSort, undefined, { numeric: true, sensitivity: 'base' });
+      if (sortMode === 'mru') {
+        if (left.tab.lastActivatedAt === undefined || right.tab.lastActivatedAt === undefined) {
+          if (left.tab.lastActivatedAt !== undefined) return -1;
+          if (right.tab.lastActivatedAt !== undefined) return 1;
+          return left.index - right.index;
+        }
+        return right.tab.lastActivatedAt - left.tab.lastActivatedAt;
+      }
+      if (left.sortValue === undefined || right.sortValue === undefined) return left.index - right.index;
+      const compared = left.sortValue.localeCompare(right.sortValue, undefined, { numeric: true, sensitivity: 'base' });
       return compared === 0 ? left.index - right.index : compared;
     })
     .map((entry) => entry.tab);
 }
 
-function fileSortValue(tab: VerticalTabItem, sortMode: SortMode): string | undefined {
+function tabSortValue(tab: VerticalTabItem, sortMode: SortMode): string | undefined {
+  if (sortMode === 'none' || sortMode === 'mru') return undefined;
   if (!tab.isFile) return undefined;
   if (sortMode === 'nameAsc') return tab.label;
   if (sortMode === 'nameDesc') return invertString(tab.label);

@@ -45,6 +45,7 @@ const fr: LocaleStrings = {
   groupModeFileType: "Type de fichier",
   sortModeLabel: "Tri",
   sortModeNone: "Manuel",
+  sortModeMru: "Récemment utilisés",
   sortModeModifiedAsc: "Date de modification (croissant)",
   sortModeModifiedDesc: "Date de modification (décroissant)",
   sortModeNameAsc: "Nom (croissant)",
@@ -53,6 +54,17 @@ const fr: LocaleStrings = {
   searchGroup: "Rechercher les noms de groupe",
   showSearch: "Afficher la recherche",
   hideSearch: "Masquer la recherche",
+  regexSearch: "Utiliser une expression régulière",
+  invalidRegex: "Expression régulière non valide : {0}",
+  filterTabs: "Filtrer les onglets",
+  filterUnsaved: "Onglets non enregistrés",
+  filterPinned: "Onglets épinglés",
+  filterCurrentGroup: "Onglets du groupe d’éditeurs actuel",
+  filterFileType: "Filtrer par type de fichier",
+  allFileTypes: "Tous les types de fichiers",
+  searchResultCount: "{0} onglets correspondants",
+  searchResultCountWithGroups: "{0} onglets correspondants · {1} groupes correspondants",
+  noSearchResults: "Aucun onglet ne correspond à la recherche et aux filtres actuels.",
 };
 
 export default fr;

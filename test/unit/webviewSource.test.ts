@@ -23,7 +23,7 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.doesNotMatch(panelSource, /id="close-saved"/);
   assert.doesNotMatch(panelSource, /id="close-all"/);
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
-  assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
+  assert.match(webviewSource, /function showContextMenu\([\s\S]+?tab\?: VerticalTabItem,[\s\S]+?group\?: VerticalTabDisplayGroup,[\s\S]+?invoker\?: HTMLElement/);
  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\(i18n\.close/);
   assert.match(webviewSource, /messageButton\(i18n\.close, i18n\.closeGroup, \{ type: 'closeGroup', groupId: group\.id \}\)/);
  assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
@@ -37,7 +37,7 @@ test('every visible group header has a close icon and manual rename stays in the
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
-  assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
+  assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group, header\)/);
  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
   assert.match(source, /const remove = iconButton\('close', i18n\.closeGroupAndDelete\)/);
  assert.match(source, /remove\.className = 'group-action tab-action'/);
@@ -50,9 +50,16 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
-  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; padding-right: 3px; \}/);
-  assert.match(style, /\.group-actions \{ flex: 0 0 23px; \}/);
+  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; \}/);
+  assert.match(style, /\.group-actions \{ flex: 0 0 23px; padding-right: 3px; \}/);
   assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
+});
+
+test('group names preserve their original capitalization', () => {
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(style, /\.group-name \{[\s\S]*?text-transform: none;[\s\S]*?\}/);
+  assert.doesNotMatch(style, /\.group-name \{[\s\S]*?text-transform: uppercase;[\s\S]*?\}/);
 });
 
 test('tab close buttons are always visible and context menu labels use the requested short wording', () => {
@@ -74,7 +81,7 @@ test('pinned tab icons render in a reserved left slot so peer labels stay aligne
   assert.match(source, /if \(tab\.isPinned\) pin\.append\(codicon\('pinned'\)\)/);
   assert.match(source, /activate\.append\(icon, pin, text\)/);
   assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
-  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 14px;[\s\S]+text-align: center; \}/);
+  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 var\(--vertical-tab-pin-slot-width\);[\s\S]+text-align: center; \}/);
   assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column;[\s\S]+min-width: 0;[\s\S]+?\}/);
 });
 
@@ -87,8 +94,26 @@ test('dirty tabs render an accessible status indicator immediately before the cl
   assert.match(source, /dirty\.title = i18n\.unsavedChanges/);
   assert.match(source, /dirty\.setAttribute\('aria-label', i18n\.unsavedChanges\)/);
   assert.match(source, /actions\.append\(dirty\);[\s\S]+actions\.append\(closeSelectionButton\(tab\)\)/);
-  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: 23px; \}/);
+  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: var\(--vertical-tab-action-size\); padding-right: 0; \}/);
   assert.match(style, /\.tab-dirty-indicator \{[\s\S]+pointer-events: none;/);
+});
+
+test('compact tab spacing prioritizes label and path width without shrinking the close target', () => {
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(style, /--vertical-tab-action-size: 22px;/);
+  assert.match(style, /--vertical-tab-dirty-width: 8px;/);
+  assert.match(style, /--vertical-tab-icon-size: 16px;/);
+  assert.match(style, /--vertical-tab-inline-padding: 6px;/);
+  assert.match(style, /--vertical-tab-item-gap: 2px;/);
+  assert.match(style, /--vertical-tab-pin-slot-width: 12px;/);
+  assert.match(style, /--vertical-tab-tree-indent: 12px;/);
+  assert.match(style, /\.tab-row\.tree-level-1 \{ padding-left: var\(--vertical-tab-tree-indent\); \}/);
+  assert.match(style, /\.tab-main \{[\s\S]+gap: var\(--vertical-tab-item-gap\);[\s\S]+padding: 2px 0 2px var\(--vertical-tab-inline-padding\);/);
+  assert.match(style, /\.tab-icon \{[\s\S]+flex: 0 0 var\(--vertical-tab-icon-size\);[\s\S]+margin: 0;[\s\S]+width: var\(--vertical-tab-icon-size\);/);
+  assert.match(style, /\.tab-label \{ flex: 1 1 auto; min-width: 0;[\s\S]+text-overflow: ellipsis;/);
+  assert.match(style, /\.tab-dirty-indicator \{[\s\S]+flex: 0 0 var\(--vertical-tab-dirty-width\);/);
+  assert.match(style, /\.tab-action \{[\s\S]+height: var\(--vertical-tab-action-size\);[\s\S]+min-width: var\(--vertical-tab-action-size\);/);
 });
 
 test('pinned groups render an indicator, sort first, and reject unsupported host messages', () => {
@@ -127,12 +152,35 @@ test('tab colors distinguish selection, shown editors, and the focused editor', 
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(panelSource, /isFocused: tab\.isActive && tab\.group\.isActive/);
+  assert.match(panelSource, /isFocused: tab\.isActive && \(tab\.group\.isActive \|\| tab\.group === this\.lastFocusedUserGroup\)/);
   assert.match(source, /tab\.isFocused \? 'is-focused' : ''/);
   assert.match(style, /\.tab-row\.is-selected \{\s*background: var\(--vscode-list-inactiveSelectionBackground/);
   assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-tab-unfocusedActiveBackground/);
   assert.match(style, /\.tab-row\.is-focused \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
   assert.match(style, /\.tab-row\.is-focused::before \{[\s\S]+var\(--vscode-tab-activeBorderTop/);
+});
+
+test('active tab following is configurable and expands then reveals the focused tab', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+  const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default: unknown; scope?: string; markdownDescription?: string }> } };
+  };
+  const setting = manifest.contributes.configuration.properties['verticalTabs.alwaysFollowActiveTab'];
+
+  assert.equal(setting?.default, true);
+  assert.equal(setting?.scope, 'window');
+  assert.equal(setting?.markdownDescription, '%verticalTabs.config.alwaysFollowActiveTab%');
+  assert.match(packageNls['verticalTabs.config.alwaysFollowActiveTab'] ?? '', /automatically expands its group and scrolls the tab into view/);
+  assert.match(packageNlsZhCn['verticalTabs.config.alwaysFollowActiveTab'] ?? '', /自动展开其所属分组，并将对应标签滚动到可见区域/);
+  assert.match(panelSource, /alwaysFollowActiveTab: readAlwaysFollowActiveTab\(\)/);
+  assert.match(panelSource, /get<boolean>\('alwaysFollowActiveTab', true\)/);
+  assert.match(webviewSource, /snapshot\.tabs\.find\(\(tab\) => tab\.isFocused\)/);
+  assert.match(webviewSource, /activeTabFollowTracker\.shouldFollow\(focusedTab\?\.target, snapshot\.alwaysFollowActiveTab\)/);
+  assert.match(webviewSource, /setDisplayGroupCollapsed\(focusedGroup, false, false\)/);
+  assert.match(webviewSource, /scrollIntoView\(\{ block: 'nearest', inline: 'nearest' \}\)/);
 });
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
@@ -144,6 +192,7 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
   assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
   assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
+  assert.deepEqual(properties['verticalTabs.defaultSortMode']?.enum, ['none', 'mru', 'modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc']);
   assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
   assert.equal(properties['verticalTabs.toolbarPosition']?.default, 'top');
   assert.deepEqual(properties['verticalTabs.toolbarPosition']?.enum, ['top', 'bottom']);
@@ -157,22 +206,51 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
-test('relative path display is configurable and uses a subdued second line', () => {
+test('webview selection is synchronized for command-driven multi-tab moves', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const messages = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /vscode\.postMessage\(\{ type: 'selectionChanged', targets \}\)/);
+  assert.match(messages, /type: 'selectionChanged'; readonly targets: readonly TabTarget\[\]/);
+  assert.match(panelSource, /private commandSelectedTargets: readonly TabTarget\[\] = \[\]/);
+  assert.match(panelSource, /moveItemsOneStep\(currentOrder, selectedTabs, direction\)/);
+  assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedTabs, undefined\)/);
+});
+
+test('directory and relative path display is configurable and uses a subdued second line', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+  const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
   const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
-    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly string[] }> } };
+    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly string[]; enumItemLabels?: readonly string[] }> } };
   };
   const setting = manifest.contributes.configuration.properties['verticalTabs.relativePathDisplay'];
 
   assert.equal(setting?.default, 'off');
-  assert.deepEqual(setting?.enum, ['off', 'duplicates', 'always']);
+  assert.deepEqual(setting?.enum, ['off', 'duplicatesDirectory', 'duplicates', 'alwaysDirectory', 'always']);
+  assert.deepEqual(setting?.enumItemLabels, [
+    '%verticalTabs.config.relativePathDisplay.label.off%',
+    '%verticalTabs.config.relativePathDisplay.label.duplicatesDirectory%',
+    '%verticalTabs.config.relativePathDisplay.label.duplicates%',
+    '%verticalTabs.config.relativePathDisplay.label.alwaysDirectory%',
+    '%verticalTabs.config.relativePathDisplay.label.always%',
+  ]);
   assert.match(panelSource, /relativePathDisplay: readRelativePathDisplay\(\)/);
+  assert.match(panelSource, /directoryName: inputDirectoryName\(tab\.input\)/);
+  assert.match(panelSource, /function inputDirectoryName/);
   assert.match(panelSource, /function inputWorkspaceRelativePath/);
   assert.match(panelSource, /vscode\.workspace\.getWorkspaceFolder\(uri\)/);
   assert.match(webviewSource, /detail\.className = 'tab-description'/);
   assert.match(style, /\.tab-description \{[^}]*font-size: 10px;[^}]*opacity: \.82;/);
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.off'], '不显示（默认）');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.duplicatesDirectory'], '仅同名文件时显示目录名');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.duplicates'], '仅同名文件时显示相对仓库路径');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.alwaysDirectory'], '始终显示目录名');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.always'], '始终显示相对仓库的路径');
+  assert.equal(typeof packageNls['verticalTabs.config.relativePathDisplay.label.duplicatesDirectory'], 'string');
 });
 
 test('editor-area position setting supports live left and right placement with a safe fallback', () => {
@@ -189,7 +267,7 @@ test('editor-area position setting supports live left and right placement with a
   assert.match(panelSource, /event\.affectsConfiguration\('verticalTabs\.position'\)/);
   assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupLeft/);
   assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupRight/);
-  assert.match(panelSource, /workbench\.action\.focusLastEditorGroup/);
+  assert.match(panelSource, /selectWidestEditorGroupViewColumn/);
   assert.match(panelSource, /this\.railPosition === 'left'[\s\S]+newGroupRight[\s\S]+newGroupLeft/);
 });
 
@@ -198,7 +276,7 @@ test('adjacent navigation reuses an open panel without stealing the active edito
 
   assert.match(
     panelSource,
-    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction\)/,
+    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction, scope\)/,
   );
 });
 
@@ -223,6 +301,7 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /<span>\$\{i18n\.groupModeLabel\}<\/span><select id="group-mode">/);
   assert.match(panelSource, /<span>\$\{i18n\.sortModeLabel\}<\/span><select id="sort-mode">/);
   assert.match(panelSource, /<option value="none">\$\{i18n\.sortModeNone\}<\/option>/);
+  assert.match(panelSource, /<option value="mru">\$\{i18n\.sortModeMru\}<\/option>/);
  assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLElement>\('#toolbar-controls'\)/);
@@ -235,6 +314,18 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /id="toolbar-controls" class="toolbar-selects"/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '分组方式'/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
+});
+
+test('MRU sorting tracks verified activations across editor groups without rewriting native tab order', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(panelSource, /private readonly mruTracker = new TabMruTracker<vscode\.Tab>\(\)/);
+  assert.match(panelSource, /const activeGroup = vscode\.window\.tabGroups\.all\.find\(\(group\) => group\.isActive\)/);
+  assert.match(panelSource, /this\.mruTracker\.observeFocused\(focusedUserTab\)/);
+  assert.match(panelSource, /lastActivatedAt: this\.mruTracker\.lastActivatedAt\(tab\)/);
+  assert.match(panelSource, /if \(matched\) \{[\s\S]+this\.mruTracker\.recordSuccessfulActivation\(tab\)/);
+  assert.match(panelSource, /this\.suppressMruTracking = true;[\s\S]+await this\.syncVsCodeGroupOrder[\s\S]+this\.suppressMruTracking = false/);
+  assert.match(panelSource, /if \(this\.sortMode === 'mru'\) \{[\s\S]+最近使用排序不回写 VS Code 原生标签顺序/);
 });
 
 test('webview renders Seti file icons and Codicon actions in a compact two-line layout', () => {
@@ -371,6 +462,24 @@ test('extension restores the prepared rail layout without a fixed visible delay'
   assert.match(source, /宽度已在 Webview 显示前应用，跳过显示后的布局等待和重复写入/);
 });
 
+test('rail creation avoids activating a narrow edge editor before restoring widths', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const prepareStart = source.indexOf('async function prepareRailGroup(');
+  const prepareEnd = source.indexOf('function getConfiguredRailRatio(', prepareStart);
+  const prepareSource = source.slice(prepareStart, prepareEnd);
+
+  assert.ok(prepareStart >= 0 && prepareEnd > prepareStart);
+  assert.match(
+    prepareSource,
+    /await prepareNarrowEdgeEditorGroupBeforeRailCreation\(previousLayout, position\)[\s\S]+await vscode\.commands\.executeCommand\(createCommand\)/,
+  );
+  assert.match(prepareSource, /selectWidestEditorGroupViewColumn\(/);
+  assert.match(prepareSource, /moveActiveEmptyGroupToRailEdge\(position\)/);
+  assert.match(prepareSource, /mode: 'pixel', delta: 1[\s\S]+mode: 'ratio'/);
+  assert.doesNotMatch(prepareSource, /workbench\.action\.focusFirstEditorGroup/);
+  assert.doesNotMatch(prepareSource, /workbench\.action\.focusLastEditorGroup/);
+});
+
 test('extension avoids persisting and restoring transient empty-rail widths', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
@@ -395,6 +504,27 @@ test('extension logs and skips width application when a rail-sized root group al
   assert.match(source, /if \(railRatio > MAX_EMPTY_RAIL_RESTORE_RATIO\) return undefined/);
   assert.doesNotMatch(source, /candidate\.ratio >= 0\.6/);
   assert.match(source, /setRailRootGroupWidth\(layout, railWidth, position\)/);
+});
+
+test('extension keeps the native new-group layout when preserved rail allocation is unsafe', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /widthContributions: describeRailWidthContributions\(previousLayout, preservedLayout, position\)/);
+  assert.match(
+    source,
+    /if \(previousLayout && countLayoutLeaves\(layout\) === countLayoutLeaves\(previousLayout\) \+ 1\)[\s\S]+if \(preservedLayout\)[\s\S]+return applyEditorLayout\(preservedLayout\);[\s\S]+return true;\s*}\s*const existingRailLikeGroup/,
+  );
+});
+
+test('extension returns rail width to its original editor donors when hidden', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /await this\.captureCloseLayoutRestore\(preparedRailGroup\?\.previousLayout\)/);
+  assert.match(source, /removeRailRestoringEditorWidths\(currentLayout, this\.railPosition, contributions\)/);
+  assert.match(
+    source,
+    /vscode\.window\.tabGroups\.close\(group, true\)[\s\S]+waitForEditorLayoutLeafCount\(countLayoutLeaves\(restoredLayout\)\)[\s\S]+applyEditorLayout\(restoredLayout\)/,
+  );
 });
 
 test('extension retries undelivered render messages', () => {
@@ -460,10 +590,36 @@ test('extension marks built-in welcome and settings webviews as activatable', ()
 test('webview enables best-effort activation with a distinct tooltip', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /activate\.disabled = !tab\.isActivatable/);
+  assert.match(source, /activate\.setAttribute\('aria-disabled', String\(!tab\.isActivatable\)\)/);
+  assert.match(source, /if \(!tab\.isActivatable\) return/);
   assert.match(source, /function activationTitle\(tab: VerticalTabItem\): string/);
   assert.match(source, /tab\.activationKind === 'bestEffort'/);
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
+});
+
+test('tab tree uses one roving tab stop and supports keyboard navigation and context menus', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(panelSource, /id="groups" role="tree" tabindex="0"/);
+  assert.match(source, /header\.className = 'group-header tree-navigation-item'/);
+  assert.match(source, /activate\.className = 'tab-main tree-navigation-item'/);
+  assert.match(source, /header\.tabIndex = -1/);
+  assert.match(source, /activate\.tabIndex = -1/);
+  assert.match(source, /function initializeTreeFocus/);
+  assert.match(source, /for \(const item of items\) item\.tabIndex = -1/);
+  assert.match(source, /if \(target\) target\.tabIndex = 0/);
+  assert.match(source, /groups\?\.addEventListener\('keydown', handleTreeKeyDown\)/);
+  assert.match(source, /event\.key === 'Enter' && item\.classList\.contains\('tab-main'\)/);
+  assert.match(source, /openKeyboardContextMenu\(event, header, undefined, group\)/);
+  assert.match(source, /openKeyboardContextMenu\(event, activate, tab\)/);
+  assert.match(source, /isKeyboardContextMenuKey\(event\.key, event\.shiftKey\)/);
+  assert.match(source, /menu\.addEventListener\('keydown', handleContextMenuKeyDown\)/);
+  assert.match(source, /nextVerticalNavigationIndex\(currentIndex, actions\.length, event\.key, true\)/);
+  assert.match(source, /dismissContextMenu\(true\)/);
+  assert.match(source, /invoker\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(style, /\.tab-context-action:focus-visible/);
 });
 
 test('webview collapses an existing multi-selection on click while retaining block dragging and keyboard activation', () => {
@@ -694,23 +850,40 @@ test('parent-directory file collisions require confirmation and replace related 
 });
 
 
-test('search input, group toggle, and search visibility toggle are present in the panel template', () => {
+test('search, combined tab filters, result feedback, and regular-expression controls are present', () => {
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const styleSource = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(panelSource, /id="toggle-search"/);
   assert.match(panelSource, /id="search-container"/);
   assert.match(panelSource, /id="search-input"/);
   assert.match(panelSource, /id="search-group-toggle"/);
+  assert.match(panelSource, /id="regex-search-toggle"/);
+  assert.match(panelSource, /id="filter-unsaved"/);
+  assert.match(panelSource, /id="filter-pinned"/);
+  assert.match(panelSource, /id="filter-current-group"/);
+  assert.match(panelSource, /id="filter-file-type"/);
+  assert.match(panelSource, /id="search-result-count"/);
+  assert.match(panelSource, /id="search-error"/);
   assert.ok(webviewSource.includes("querySelector<HTMLInputElement>('#search-input')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#search-group-toggle')"));
+  assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#regex-search-toggle')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#toggle-search')"));
   assert.ok(webviewSource.includes("querySelector<HTMLElement>('#search-container')"));
   assert.ok(webviewSource.includes("type: 'setSearchVisible'"));
   assert.ok(webviewSource.includes("type: 'setSearchGroups'"));
-  assert.match(webviewSource, /function applySearchFilter/);
+  assert.match(webviewSource, /evaluateTabSearch/);
+  assert.match(webviewSource, /appendHighlightedText/);
+  assert.match(webviewSource, /searchCollapsedGroups/);
+  assert.match(webviewSource, /event\.key !== 'Escape'/);
+  assert.match(webviewSource, /clearSearchAndFilters/);
   assert.match(webviewSource, /function applyCurrentFilter/);
   assert.match(webviewSource, /function setSearchContainerVisible/);
+  assert.match(panelSource, /lastFocusedUserGroup/);
+  assert.match(panelSource, /updateLastFocusedUserGroup/);
+  assert.match(styleSource, /\.search-match/);
+  assert.match(styleSource, /\.search-error/);
   assert.match(panelSource, /searchVisible:/);
   assert.match(panelSource, /searchGroups:/);
   assert.match(panelSource, /SEARCH_VISIBLE_STORAGE_KEY/);

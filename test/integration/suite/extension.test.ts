@@ -18,6 +18,18 @@ suite('Vertical Tabs extension', () => {
     assert.ok(commands.includes('verticalTabs.focus'), 'The focus command should be registered.');
     assert.ok(commands.includes('verticalTabs.previous'), 'The previous command should be registered.');
     assert.ok(commands.includes('verticalTabs.next'), 'The next command should be registered.');
+    for (const command of [
+      'verticalTabs.previousInGroup',
+      'verticalTabs.nextInGroup',
+      'verticalTabs.previousAcrossGroups',
+      'verticalTabs.nextAcrossGroups',
+      'verticalTabs.moveUpInGroup',
+      'verticalTabs.moveDownInGroup',
+      'verticalTabs.moveToPreviousGroup',
+      'verticalTabs.moveToNextGroup',
+    ]) {
+      assert.ok(commands.includes(command), `${command} should be registered.`);
+    }
     assert.ok(commands.includes('verticalTabs.showLogs'), 'The show logs command should be registered.');
 
   });
@@ -101,6 +113,112 @@ suite('Vertical Tabs extension', () => {
 
     assert.ok(Math.abs(nextSizes[2] - previousSizes[1]) <= 1, `The non-leading editor width should remain unchanged; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
     assert.ok(Math.abs(nextSizes[0] + nextSizes[1] - previousSizes[0]) <= 1, `Only the original leading editor should provide space for the rail; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
+  });
+
+  test('preserves a minimized edge editor group when opening and hiding the rail on either side', async function () {
+    this.timeout(30_000);
+    const configuration = vscode.workspace.getConfiguration('verticalTabs');
+
+    try {
+      for (const position of ['left', 'right'] as const) {
+        await vscode.commands.executeCommand('verticalTabs.close');
+        await waitFor(() => verticalTabs().length === 0);
+        await closeNonVerticalTabs();
+        await configuration.update('position', position, vscode.ConfigurationTarget.Global);
+
+        const firstDocument = await vscode.workspace.openTextDocument({ content: `${position} minimized edge first editor` });
+        await vscode.window.showTextDocument(firstDocument, { preserveFocus: false });
+        await vscode.commands.executeCommand('workbench.action.newGroupRight');
+        const secondDocument = await vscode.workspace.openTextDocument({ content: `${position} minimized edge second editor` });
+        await vscode.window.showTextDocument(secondDocument, { preserveFocus: false });
+        await waitFor(() => vscode.window.tabGroups.all.length === 2);
+
+        const minimizedIndex = position === 'left' ? 0 : 1;
+        await vscode.commands.executeCommand('vscode.setEditorLayout', {
+          orientation: 0,
+          groups: position === 'left'
+            ? [{ size: 220 }, { size: 1180 }]
+            : [{ size: 1180 }, { size: 220 }],
+        });
+        const previousLayout = await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 2
+          && candidate.groups[minimizedIndex]?.size === 220
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
+        const previousSizes = previousLayout.groups.map((group) => group.size as number);
+        const activeDocument = position === 'left' ? secondDocument : firstDocument;
+        await vscode.window.showTextDocument(activeDocument, {
+          viewColumn: position === 'left' ? vscode.ViewColumn.Two : vscode.ViewColumn.One,
+          preserveFocus: false,
+        });
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+
+        await vscode.commands.executeCommand('verticalTabs.open');
+        await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length === 3 && isRailAtEdge(position));
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+        const nextLayout = await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 3
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
+        const nextSizes = nextLayout.groups.map((group) => group.size as number);
+        const railIndex = position === 'left' ? 0 : 2;
+        const widestIndexBefore = position === 'left' ? 1 : 0;
+        const widestIndexAfter = position === 'left' ? 2 : 0;
+        const railWidth = nextSizes[railIndex];
+        const donatedWidth = previousSizes[widestIndexBefore] - nextSizes[widestIndexAfter];
+
+        assert.ok(railWidth >= 222, `The ${position} rail should receive a safe width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
+        assert.ok(
+          Math.abs(nextSizes[1] - previousSizes[minimizedIndex]) <= 1,
+          `The minimized ${position} edge editor should keep its width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+        );
+        assert.ok(
+          Math.abs(donatedWidth - railWidth) <= 1,
+          `Only the widest editor should provide the ${position} rail width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 350));
+        const stableOpenLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+        assert.ok(
+          Math.abs((stableOpenLayout.groups[1]?.size ?? 0) - previousSizes[minimizedIndex]) <= 1,
+          `The minimized ${position} edge editor should remain narrow after VS Code settles; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(stableOpenLayout)}.`,
+        );
+
+        await vscode.commands.executeCommand('verticalTabs.close');
+        await waitFor(() => verticalTabs().length === 0 && vscode.window.tabGroups.all.length === 2);
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+        const hiddenLayout = await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 2
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
+        const hiddenSizes = hiddenLayout.groups.map((group) => group.size as number);
+        assert.ok(
+          hiddenSizes.every((size, index) => Math.abs(size - previousSizes[index]) <= 1),
+          `Hiding the ${position} rail should return its width to the original donor without redistributing other editors; before ${JSON.stringify(previousLayout)}, hidden ${JSON.stringify(hiddenLayout)}.`,
+        );
+
+        await vscode.commands.executeCommand('verticalTabs.open');
+        await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length === 3 && isRailAtEdge(position));
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+        await new Promise<void>((resolve) => setTimeout(resolve, 350));
+        const reopenedLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+        const reopenedSizes = reopenedLayout.groups.map((group) => group.size as number);
+        const reopenedRailWidth = reopenedSizes[railIndex];
+        const reopenedDonatedWidth = previousSizes[widestIndexBefore] - reopenedSizes[widestIndexAfter];
+        assert.ok(
+          Math.abs(reopenedSizes[1] - previousSizes[minimizedIndex]) <= 1,
+          `Reopening the ${position} rail must not activate and auto-expand the minimized edge editor; before ${JSON.stringify(previousLayout)}, reopened ${JSON.stringify(reopenedLayout)}.`,
+        );
+        assert.ok(
+          reopenedRailWidth >= 222 && Math.abs(reopenedDonatedWidth - reopenedRailWidth) <= 1,
+          `Reopening the ${position} rail should keep taking width only from the widest editor; before ${JSON.stringify(previousLayout)}, reopened ${JSON.stringify(reopenedLayout)}.`,
+        );
+      }
+    } finally {
+      await configuration.update('position', 'left', vscode.ConfigurationTarget.Global);
+      if (verticalTabs().length > 0 && !isRailAtEdge('left')) {
+        await waitFor(() => isRailAtEdge('left'));
+      }
+    }
   });
 
   test('creates on the right and applies live left-right position changes without losing focus', async function () {
@@ -189,6 +307,8 @@ suite('Vertical Tabs extension', () => {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
       activationEvents: string[];
       contributes: {
+        commands: Array<{ command: string }>;
+        keybindings: Array<{ command: string }>;
         configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> };
         viewsContainers: { activitybar: Array<{ id: string }> };
       };
@@ -202,10 +322,79 @@ suite('Vertical Tabs extension', () => {
     assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultGroupMode'].default, 'vscode');
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultSortMode'].default, 'none');
+    assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.defaultSortMode'].enum, ['none', 'mru', 'modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc']);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].default, 'top');
     assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].enum, ['top', 'bottom']);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].scope, 'window');
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));
+    const configurableCommands = [
+      'verticalTabs.previousInGroup',
+      'verticalTabs.nextInGroup',
+      'verticalTabs.previousAcrossGroups',
+      'verticalTabs.nextAcrossGroups',
+      'verticalTabs.moveUpInGroup',
+      'verticalTabs.moveDownInGroup',
+      'verticalTabs.moveToPreviousGroup',
+      'verticalTabs.moveToNextGroup',
+    ];
+    assert.ok(configurableCommands.every((command) => manifest.contributes.commands.some((entry) => entry.command === command)));
+    assert.ok(configurableCommands.every((command) => !manifest.contributes.keybindings.some((entry) => entry.command === command)), 'Tab switching and moving commands must not have default keybindings.');
+  });
+
+  test('switches and moves tabs within and across editor groups', async function () {
+    this.timeout(20_000);
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1);
+    await closeNonVerticalTabs();
+    await waitFor(() => nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')));
+
+    const sourceGroup = vscode.window.tabGroups.all.find((group) => !group.tabs.some((tab) => isVerticalTabsTab(tab)));
+    assert.ok(sourceGroup, 'A user editor group should exist beside the vertical-tabs group.');
+    const documents = await Promise.all([
+      vscode.workspace.openTextDocument({ content: 'keyboard command first' }),
+      vscode.workspace.openTextDocument({ content: 'keyboard command second' }),
+      vscode.workspace.openTextDocument({ content: 'keyboard command third' }),
+    ]);
+    for (const document of documents) {
+      await vscode.window.showTextDocument(document, { viewColumn: sourceGroup.viewColumn, preserveFocus: false, preview: false });
+    }
+    const documentUris = new Set(documents.map((document) => document.uri.toString()));
+    const extraTabs = sourceGroup.tabs.filter((tab) => !(tab.input instanceof vscode.TabInputText && documentUris.has(tab.input.uri.toString())));
+    if (extraTabs.length > 0) await vscode.window.tabGroups.close(extraTabs, true);
+    await waitFor(() => textTabUris(sourceGroup).length === 3);
+
+    await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
+    await vscode.commands.executeCommand('verticalTabs.nextInGroup');
+    await waitFor(() => activeTextDocumentUri() === documents[2].uri.toString());
+    await vscode.commands.executeCommand('verticalTabs.previousInGroup');
+    await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
+
+    await vscode.commands.executeCommand('verticalTabs.moveUpInGroup');
+    await waitFor(() => textTabUris(sourceGroup)[0] === documents[1].uri.toString());
+    assert.deepEqual(textTabUris(sourceGroup), [documents[1], documents[0], documents[2]].map((document) => document.uri.toString()));
+    await vscode.commands.executeCommand('verticalTabs.moveDownInGroup');
+    await waitFor(() => textTabUris(sourceGroup)[1] === documents[1].uri.toString());
+    assert.deepEqual(textTabUris(sourceGroup), documents.map((document) => document.uri.toString()));
+
+    await vscode.commands.executeCommand('workbench.action.newGroupRight');
+    const destinationDocument = await vscode.workspace.openTextDocument({ content: 'keyboard command destination' });
+    await vscode.window.showTextDocument(destinationDocument, { preserveFocus: false, preview: false });
+    const destinationGroup = destinationDocumentTab(destinationDocument)?.group;
+    assert.ok(destinationGroup && destinationGroup !== sourceGroup, 'A second user editor group should contain the destination document.');
+
+    await vscode.window.showTextDocument(documents[2], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
+    await vscode.commands.executeCommand('verticalTabs.nextAcrossGroups');
+    await waitFor(() => activeTextDocumentUri() === destinationDocument.uri.toString());
+    await vscode.commands.executeCommand('verticalTabs.previousAcrossGroups');
+    await waitFor(() => activeTextDocumentUri() === documents[2].uri.toString());
+
+    await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
+    await vscode.commands.executeCommand('verticalTabs.moveToNextGroup');
+    await waitFor(() => destinationDocumentTab(documents[1])?.group === destinationGroup);
+    assert.equal(textTabUris(destinationGroup).at(-1), documents[1].uri.toString());
+    await vscode.commands.executeCommand('verticalTabs.moveToPreviousGroup');
+    await waitFor(() => destinationDocumentTab(documents[1])?.group === sourceGroup);
+    assert.equal(textTabUris(sourceGroup).at(-1), documents[1].uri.toString());
   });
 
   test('activates existing built-in webview tabs without duplicating them', async function () {
@@ -451,6 +640,14 @@ function isBuiltInEditorTab(tab: vscode.Tab, kind: 'settings' | 'welcome'): bool
 function activeTextDocumentUri(): string | undefined {
   const active = vscode.window.tabGroups.activeTabGroup.activeTab;
   return active?.input instanceof vscode.TabInputText ? active.input.uri.toString() : undefined;
+}
+
+function textTabUris(group: vscode.TabGroup): string[] {
+  return group.tabs.flatMap((tab) => tab.input instanceof vscode.TabInputText ? [tab.input.uri.toString()] : []);
+}
+
+function destinationDocumentTab(document: vscode.TextDocument): { tab: vscode.Tab; group: vscode.TabGroup } | undefined {
+  return nonVerticalTabs().find(({ tab }) => tab.input instanceof vscode.TabInputText && tab.input.uri.toString() === document.uri.toString());
 }
 
 async function closeNonVerticalTabs(): Promise<void> {

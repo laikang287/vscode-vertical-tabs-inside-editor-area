@@ -43,6 +43,7 @@ export interface LocaleStrings {
   readonly groupModeFileType: string;
   readonly sortModeLabel: string;
   readonly sortModeNone: string;
+  readonly sortModeMru: string;
   readonly sortModeModifiedAsc: string;
   readonly sortModeModifiedDesc: string;
   readonly sortModeNameAsc: string;
@@ -51,6 +52,17 @@ export interface LocaleStrings {
   readonly searchGroup: string;
   readonly showSearch: string;
   readonly hideSearch: string;
+  readonly regexSearch: string;
+  readonly invalidRegex: string;
+  readonly filterTabs: string;
+  readonly filterUnsaved: string;
+  readonly filterPinned: string;
+  readonly filterCurrentGroup: string;
+  readonly filterFileType: string;
+  readonly allFileTypes: string;
+  readonly searchResultCount: string;
+  readonly searchResultCountWithGroups: string;
+  readonly noSearchResults: string;
 }
 
 export type SupportedLocale =
