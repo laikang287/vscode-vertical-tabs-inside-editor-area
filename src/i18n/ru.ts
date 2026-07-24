@@ -4,6 +4,9 @@ import { ruWorksets } from './worksetStrings';
 const ru: LocaleStrings = {
   ...ruWorksets,
   emptyState: 'Нет отображаемых вкладок редактора.',
+  verticalTabsStatusBarName: 'Вертикальные вкладки',
+  showVerticalTabs: 'Показать вертикальные вкладки',
+  hideVerticalTabs: 'Скрыть вертикальные вкладки',
   expand: 'Развернуть',
   collapse: 'Свернуть',
   expandGroup: 'Развернуть группу',

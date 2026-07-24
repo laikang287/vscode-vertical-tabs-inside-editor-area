@@ -4,6 +4,9 @@ import { esWorksets } from './worksetStrings';
 const es: LocaleStrings = {
   ...esWorksets,
   emptyState: 'No hay pestañas de editor mostrables.',
+  verticalTabsStatusBarName: 'Pestañas verticales',
+  showVerticalTabs: 'Mostrar pestañas verticales',
+  hideVerticalTabs: 'Ocultar pestañas verticales',
   expand: 'Expandir',
   collapse: 'Contraer',
   expandGroup: 'Expandir grupo',

@@ -4,6 +4,9 @@ import { koWorksets } from './worksetStrings';
 const ko: LocaleStrings = {
   ...koWorksets,
   emptyState: '표시 가능한 편집기 탭이 없습니다.',
+  verticalTabsStatusBarName: '세로 탭',
+  showVerticalTabs: '세로 탭 표시',
+  hideVerticalTabs: '세로 탭 숨기기',
   expand: '펼치기',
   collapse: '접기',
   expandGroup: '그룹 펼치기',

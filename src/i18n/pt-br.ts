@@ -4,6 +4,9 @@ import { ptBrWorksets } from './worksetStrings';
 const ptBr: LocaleStrings = {
   ...ptBrWorksets,
   emptyState: 'Nenhuma aba de editor exibível.',
+  verticalTabsStatusBarName: 'Abas verticais',
+  showVerticalTabs: 'Mostrar abas verticais',
+  hideVerticalTabs: 'Ocultar abas verticais',
   expand: 'Expandir',
   collapse: 'Recolher',
   expandGroup: 'Expandir grupo',
