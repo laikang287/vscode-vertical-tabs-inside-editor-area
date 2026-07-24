@@ -378,8 +378,13 @@ test('rail creation avoids activating a narrow edge editor before restoring widt
   const prepareSource = source.slice(prepareStart, prepareEnd);
 
   assert.ok(prepareStart >= 0 && prepareEnd > prepareStart);
+  assert.match(
+    prepareSource,
+    /await prepareNarrowEdgeEditorGroupBeforeRailCreation\(previousLayout, position\)[\s\S]+await vscode\.commands\.executeCommand\(createCommand\)/,
+  );
   assert.match(prepareSource, /selectWidestEditorGroupViewColumn\(/);
   assert.match(prepareSource, /moveActiveEmptyGroupToRailEdge\(position\)/);
+  assert.match(prepareSource, /mode: 'pixel', delta: 1[\s\S]+mode: 'ratio'/);
   assert.doesNotMatch(prepareSource, /workbench\.action\.focusFirstEditorGroup/);
   assert.doesNotMatch(prepareSource, /workbench\.action\.focusLastEditorGroup/);
 });
