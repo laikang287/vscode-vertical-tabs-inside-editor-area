@@ -125,6 +125,24 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
+test('relative path display is configurable and uses a subdued second line', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly string[] }> } };
+  };
+  const setting = manifest.contributes.configuration.properties['verticalTabs.relativePathDisplay'];
+
+  assert.equal(setting?.default, 'off');
+  assert.deepEqual(setting?.enum, ['off', 'duplicates', 'always']);
+  assert.match(panelSource, /relativePathDisplay: readRelativePathDisplay\(\)/);
+  assert.match(panelSource, /function inputWorkspaceRelativePath/);
+  assert.match(panelSource, /vscode\.workspace\.getWorkspaceFolder\(uri\)/);
+  assert.match(webviewSource, /detail\.className = 'tab-description'/);
+  assert.match(style, /\.tab-description \{[^}]*font-size: 10px;[^}]*opacity: \.82;/);
+});
+
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
