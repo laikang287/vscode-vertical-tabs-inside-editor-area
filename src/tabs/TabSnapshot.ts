@@ -7,6 +7,7 @@ import type {
   SortMode,
   TabTargetIdentity,
   TabActivationKind,
+  ToolbarPosition,
   VerticalTabDisplayGroup,
   VerticalTabItem,
   VerticalTabsSnapshot,
@@ -42,6 +43,7 @@ export interface SnapshotSourceGroup {
 export interface SnapshotBuildOptions {
   readonly groupMode?: GroupMode;
   readonly sortMode?: SortMode;
+  readonly toolbarPosition?: ToolbarPosition;
   readonly rememberState?: boolean;
   readonly toolbarControlsVisible?: boolean;
   readonly searchVisible?: boolean;
@@ -89,7 +91,7 @@ export function buildSnapshot(
   }));
 
   const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
-  return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
+  return { revision, groupMode, sortMode, toolbarPosition: options.toolbarPosition ?? 'top', rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
 }
 
 function countVisibleTabLabels(groups: readonly SnapshotSourceGroup[]): ReadonlyMap<string, number> {

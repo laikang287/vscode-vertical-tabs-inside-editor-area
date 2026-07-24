@@ -135,14 +135,18 @@ test('tab colors distinguish selection, shown editors, and the focused editor', 
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
-  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, { default: unknown; markdownDescription?: string }> } } };
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> } } };
   const properties = manifest.contributes.configuration.properties;
 
   assert.equal(properties['verticalTabs.rememberState']?.default, true);
   assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
   assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
   assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
- assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
+  assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
+  assert.equal(properties['verticalTabs.toolbarPosition']?.default, 'top');
+  assert.deepEqual(properties['verticalTabs.toolbarPosition']?.enum, ['top', 'bottom']);
+  assert.equal(properties['verticalTabs.toolbarPosition']?.scope, 'window');
+  assert.match(properties['verticalTabs.toolbarPosition']?.markdownDescription ?? '', /%verticalTabs\.config\.toolbarPosition%/);
   assert.match(properties['verticalTabs.tabWidthRatio']?.markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
   assert.match(panelSource, /vscode\.workspace\.onDidChangeConfiguration/);
   assert.match(panelSource, /this\.manualGroups\.splice\(0, this\.manualGroups\.length\)/);
@@ -442,6 +446,27 @@ test('webview collapses an existing multi-selection on click while retaining blo
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
   assert.match(source, /findCurrentTabByIdentity/);
   assert.match(source, /findCurrentTabByIdentity\(tab\.target\.identity\)/);
+});
+
+test('toolbar position setting fixes the toolbar at either edge and reverses only bottom section order', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+  const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
+
+  assert.match(panelSource, /type ToolbarPosition/);
+  assert.match(panelSource, /this\.toolbarPosition = readToolbarPosition\(\)/);
+  assert.match(panelSource, /event\.affectsConfiguration\('verticalTabs\.toolbarPosition'\)/);
+  assert.match(panelSource, /toolbarPosition: this\.toolbarPosition/);
+  assert.match(panelSource, /data-toolbar-position="\$\{this\.toolbarPosition\}"/);
+  assert.match(panelSource, /<div class="toolbar-actions">[\s\S]+?<div id="toolbar-controls" class="toolbar-selects">[\s\S]+?<div id="search-container" class="search-container">/);
+  assert.match(webviewSource, /verticalTabs\.dataset\.toolbarPosition = message\.snapshot\.toolbarPosition/);
+  assert.match(style, /\.vertical-tabs \{[\s\S]+display: flex;[\s\S]+height: 100vh;[\s\S]+overflow: hidden;/);
+  assert.match(style, /\.vertical-tabs\[data-toolbar-position="bottom"\] \.toolbar \{[\s\S]+flex-direction: column-reverse;[\s\S]+order: 2;/);
+  assert.match(style, /#groups \{[\s\S]+flex: 1 1 auto;[\s\S]+min-height: 0;[\s\S]+overflow-y: auto;/);
+  assert.equal(typeof packageNls['verticalTabs.config.toolbarPosition'], 'string');
+  assert.equal(typeof packageNlsZhCn['verticalTabs.config.toolbarPosition'], 'string');
 });
 
 test('webview only shows the drag cursor on draggable tab rows', () => {
