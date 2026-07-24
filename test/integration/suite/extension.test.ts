@@ -103,6 +103,87 @@ suite('Vertical Tabs extension', () => {
     assert.ok(Math.abs(nextSizes[0] + nextSizes[1] - previousSizes[0]) <= 1, `Only the original leading editor should provide space for the rail; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
   });
 
+  test('creates on the right and applies live left-right position changes without losing focus', async function () {
+    this.timeout(20_000);
+    const configuration = vscode.workspace.getConfiguration('verticalTabs');
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+    await closeNonVerticalTabs();
+
+    try {
+      await configuration.update('position', 'right', vscode.ConfigurationTarget.Global);
+      const document = await vscode.workspace.openTextDocument({ content: 'right rail focus restoration' });
+      await vscode.window.showTextDocument(document, { preserveFocus: false });
+      await vscode.commands.executeCommand('verticalTabs.open');
+      await waitFor(() => verticalTabs().length === 1 && isRailAtEdge('right'));
+
+      assert.equal(verticalTabs()[0]?.group.tabs.length, 1, 'The right rail should keep an exclusive editor group.');
+      let layout = await waitForEditorLayout((candidate) => {
+        const ratios = rootGroupRatios(candidate);
+        return ratios.length >= 2 && (ratios.at(-1) ?? 1) <= 0.3;
+      });
+      assert.ok((rootGroupRatios(layout).at(-1) ?? 1) <= 0.3, `The right rail should use the shared narrow width; received ${JSON.stringify(layout)}.`);
+
+      await vscode.window.showTextDocument(document, { preserveFocus: false });
+      await waitFor(() => activeTextDocumentUri() === document.uri.toString());
+      await configuration.update('position', 'left', vscode.ConfigurationTarget.Global);
+      await waitFor(() => verticalTabs().length === 1 && isRailAtEdge('left'));
+      await waitFor(() => activeTextDocumentUri() === document.uri.toString());
+      assert.equal(verticalTabs()[0]?.group.tabs.length, 1, 'Moving left must not mix user tabs into the rail group.');
+
+      await configuration.update('position', 'right', vscode.ConfigurationTarget.Global);
+      await waitFor(() => verticalTabs().length === 1 && isRailAtEdge('right'));
+      await waitFor(() => activeTextDocumentUri() === document.uri.toString());
+      assert.equal(verticalTabs().length, 1, 'Live position changes must not create duplicate rails.');
+
+      await vscode.commands.executeCommand('workbench.action.newGroupRight');
+      const secondDocument = await vscode.workspace.openTextDocument({ content: 'right rail third editor group' });
+      await vscode.window.showTextDocument(secondDocument, { preserveFocus: false });
+      await waitFor(() => vscode.window.tabGroups.all.length === 3 && isRailAtEdge('right'));
+      await vscode.commands.executeCommand('vscode.setEditorLayout', {
+        orientation: 0,
+        groups: [{ size: 690 }, { size: 690 }, { size: 220 }],
+      });
+      await vscode.commands.executeCommand('verticalTabs.focus');
+      layout = await waitForEditorLayout((candidate) => candidate.groups.at(-1)?.size === 222);
+      assert.equal(layout.groups.at(-1)?.size, 222, `The right rail should be nudged above VS Code's native minimum width in a three-group layout; received ${JSON.stringify(layout)}.`);
+
+      const lockedDocument = await vscode.workspace.openTextDocument({ content: 'right locked rail verification' });
+      await vscode.window.showTextDocument(lockedDocument, { preserveFocus: false });
+      assert.ok(
+        !verticalTabs()[0]?.group.tabs.some((tab) => tab.input instanceof vscode.TabInputText
+          && tab.input.uri.toString() === lockedDocument.uri.toString()),
+        'A normal editor must not open in the locked right rail group.',
+      );
+
+      await closeNonVerticalTabs();
+      await waitFor(() => nonVerticalTabs().some(({ tab }) => isBuiltInEditorTab(tab, 'welcome')));
+      await waitFor(() => isRailAtEdge('right'));
+      const emptyStateGroups = vscode.window.tabGroups.all.map((group) => ({
+        viewColumn: group.viewColumn,
+        labels: group.tabs.map((tab) => tab.label),
+        containsRail: group.tabs.some((tab) => isVerticalTabsTab(tab)),
+      }));
+      assert.ok(
+        nonVerticalTabs().some(({ group }) => group.viewColumn < verticalTabs()[0].group.viewColumn),
+        `With a right rail, the restored welcome editor area should be on its left. Groups: ${JSON.stringify(emptyStateGroups)}`,
+      );
+
+      await vscode.commands.executeCommand('verticalTabs.close');
+      await waitFor(() => verticalTabs().length === 0);
+      await vscode.commands.executeCommand('verticalTabs.open');
+      await waitFor(() => verticalTabs().length === 1 && isRailAtEdge('right'));
+      assert.equal(verticalTabs()[0]?.group.tabs.length, 1, 'Reopening should restore one exclusive right rail.');
+    } finally {
+      await configuration.update('position', 'left', vscode.ConfigurationTarget.Global);
+      if (verticalTabs().length > 0) {
+        await waitFor(() => isRailAtEdge('left'));
+        await waitFor(() => verticalTabs().length === 1 && verticalTabs()[0]?.group.tabs.length === 1);
+        await new Promise<void>((resolve) => setTimeout(resolve, 250));
+      }
+    }
+  });
+
   test('declares the startup and webview restoration activation events', () => {
     const manifestPath = path.resolve(__dirname, '../../../../package.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
@@ -115,6 +196,7 @@ suite('Vertical Tabs extension', () => {
     assert.ok(manifest.activationEvents.includes('onStartupFinished'));
     assert.ok(manifest.activationEvents.includes('onWebviewPanel:verticalTabs.editorArea'));
     assert.ok(!('verticalTabs.defaultRailWidthRatio' in manifest.contributes.configuration.properties));
+    assert.equal(manifest.contributes.configuration.properties['verticalTabs.position'].default, 'left');
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.rememberState'].default, true);
    assert.equal(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].default, 0.2);
     assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
@@ -274,6 +356,15 @@ function nonVerticalTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
   return result;
 }
 
+function isRailAtEdge(position: 'left' | 'right'): boolean {
+  const rail = verticalTabs()[0]?.group;
+  const columns = vscode.window.tabGroups.all.map((group) => group.viewColumn);
+  if (!rail || columns.length === 0) {
+    return false;
+  }
+  return rail.viewColumn === (position === 'left' ? Math.min(...columns) : Math.max(...columns));
+}
+
 function rootGroupRatios(layout: EditorLayout): number[] {
   const sizes = layout.groups.map((group) => group.size);
   if (!sizes.every((size): size is number => typeof size === 'number' && size > 0)) {
@@ -290,7 +381,12 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     }
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
   }
-  assert.fail('Timed out waiting for the editor state to settle.');
+  assert.fail(`Timed out waiting for the editor state to settle. Groups: ${JSON.stringify(vscode.window.tabGroups.all.map((group) => ({
+    viewColumn: group.viewColumn,
+    isActive: group.isActive,
+    activeLabel: group.activeTab?.label,
+    labels: group.tabs.map((tab) => tab.label),
+  })))}`);
 }
 
 async function waitForEditorLayout(predicate: (layout: EditorLayout) => boolean): Promise<EditorLayout> {
