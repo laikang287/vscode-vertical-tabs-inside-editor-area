@@ -135,11 +135,25 @@ async function verifyWindowWasManaged(filePath, config) {
   }
 
   const expectedDisplay = config.display.replace(/^\\\\\.\\/u, '').toLowerCase();
-  if (expectedDisplay !== 'primary' && status.display.toLowerCase() !== expectedDisplay) {
+  if (expectedDisplay === 'auto') {
+    if (status.displaySelection !== 'auto') {
+      throw new Error(`测试窗口未使用自动显示器选择：${JSON.stringify(status)}`);
+    }
+    if (
+      status.displayCount > 1
+      && typeof status.activeDisplay === 'string'
+      && status.display.toLowerCase() === status.activeDisplay.toLowerCase()
+    ) {
+      throw new Error(`测试窗口仍位于激活窗口所在显示器 ${status.activeDisplay}。`);
+    }
+  } else if (expectedDisplay !== 'primary' && status.display.toLowerCase() !== expectedDisplay) {
     throw new Error(`测试窗口位于 ${status.display}，与配置的 ${config.display} 不一致。`);
   }
   if (status.width !== config.width || status.height !== config.height || status.preventFocus !== config.preventFocus) {
     throw new Error(`测试窗口管理结果与配置不一致：${JSON.stringify(status)}`);
   }
-  console.log(`测试窗口管理验证通过：${status.display} ${status.width}x${status.height}，禁止抢焦点=${status.preventFocus}`);
+  const avoidedDisplay = status.displaySelection === 'auto' && status.activeDisplay
+    ? `，已避开激活显示器=${status.activeDisplay}`
+    : '';
+  console.log(`测试窗口管理验证通过：${status.display} ${status.width}x${status.height}，禁止抢焦点=${status.preventFocus}${avoidedDisplay}`);
 }

@@ -76,12 +76,33 @@ public static class TestWindowNativeMethods
 
 [TestWindowNativeMethods]::SetProcessDPIAware() | Out-Null
 
+function Get-DisplayNameForWindow {
+  param([IntPtr]$Window)
+
+  if ($Window -eq [IntPtr]::Zero) {
+    return $null
+  }
+
+  $screen = [System.Windows.Forms.Screen]::FromHandle($Window)
+  if ($null -eq $screen) {
+    return $null
+  }
+
+  return $screen.DeviceName.Replace('\\.\', '')
+}
+
+$initialForegroundWindow = [TestWindowNativeMethods]::GetForegroundWindow()
+$activeDisplayName = Get-DisplayNameForWindow -Window $initialForegroundWindow
+
 function Get-DisplayInfo {
   return @([System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
+    $name = $_.DeviceName.Replace('\\.\', '')
     [pscustomobject]@{
-      Name = $_.DeviceName.Replace('\\.\', '')
+      Name = $name
       DeviceName = $_.DeviceName
       Primary = $_.Primary
+      Active = $null -ne $activeDisplayName -and
+        $name.Equals($activeDisplayName, [System.StringComparison]::OrdinalIgnoreCase)
       Left = $_.WorkingArea.Left
       Top = $_.WorkingArea.Top
       Width = $_.WorkingArea.Width
@@ -95,14 +116,41 @@ function Get-DisplayInfo {
 $displays = Get-DisplayInfo
 if ($ListDisplays) {
   $displays |
-    Select-Object Name, Primary, Bounds, WorkingArea |
+    Select-Object Name, Primary, Active, Bounds, WorkingArea |
     Format-Table -AutoSize |
     Out-String -Width 200 |
     Write-Output
   exit 0
 }
 
-$targetDisplay = if ($Display.Equals('primary', [System.StringComparison]::OrdinalIgnoreCase)) {
+if ($X -lt 0 -or $Y -lt 0 -or $Width -lt 640 -or $Height -lt 480) {
+  throw 'Test window coordinates must be non-negative integers and its size must be at least 640x480.'
+}
+
+$automaticDisplay = $Display.Equals('auto', [System.StringComparison]::OrdinalIgnoreCase)
+$displaySelection = if ($automaticDisplay) { 'auto' } else { 'explicit' }
+
+$targetDisplay = if ($automaticDisplay) {
+  $candidates = @($displays | Where-Object {
+    $null -eq $activeDisplayName -or
+    -not $_.Name.Equals($activeDisplayName, [System.StringComparison]::OrdinalIgnoreCase)
+  })
+
+  if ($candidates.Count -eq 0) {
+    Write-Warning 'Only one display is available, so the integration-test window cannot avoid the active display.'
+    $candidates = @($displays)
+  }
+
+  $candidates |
+    Where-Object {
+      ($X + $Width) -le $_.Width -and
+      ($Y + $Height) -le $_.Height
+    } |
+    Sort-Object `
+      @{ Expression = { $_.Width * $_.Height }; Descending = $true }, `
+      @{ Expression = { $_.Name }; Descending = $false } |
+    Select-Object -First 1
+} elseif ($Display.Equals('primary', [System.StringComparison]::OrdinalIgnoreCase)) {
   $displays | Where-Object { $_.Primary } | Select-Object -First 1
 } else {
   $normalizedDisplay = $Display.Replace('\\.\', '')
@@ -114,11 +162,10 @@ $targetDisplay = if ($Display.Equals('primary', [System.StringComparison]::Ordin
 
 if ($null -eq $targetDisplay) {
   $available = ($displays | ForEach-Object { $_.Name }) -join ', '
+  if ($automaticDisplay) {
+    throw "No display other than the active display '$activeDisplayName' can fit the requested ${Width}x${Height} window at relative position ($X,$Y). Available displays: $available."
+  }
   throw "Test window display '$Display' was not found. Available displays: $available. Run npm run test:displays for details."
-}
-
-if ($X -lt 0 -or $Y -lt 0 -or $Width -lt 640 -or $Height -lt 480) {
-  throw 'Test window coordinates must be non-negative integers and its size must be at least 640x480.'
 }
 if (($X + $Width) -gt $targetDisplay.Width -or ($Y + $Height) -gt $targetDisplay.Height) {
   throw "Test window ${Width}x${Height} at relative position ($X,$Y) exceeds the $($targetDisplay.Name) working area $($targetDisplay.Width)x$($targetDisplay.Height)."
@@ -127,13 +174,13 @@ if (($X + $Width) -gt $targetDisplay.Width -or ($Y + $Height) -gt $targetDisplay
 $absoluteX = $targetDisplay.Left + $X
 $absoluteY = $targetDisplay.Top + $Y
 $shouldPreventFocus = $PreventFocus -eq 'true'
-$lastForegroundWindow = [TestWindowNativeMethods]::GetForegroundWindow()
+$lastForegroundWindow = $initialForegroundWindow
 $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
 $testProcess = $null
 $testWindow = [IntPtr]::Zero
 $executableFullPath = [System.IO.Path]::GetFullPath($ExecutablePath)
 
-Write-Output "READY display=$($targetDisplay.Name) rectangle=${absoluteX},${absoluteY},${Width},${Height} preventFocus=$shouldPreventFocus"
+Write-Output "READY selection=$displaySelection activeDisplay=$activeDisplayName display=$($targetDisplay.Name) rectangle=${absoluteX},${absoluteY},${Width},${Height} preventFocus=$shouldPreventFocus"
 
 while ([DateTime]::UtcNow -lt $deadline -and $testWindow -eq [IntPtr]::Zero) {
   $candidate = Get-CimInstance Win32_Process -Filter "Name = '$([System.IO.Path]::GetFileName($executableFullPath))'" |
@@ -197,6 +244,9 @@ if ($shouldPreventFocus -and $foregroundWindow -eq $testWindow -and
 
 $status = [pscustomobject]@{
   display = $targetDisplay.Name
+  displaySelection = $displaySelection
+  activeDisplay = $activeDisplayName
+  displayCount = @($displays).Count
   x = $absoluteX
   y = $absoluteY
   width = $Width

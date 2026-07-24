@@ -29,6 +29,10 @@ test('integration test window config accepts an explicit display and rectangle',
   });
 });
 
+test('integration test window config accepts automatic display selection', () => {
+  assert.equal(parseIntegrationTestWindowConfig({ display: ' AUTO ' }).display, 'AUTO');
+});
+
 test('integration test window config rejects invalid or unknown values', () => {
   assert.throws(
     () => parseIntegrationTestWindowConfig({ display: '' }),

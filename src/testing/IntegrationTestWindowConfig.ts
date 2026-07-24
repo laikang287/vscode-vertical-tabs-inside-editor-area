@@ -11,7 +11,7 @@ export interface IntegrationTestWindowConfig {
 export const defaultIntegrationTestWindowConfig: IntegrationTestWindowConfig = {
   enabled: true,
   preventFocus: true,
-  display: 'primary',
+  display: 'auto',
   x: 24,
   y: 24,
   width: 1280,
