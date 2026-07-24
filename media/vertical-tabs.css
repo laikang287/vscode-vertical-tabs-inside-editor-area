@@ -217,6 +217,11 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   display: none;
 }
 
+.scroll-anchor-spacer {
+  pointer-events: none;
+  width: 1px;
+}
+
 .tab-group { margin-top: 0; }
 .tab-group.without-header { margin-top: 0; }
 .tab-group.empty-manual-root { min-height: 22px; }

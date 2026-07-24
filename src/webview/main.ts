@@ -4,6 +4,7 @@ import { TabSelection } from './TabSelection';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 import { isKeyboardContextMenuKey, nextVerticalNavigationIndex, type VerticalNavigationKey } from './keyboardNavigation';
+import { calculateScrollAnchorRestoration, isWithinNaturalScrollRange } from './scrollAnchor';
 import {
   evaluateTabSearch,
   findTextMatchRanges,
@@ -138,6 +139,7 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
 groups?.addEventListener('keydown', handleTreeKeyDown);
+groups?.addEventListener('scroll', clearScrollAnchorCompensationWhenSafe, { passive: true });
 groups?.addEventListener('focusin', (event) => {
   const item = treeItemFromEventTarget(event.target);
   if (item) setTreeTabStop(item);
@@ -233,7 +235,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   setSearchContainerVisible(message.snapshot.searchVisible);
   currentSearchGroups = message.snapshot.searchGroups;
   updateSearchControlState();
-  renderCurrentTabs();
+  renderCurrentTabs({ preserveScroll: followedTarget === undefined });
   correctPendingActivation();
   revealFollowedTab(followedTarget);
   applyKeyboardNavigationPreview();
@@ -337,11 +339,24 @@ function treeFocusKeyForTab(tab: VerticalTabItem): string {
   return `tab:${tab.target.groupIndex}:${JSON.stringify(tab.target.identity)}`;
 }
 
-function renderCurrentTabs(): void {
+interface TreeScrollAnchor {
+  readonly focusKey: string;
+  readonly viewportOffset: number;
+}
+
+interface RenderCurrentTabsOptions {
+  readonly preferredFocusKey?: string;
+  readonly preserveScroll?: boolean;
+}
+
+function renderCurrentTabs(options: RenderCurrentTabsOptions = {}): void {
   if (!latestSnapshot || !groups || !description) return;
   const hadTreeFocus = groups.contains(document.activeElement);
   const previousTreeFocusKey = currentTreeFocusKey();
-  groups.replaceChildren();
+  const scrollAnchor = options.preserveScroll === false
+    ? undefined
+    : captureTreeScrollAnchor(options.preferredFocusKey);
+  const nextTree = document.createDocumentFragment();
   const { tabs, displayGroups } = latestSnapshot;
   latestSearchResult = evaluateTabSearch(displayGroups, {
     query: currentSearchQuery,
@@ -355,11 +370,13 @@ function renderCurrentTabs(): void {
       ? i18n.noSearchResults
       : '';
   for (const resultGroup of latestSearchResult.groups) {
-    appendDisplayGroup(groups, resultGroup.group, resultGroup.autoExpand);
+    appendDisplayGroup(nextTree, resultGroup.group, resultGroup.autoExpand);
   }
+  groups.replaceChildren(nextTree);
   initializeTreeFocus(previousTreeFocusKey, hadTreeFocus);
   updateSearchFeedback(latestSearchResult);
   updateTreeActionState();
+  restoreTreeScrollAnchor(scrollAnchor);
 }
 
 function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
@@ -395,7 +412,7 @@ function stringifyDetails(value: unknown): string {
   }
 }
 
-function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup, autoExpand = false): void {
+function appendDisplayGroup(parent: HTMLElement | DocumentFragment, group: VerticalTabDisplayGroup, autoExpand = false): void {
   const section = document.createElement('section');
   const collapsed = autoExpand
     ? searchCollapsedGroups.has(groupCollapseKey(group))
@@ -710,7 +727,7 @@ function toggleRenderedDisplayGroup(group: VerticalTabDisplayGroup, autoExpanded
   const key = groupCollapseKey(group);
   if (searchCollapsedGroups.has(key)) searchCollapsedGroups.delete(key);
   else searchCollapsedGroups.add(key);
-  applyCurrentFilter();
+  applyCurrentFilter(false, treeFocusKeyForGroup(group));
 }
 
 function setAllGroupsCollapsed(collapsed: boolean): void {
@@ -720,7 +737,7 @@ function setAllGroupsCollapsed(collapsed: boolean): void {
     if (group.showHeader) setDisplayGroupCollapsed(group, collapsed, false);
   }
   saveCollapsedGroups();
-  render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot });
+  renderCurrentTabs();
 }
 
 function setDisplayGroupCollapsed(group: VerticalTabDisplayGroup, collapsed: boolean, rerender = true): void {
@@ -729,7 +746,9 @@ function setDisplayGroupCollapsed(group: VerticalTabDisplayGroup, collapsed: boo
   collapsedGroups.delete(collapsed ? openKey : closedKey);
   collapsedGroups.add(collapsed ? closedKey : openKey);
   saveCollapsedGroups();
-  if (rerender && latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
+  if (rerender && latestSnapshot) {
+    renderCurrentTabs({ preferredFocusKey: treeFocusKeyForGroup(group) });
+  }
 }
 
 function isGroupCollapsed(group: VerticalTabDisplayGroup): boolean {
@@ -756,6 +775,71 @@ function saveCollapsedGroups(): void {
   if (latestSnapshot?.rememberState) vscode.setState({ collapsedGroups: keys });
   else vscode.setState({});
   vscode.postMessage({ type: 'setCollapsedGroups', keys });
+}
+
+function captureTreeScrollAnchor(preferredFocusKey?: string): TreeScrollAnchor | undefined {
+  if (!groups) return undefined;
+  const containerBounds = groups.getBoundingClientRect();
+  const items = treeNavigationItems();
+  const preferred = preferredFocusKey
+    ? items.find((item) => item.dataset.focusKey === preferredFocusKey)
+    : undefined;
+  const anchor = preferred ?? items.find((item) => {
+    const bounds = item.getBoundingClientRect();
+    return bounds.bottom > containerBounds.top && bounds.top < containerBounds.bottom;
+  });
+  const focusKey = anchor?.dataset.focusKey;
+  if (!anchor || !focusKey) return undefined;
+
+  return {
+    focusKey,
+    viewportOffset: anchor.getBoundingClientRect().top - containerBounds.top,
+  };
+}
+
+function restoreTreeScrollAnchor(anchor: TreeScrollAnchor | undefined): void {
+  if (!groups || !anchor) return;
+  const target = treeNavigationItems().find((item) => item.dataset.focusKey === anchor.focusKey);
+  if (!target) return;
+  const containerBounds = groups.getBoundingClientRect();
+  const restoration = calculateScrollAnchorRestoration({
+    currentScrollTop: groups.scrollTop,
+    anchorOffsetBefore: anchor.viewportOffset,
+    anchorOffsetAfter: target.getBoundingClientRect().top - containerBounds.top,
+    scrollHeight: groups.scrollHeight,
+    clientHeight: groups.clientHeight,
+  });
+
+  if (restoration.trailingSpace > 0) {
+    const spacer = document.createElement('div');
+    spacer.className = 'scroll-anchor-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.height = `${restoration.trailingSpace}px`;
+    groups.append(spacer);
+  }
+
+  groups.scrollTop = restoration.scrollTop;
+  const residualOffset = target.getBoundingClientRect().top
+    - groups.getBoundingClientRect().top
+    - anchor.viewportOffset;
+  if (Math.abs(residualOffset) > 0.5) groups.scrollTop += residualOffset;
+}
+
+function clearScrollAnchorCompensationWhenSafe(): void {
+  if (!groups) return;
+  const spacer = groups.querySelector<HTMLElement>('.scroll-anchor-spacer');
+  if (
+    !spacer
+    || !isWithinNaturalScrollRange(
+      groups.scrollTop,
+      groups.scrollHeight,
+      groups.clientHeight,
+      spacer.offsetHeight,
+    )
+  ) {
+    return;
+  }
+  spacer.remove();
 }
 
 function updateTreeActionState(): void {
@@ -1573,9 +1657,9 @@ function setSearchContainerVisible(visible: boolean): void {
   toggleSearchButton?.setAttribute('aria-pressed', String(visible));
 }
 
-function applyCurrentFilter(resetSearchCollapses = false): void {
+function applyCurrentFilter(resetSearchCollapses = false, preferredFocusKey?: string): void {
   if (resetSearchCollapses) searchCollapsedGroups.clear();
-  renderCurrentTabs();
+  renderCurrentTabs({ preferredFocusKey });
 }
 
 function clearSearch(rerender = true): void {
