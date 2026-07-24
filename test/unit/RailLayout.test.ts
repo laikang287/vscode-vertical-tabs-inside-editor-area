@@ -5,12 +5,16 @@ import {
   countLayoutLeaves,
   findLayoutLeafPath,
   getEditorGroupWidth,
+  getRailGroupRatio,
+  insertRailPreservingEditorWidths,
   isEditorLayout,
   MAX_PERSISTED_RAIL_RATIO,
   MIN_RAIL_WIDTH,
   normalizeRailWidth,
   prependRailToLayout,
+  prependRailPreservingEditorWidths,
   resolveRailRatio,
+  setRailRootGroupWidth,
   setLeadingRailWidth,
   shouldPersistObservedRailWidth,
   shouldPersistRailGroupRatio,
@@ -33,6 +37,67 @@ test('wraps a vertical editor layout so the rail stays full-height', () => {
   assert.equal(result.orientation, 0);
   assert.equal(result.groups[0].size, 320);
   assert.deepEqual(result.groups[1], { groups: [{ size: 400 }, { size: 400 }] });
+});
+
+test('takes a new rail width only from the original leading editor column', () => {
+  const layout = {
+    orientation: 0,
+    groups: [
+      { size: 800, groups: [{ size: 320 }, { size: 480 }] },
+      { size: 300 },
+      { size: 500 },
+    ],
+  } as const;
+
+  const result = prependRailPreservingEditorWidths(layout, 320);
+  assert.deepEqual(result, {
+    orientation: 0,
+    groups: [
+      { size: 320 },
+      { size: 480, groups: [{ size: 320 }, { size: 480 }] },
+      { size: 300 },
+      { size: 500 },
+    ],
+  });
+  assert.deepEqual(layout.groups.map((group) => group.size), [800, 300, 500], 'The captured layout must remain immutable.');
+});
+
+test('limits the rail to preserve the native minimum width of the original leading group', () => {
+  assert.deepEqual(
+    prependRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 500 }, { size: 600 }] }, 400),
+    { orientation: 0, groups: [{ size: 280 }, { size: 220 }, { size: 600 }] },
+  );
+  assert.equal(
+    prependRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 400 }, { size: 600 }] }, 300),
+    undefined,
+  );
+  assert.equal(
+    prependRailPreservingEditorWidths({ orientation: 1, groups: [{ size: 500 }, { size: 500 }] }, 300),
+    undefined,
+  );
+});
+
+test('takes a new right rail width only from the original trailing editor column', () => {
+  const layout = {
+    orientation: 0,
+    groups: [
+      { size: 500 },
+      { size: 300 },
+      { size: 800, groups: [{ size: 320 }, { size: 480 }] },
+    ],
+  } as const;
+
+  const result = insertRailPreservingEditorWidths(layout, 320, 'right');
+  assert.deepEqual(result, {
+    orientation: 0,
+    groups: [
+      { size: 500 },
+      { size: 300 },
+      { size: 480, groups: [{ size: 320 }, { size: 480 }] },
+      { size: 320 },
+    ],
+  });
+  assert.deepEqual(layout.groups.map((group) => group.size), [500, 300, 800]);
 });
 
 test('updates only the leading rail leaf and validates persisted widths', () => {
@@ -134,6 +199,51 @@ test('does not persist rail width when the rail is the only editor group or effe
   assert.equal(shouldPersistObservedRailWidth({ orientation: 0, groups: [{ size: 240 }, { size: 760 }] }, 240), true);
   assert.equal(shouldPersistRailGroupRatio({ orientation: 0, groups: [{ size: 240 }, { size: 760 }] }), true);
   assert.equal(MAX_PERSISTED_RAIL_RATIO, 0.3);
+});
+
+test('reads and persists the configured left or right edge rail ratio', () => {
+  const leftLayout = { orientation: 0, groups: [{ size: 240 }, { size: 760 }] } as const;
+  const rightLayout = { orientation: 0, groups: [{ size: 760 }, { size: 240 }] } as const;
+
+  assert.equal(getRailGroupRatio(leftLayout, 'left'), 0.24);
+  assert.equal(getRailGroupRatio(rightLayout, 'right'), 0.24);
+  assert.equal(shouldPersistRailGroupRatio(leftLayout, 'left'), true);
+  assert.equal(shouldPersistRailGroupRatio(leftLayout, 'right'), false);
+  assert.equal(shouldPersistRailGroupRatio(rightLayout, 'right'), true);
+  assert.equal(shouldPersistRailGroupRatio(rightLayout, 'left'), false);
+  assert.equal(shouldPersistObservedRailWidth(rightLayout, 240, 'right'), true);
+});
+
+test('resizes either edge rail while preserving opposite root-group proportions and nesting', () => {
+  const layout = {
+    orientation: 0,
+    groups: [
+      { size: 200 },
+      { size: 300, groups: [{ size: 120 }, { size: 180 }] },
+      { size: 500 },
+    ],
+  } as const;
+
+  const left = setRailRootGroupWidth(layout, 250, 'left');
+  assert.deepEqual(left, {
+    orientation: 0,
+    groups: [
+      { size: 250 },
+      { size: 281, groups: [{ size: 120 }, { size: 180 }] },
+      { size: 469 },
+    ],
+  });
+
+  const right = setRailRootGroupWidth(layout, 250, 'right');
+  assert.deepEqual(right, {
+    orientation: 0,
+    groups: [
+      { size: 300 },
+      { size: 450, groups: [{ size: 120 }, { size: 180 }] },
+      { size: 250 },
+    ],
+  });
+  assert.equal(setRailRootGroupWidth({ orientation: 1, groups: [{ size: 500 }, { size: 500 }] }, 250, 'right'), undefined);
 });
 
 test('resolves saved rail ratio before falling back to the configured default', () => {

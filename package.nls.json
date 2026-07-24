@@ -1,6 +1,13 @@
 {
+  "verticalTabs.config.position": "Position of the vertical tab bar inside the editor area. Changes are applied immediately.",
+  "verticalTabs.config.position.left": "Place the vertical tab bar at the left edge of the editor area.",
+  "verticalTabs.config.position.right": "Place the vertical tab bar at the right edge of the editor area.",
   "verticalTabs.config.rememberState": "When enabled, remembers group mode, sort mode, manual groups, pinned groups, and adjusted width per workspace. When disabled, always uses the default values.",
   "verticalTabs.config.tabWidthRatio": "Width percentage of the vertical tab bar relative to the editor area. Controls the tab bar width on first display or when automatic memory is disabled. Default 20%.",
+  "verticalTabs.config.relativePathDisplay": "Controls whether a workspace-relative path is shown below each tab name.",
+  "verticalTabs.config.relativePathDisplay.off": "Do not show relative paths (default).",
+  "verticalTabs.config.relativePathDisplay.duplicates": "Show relative paths only when multiple open tabs have the same name.",
+  "verticalTabs.config.relativePathDisplay.always": "Always show relative paths for files inside the workspace.",
   "verticalTabs.config.defaultGroupMode": "Default grouping mode. Always used when automatic memory is disabled; used only when no saved value exists when automatic memory is enabled.",
   "verticalTabs.config.defaultGroupMode.vscode": "Follow VS Code editor groups.",
   "verticalTabs.config.defaultGroupMode.manual": "Use manual grouping.",
@@ -26,5 +33,8 @@
   "verticalTabs.config.language.es": "Español (Spanish)",
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (Russian)",
-  "verticalTabs.config.defaultToolbarControlsVisible": "Default visibility for the grouping and sorting dropdown controls. When automatic memory is enabled, this is used only when no saved visibility exists; when automatic memory is disabled, this default is always used."
+  "verticalTabs.config.defaultToolbarControlsVisible": "Default visibility for the grouping and sorting dropdown controls. When automatic memory is enabled, this is used only when no saved visibility exists; when automatic memory is disabled, this default is always used.",
+  "verticalTabs.config.toolbarPosition": "Position of the search and group action icons, grouping and sorting controls, and search box in the vertical tab bar. Changes apply immediately.",
+  "verticalTabs.config.toolbarPosition.top": "Fix the controls above the tab list.",
+  "verticalTabs.config.toolbarPosition.bottom": "Fix the controls below the tab list and reverse their vertical section order."
 }

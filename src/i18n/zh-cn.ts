@@ -9,6 +9,7 @@ const zhCn: LocaleStrings = {
   pinnedGroup: '固定分组',
   closeGroupAndDelete: '关闭分组内所有标签并删除分组',
   closeTab: '关闭标签',
+  unsavedChanges: '未保存的更改',
   close: '关闭',
   closeOthers: '关闭其它',
   closeBelow: '关闭下侧',

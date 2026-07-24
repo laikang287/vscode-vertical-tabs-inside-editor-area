@@ -4,12 +4,17 @@ import { buildSnapshot, moveItemsBefore, sameIdentity, selectCloseTargets, selec
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
-  { label: 'index.ts', path: 'src/index.ts', isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
-  { label: 'index.ts', path: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
+  { label: 'index.ts', path: 'src/index.ts', relativePath: 'src/index.ts', languageId: 'typescript', icon: { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' }, isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
+  { label: 'index.ts', path: 'test/index.ts', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
 ] }, { tabs: [
   { label: 'Terminal', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
-  { label: 'README.md', path: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
+  { label: 'README.md', path: 'README.md', relativePath: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
 ] }];
+
+test('defaults the toolbar to the top and preserves an explicit bottom position', () => {
+  assert.equal(buildSnapshot(source, 1, []).toolbarPosition, 'top');
+  assert.equal(buildSnapshot(source, 2, [], { toolbarPosition: 'bottom' }).toolbarPosition, 'bottom');
+});
 
 test('moves single and non-contiguous selected keys to the exact before-target position', () => {
   assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd', 'e'], ['a'], 'd'), ['b', 'c', 'a', 'd', 'e']);
@@ -49,12 +54,48 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.tabs[0].target.tabIndex, 1);
   assert.deepEqual(snapshot.tabs[0].target.identity, { kind: 'text', uri: 'file:///workspace/src/index.ts' });
   assert.equal(snapshot.tabs[0].manualGroupId, 'work');
+  assert.equal(snapshot.tabs[0].isDirty, true);
+  assert.equal(snapshot.tabs[1].isDirty, false);
+  assert.equal(snapshot.tabs[0].inputKind, 'text');
+  assert.equal(snapshot.tabs[0].languageId, 'typescript');
+  assert.deepEqual(snapshot.tabs[0].icon, { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' });
   assert.equal(snapshot.tabs[0].description, undefined);
   assert.equal(snapshot.tabs[1].description, undefined);
   assert.equal(snapshot.tabs[0].activationKind, 'reliable');
   assert.equal(snapshot.tabs[2].activationKind, 'bestEffort');
   assert.equal(snapshot.tabs[2].isActivatable, true);
   assert.equal(snapshot.manualGroups[0].name, '工作');
+});
+
+test('shows workspace-relative paths according to the configured display mode', () => {
+  const duplicatePaths = buildSnapshot(source, 8, [], { relativePathDisplay: 'duplicates' });
+  assert.deepEqual(duplicatePaths.tabs.map((tab) => tab.description), [
+    'src/index.ts',
+    'test/index.ts',
+    undefined,
+    undefined,
+  ]);
+
+  const allPaths = buildSnapshot(source, 9, [], { relativePathDisplay: 'always' });
+  assert.deepEqual(allPaths.tabs.map((tab) => tab.description), [
+    'src/index.ts',
+    'test/index.ts',
+    undefined,
+    'README.md',
+  ]);
+
+  const hiddenPaths = buildSnapshot(source, 10, [], { relativePathDisplay: 'off' });
+  assert.ok(hiddenPaths.tabs.every((tab) => tab.description === undefined));
+});
+
+test('detects duplicate tab names without case differences', () => {
+  const caseVariantSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'Index.ts', relativePath: 'src/Index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/Index.ts' } },
+    { label: 'index.ts', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
+  ] }];
+
+  const snapshot = buildSnapshot(caseVariantSource, 11, [], { relativePathDisplay: 'duplicates' });
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.description), ['src/Index.ts', 'test/index.ts']);
 });
 
 test('distinguishes tabs shown in editor groups from the focused active tab', () => {
@@ -116,6 +157,7 @@ test('selects close targets within the same manual display bucket and preserves 
   const work = snapshot.tabs[0].target;
   const topLevel = snapshot.tabs[1].target;
   assert.deepEqual(selectCloseTargets(snapshot, 'close', work), [work]);
+  assert.deepEqual(selectCloseTargets(snapshot, 'close', topLevel), [topLevel]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeOthers', work), []);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeBelow', topLevel), [snapshot.tabs[2].target, snapshot.tabs[3].target]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeSaved'), []);
@@ -159,9 +201,10 @@ test('scopes closeAll and closeSaved to the focused display group and falls back
     { label: 'f.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///f.ts' } },
   ] }];
   const snapshot = buildSnapshot(groups, 20, [], { groupMode: 'vscode' });
-  const selected = [snapshot.tabs[1]!.target, snapshot.tabs[3]!.target, snapshot.tabs[4]!.target];
+  const selected = [snapshot.tabs[1]!.target, snapshot.tabs[3]!.target, snapshot.tabs[4]!.target, snapshot.tabs[5]!.target];
 
-  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', selected), selected);
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', selected), selected.slice(0, -1));
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', [snapshot.tabs[5]!.target]), []);
   assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeOthers', selected), [snapshot.tabs[0]!.target, snapshot.tabs[2]!.target]);
   assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeBelow', selected), [snapshot.tabs[2]!.target]);
 });

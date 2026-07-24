@@ -9,6 +9,7 @@ const es: LocaleStrings = {
   pinnedGroup: 'Grupo fijado',
   closeGroupAndDelete: 'Cerrar todas las pestañas del grupo y eliminar grupo',
   closeTab: 'Cerrar pestaña',
+  unsavedChanges: 'Cambios sin guardar',
   close: 'Cerrar',
   closeOthers: 'Cerrar otros',
   closeBelow: 'Cerrar inferiores',

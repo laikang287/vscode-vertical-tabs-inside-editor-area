@@ -3,15 +3,17 @@ import { format, type LocaleStrings } from '../i18n';
 import type {
   GroupMode,
   ManualTabGroup,
+  RelativePathDisplay,
   SortMode,
   TabTargetIdentity,
   TabActivationKind,
+  TabInputKind,
+  TabVisualIcon,
+  ToolbarPosition,
   VerticalTabDisplayGroup,
   VerticalTabItem,
   VerticalTabsSnapshot,
 } from '../webview/messages';
-
-export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
 
 export interface SnapshotSourceTab {
   readonly label: string;
@@ -21,7 +23,10 @@ export interface SnapshotSourceTab {
   readonly isPinned: boolean;
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
+  readonly languageId?: string;
+  readonly icon?: TabVisualIcon;
   readonly path?: string;
+  readonly relativePath?: string;
   readonly tooltipPath?: string;
   readonly uri?: string;
   readonly mtime?: number;
@@ -40,10 +45,12 @@ export interface SnapshotSourceGroup {
 export interface SnapshotBuildOptions {
   readonly groupMode?: GroupMode;
   readonly sortMode?: SortMode;
+  readonly toolbarPosition?: ToolbarPosition;
   readonly rememberState?: boolean;
   readonly toolbarControlsVisible?: boolean;
   readonly searchVisible?: boolean;
   readonly searchGroups?: boolean;
+  readonly relativePathDisplay?: RelativePathDisplay;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
   readonly localeStrings?: LocaleStrings;
@@ -60,12 +67,15 @@ export function buildSnapshot(
 ): VerticalTabsSnapshot {
   const groupMode = options.groupMode ?? 'vscode';
   const sortMode = options.sortMode ?? 'none';
+  const relativePathDisplay = options.relativePathDisplay ?? 'off';
+  const labelOccurrences = countVisibleTabLabels(groups);
 
   const tabs: VerticalTabItem[] = groups.flatMap((group, groupIndex) => group.tabs.flatMap((tab, tabIndex) => {
     if (tab.isVerticalTabsPanel) return [];
     return [{
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
+      description: shouldShowRelativePath(tab, relativePathDisplay, labelOccurrences) ? tab.relativePath : undefined,
       isActive: tab.isActive,
       isFocused: Boolean(tab.isFocused),
       isDirty: tab.isDirty,
@@ -76,6 +86,9 @@ export function buildSnapshot(
       manualGroupId: tab.manualGroupId,
       groupId: tab.manualGroupId,
       isFile: isFileTab(tab),
+      inputKind: tab.inputKind,
+      languageId: tab.languageId,
+      icon: tab.icon ?? fallbackIcon(tab.inputKind),
       resourcePath: tab.path,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
@@ -83,7 +96,30 @@ export function buildSnapshot(
   }));
 
   const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
-  return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
+  return { revision, groupMode, sortMode, toolbarPosition: options.toolbarPosition ?? 'top', rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
+}
+
+function countVisibleTabLabels(groups: readonly SnapshotSourceGroup[]): ReadonlyMap<string, number> {
+  const occurrences = new Map<string, number>();
+  for (const tab of groups.flatMap((group) => group.tabs)) {
+    if (tab.isVerticalTabsPanel) continue;
+    const key = normalizeTabLabel(tab.label);
+    occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+  }
+  return occurrences;
+}
+
+function shouldShowRelativePath(
+  tab: SnapshotSourceTab,
+  mode: RelativePathDisplay,
+  labelOccurrences: ReadonlyMap<string, number>,
+): boolean {
+  if (!tab.relativePath || mode === 'off') return false;
+  return mode === 'always' || (labelOccurrences.get(normalizeTabLabel(tab.label)) ?? 0) > 1;
+}
+
+function normalizeTabLabel(label: string): string {
+  return label.toLocaleLowerCase();
 }
 
 export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: CloseAction, target?: VerticalTabItem['target']): VerticalTabItem['target'][] {
@@ -113,7 +149,7 @@ export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: Close
 export function selectCloseTargetsForTabs(snapshot: VerticalTabsSnapshot, action: 'close' | 'closeOthers' | 'closeBelow', targets: readonly VerticalTabItem['target'][]): VerticalTabItem['target'][] {
   const selectedTabs = resolveSnapshotTargets(snapshot, targets);
   if (selectedTabs.length === 0) return [];
-  if (action === 'close') return selectedTabs.map((tab) => tab.target);
+  if (action === 'close') return selectedTabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
   const selectedKeys = new Set(selectedTabs.map((tab) => occurrenceKey(tab.target)));
   const result: VerticalTabItem[] = [];
   for (const group of snapshot.displayGroups) {
@@ -423,6 +459,15 @@ function activationKind(tab: SnapshotSourceTab): TabActivationKind {
     return 'bestEffort';
   }
   return 'unsupported';
+}
+
+function fallbackIcon(inputKind: TabInputKind): TabVisualIcon {
+  if (inputKind === 'diff') return { kind: 'codicon', name: 'diff' };
+  if (inputKind === 'notebook' || inputKind === 'notebookDiff') return { kind: 'codicon', name: 'notebook' };
+  if (inputKind === 'terminal') return { kind: 'codicon', name: 'terminal' };
+  if (inputKind === 'webview') return { kind: 'codicon', name: 'preview' };
+  if (inputKind === 'unknown') return { kind: 'codicon', name: 'symbol-misc' };
+  return { kind: 'codicon', name: 'file' };
 }
 
 function isFileTab(tab: SnapshotSourceTab): boolean {

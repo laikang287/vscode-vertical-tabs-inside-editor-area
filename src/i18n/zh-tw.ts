@@ -9,6 +9,7 @@ const zhTw: LocaleStrings = {
   pinnedGroup: '固定群組',
   closeGroupAndDelete: '關閉群組內所有標籤並刪除群組',
   closeTab: '關閉標籤',
+  unsavedChanges: '未儲存的變更',
   close: '關閉',
   closeOthers: '關閉其他',
   closeBelow: '關閉下方',

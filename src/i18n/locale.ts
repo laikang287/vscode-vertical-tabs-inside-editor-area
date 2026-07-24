@@ -7,6 +7,7 @@ export interface LocaleStrings {
   readonly pinnedGroup: string;
   readonly closeGroupAndDelete: string;
   readonly closeTab: string;
+  readonly unsavedChanges: string;
   readonly close: string;
   readonly closeOthers: string;
   readonly closeBelow: string;

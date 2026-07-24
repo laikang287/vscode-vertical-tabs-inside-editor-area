@@ -9,6 +9,7 @@ const ko: LocaleStrings = {
   pinnedGroup: '고정된 그룹',
   closeGroupAndDelete: '그룹 내 모든 탭을 닫고 그룹 삭제',
   closeTab: '탭 닫기',
+  unsavedChanges: '저장되지 않은 변경 사항',
   close: '닫기',
   closeOthers: '다른 탭 닫기',
   closeBelow: '아래 탭 닫기',

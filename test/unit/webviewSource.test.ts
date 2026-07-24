@@ -39,7 +39,7 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
   assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
-  assert.match(source, /const remove = button\('×', i18n\.closeGroupAndDelete\)/);
+  assert.match(source, /const remove = iconButton\('close', i18n\.closeGroupAndDelete\)/);
  assert.match(source, /remove\.className = 'group-action tab-action'/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
   assert.match(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
@@ -50,8 +50,9 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
-  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; flex: 0 0 23px; justify-content: center; padding-right: 3px; \}/);
-  assert.match(style, /\.group-header \.tab-action \{ line-height: 20px; min-width: 20px; padding: 0; \}/);
+  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; padding-right: 3px; \}/);
+  assert.match(style, /\.group-actions \{ flex: 0 0 23px; \}/);
+  assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
 test('tab close buttons are always visible and context menu labels use the requested short wording', () => {
@@ -65,12 +66,38 @@ test('tab close buttons are always visible and context menu labels use the reque
   assert.doesNotMatch(source, /关闭其它标签|关闭下侧标签/);
 });
 
+test('pinned tab icons render in a reserved left slot so peer labels stay aligned', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /pin\.className = 'tab-pin-slot'/);
+  assert.match(source, /if \(tab\.isPinned\) pin\.append\(codicon\('pinned'\)\)/);
+  assert.match(source, /activate\.append\(icon, pin, text\)/);
+  assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
+  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 14px;[\s\S]+text-align: center; \}/);
+  assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column;[\s\S]+min-width: 0;[\s\S]+?\}/);
+});
+
+test('dirty tabs render an accessible status indicator immediately before the close button', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.doesNotMatch(source, /tab\.isDirty \? '● ' : ''/);
+  assert.match(source, /if \(tab\.isDirty\) \{[\s\S]+dirty\.className = 'tab-dirty-indicator'/);
+  assert.match(source, /dirty\.title = i18n\.unsavedChanges/);
+  assert.match(source, /dirty\.setAttribute\('aria-label', i18n\.unsavedChanges\)/);
+  assert.match(source, /actions\.append\(dirty\);[\s\S]+actions\.append\(closeSelectionButton\(tab\)\)/);
+  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: 23px; \}/);
+  assert.match(style, /\.tab-dirty-indicator \{[\s\S]+pointer-events: none;/);
+});
+
 test('pinned groups render an indicator, sort first, and reject unsupported host messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /pin\.className = 'group-pin-indicator'/);
-  assert.match(source, /pin\.textContent = '📌'/);
+  assert.match(source, /pin\.className = 'group-pin-indicator codicon codicon-pinned'/);
+  assert.match(source, /pin\.setAttribute\('aria-hidden', 'true'\)/);
+  assert.doesNotMatch(source, /pin\.textContent = '📌'/);
   assert.match(source, /const disabled = group\.mode === 'vscode'/);
   assert.match(panelSource, /!displayGroup \|\| !displayGroup\.showHeader \|\| displayGroup\.mode === 'vscode'/);
   assert.match(panelSource, /this\.pinnedGroupIds\.add\(message\.groupId\)/);
@@ -91,8 +118,8 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
   assert.match(panelSource, /await this\.moveActiveEditorToGroup\(tab, destination\)/);
   assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedKeys, beforeKey\)/);
-  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
-  assert.match(style, /\.tab-row\.is-selected(?:\:not\(\.is-active\))? \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 35%, var\(--vscode-editor-background\)\)/);
+  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-tab-unfocusedActiveBackground/);
+  assert.match(style, /\.tab-row\.is-selected \{\s*background: var\(--vscode-list-inactiveSelectionBackground/);
 });
 
 test('tab colors distinguish selection, shown editors, and the focused editor', () => {
@@ -102,27 +129,77 @@ test('tab colors distinguish selection, shown editors, and the focused editor', 
 
   assert.match(panelSource, /isFocused: tab\.isActive && tab\.group\.isActive/);
   assert.match(source, /tab\.isFocused \? 'is-focused' : ''/);
-  assert.match(style, /\.tab-row\.is-selected \{\s*background: color-mix/);
-  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-selected \{\s*background: var\(--vscode-list-inactiveSelectionBackground/);
+  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-tab-unfocusedActiveBackground/);
+  assert.match(style, /\.tab-row\.is-focused \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
   assert.match(style, /\.tab-row\.is-focused::before \{[\s\S]+var\(--vscode-tab-activeBorderTop/);
 });
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
-  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, { default: unknown; markdownDescription?: string }> } } };
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> } } };
   const properties = manifest.contributes.configuration.properties;
 
   assert.equal(properties['verticalTabs.rememberState']?.default, true);
   assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
   assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
   assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
- assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
+  assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
+  assert.equal(properties['verticalTabs.toolbarPosition']?.default, 'top');
+  assert.deepEqual(properties['verticalTabs.toolbarPosition']?.enum, ['top', 'bottom']);
+  assert.equal(properties['verticalTabs.toolbarPosition']?.scope, 'window');
+  assert.match(properties['verticalTabs.toolbarPosition']?.markdownDescription ?? '', /%verticalTabs\.config\.toolbarPosition%/);
   assert.match(properties['verticalTabs.tabWidthRatio']?.markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
   assert.match(panelSource, /vscode\.workspace\.onDidChangeConfiguration/);
   assert.match(panelSource, /this\.manualGroups\.splice\(0, this\.manualGroups\.length\)/);
   assert.match(panelSource, /this\.toolbarControlsVisible = readDefaultToolbarControlsVisible\(\)/);
   assert.match(panelSource, /this\.persistToolbarControlsVisible\(\)/);
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
+});
+
+test('relative path display is configurable and uses a subdued second line', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly string[] }> } };
+  };
+  const setting = manifest.contributes.configuration.properties['verticalTabs.relativePathDisplay'];
+
+  assert.equal(setting?.default, 'off');
+  assert.deepEqual(setting?.enum, ['off', 'duplicates', 'always']);
+  assert.match(panelSource, /relativePathDisplay: readRelativePathDisplay\(\)/);
+  assert.match(panelSource, /function inputWorkspaceRelativePath/);
+  assert.match(panelSource, /vscode\.workspace\.getWorkspaceFolder\(uri\)/);
+  assert.match(webviewSource, /detail\.className = 'tab-description'/);
+  assert.match(style, /\.tab-description \{[^}]*font-size: 10px;[^}]*opacity: \.82;/);
+});
+
+test('editor-area position setting supports live left and right placement with a safe fallback', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: unknown[]; scope?: string }> } };
+  };
+  const position = manifest.contributes.configuration.properties['verticalTabs.position'];
+
+  assert.equal(position?.default, 'left');
+  assert.deepEqual(position?.enum, ['left', 'right']);
+  assert.equal(position?.scope, 'window');
+  assert.match(panelSource, /return value === 'right' \? 'right' : 'left'/);
+  assert.match(panelSource, /event\.affectsConfiguration\('verticalTabs\.position'\)/);
+  assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupLeft/);
+  assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupRight/);
+  assert.match(panelSource, /workbench\.action\.focusLastEditorGroup/);
+  assert.match(panelSource, /this\.railPosition === 'left'[\s\S]+newGroupRight[\s\S]+newGroupLeft/);
+});
+
+test('adjacent navigation reuses an open panel without stealing the active editor focus', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(
+    panelSource,
+    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction\)/,
+  );
 });
 
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
@@ -141,8 +218,8 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊞<\/button>/);
- assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊟<\/button>/);
+  assert.match(panelSource, /id="expand-all"[^>]+aria-label=""><span class="codicon codicon-expand-all" aria-hidden="true"><\/span><\/button>/);
+ assert.match(panelSource, /id="collapse-all"[^>]+aria-label=""><span class="codicon codicon-collapse-all" aria-hidden="true"><\/span><\/button>/);
   assert.match(panelSource, /<span>\$\{i18n\.groupModeLabel\}<\/span><select id="group-mode">/);
   assert.match(panelSource, /<span>\$\{i18n\.sortModeLabel\}<\/span><select id="sort-mode">/);
   assert.match(panelSource, /<option value="none">\$\{i18n\.sortModeNone\}<\/option>/);
@@ -158,6 +235,28 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /id="toolbar-controls" class="toolbar-selects"/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '分组方式'/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
+});
+
+test('webview renders Seti file icons and Codicon actions in a compact two-line layout', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /function createTabIcon\(tab: VerticalTabItem\): HTMLSpanElement/);
+  assert.match(source, /icon\.className = 'tab-icon tab-seti-icon'/);
+  assert.match(source, /const result = iconButton\('close', i18n\.closeTab\)/);
+  assert.match(source, /codicon\('pinned'\)/);
+  assert.match(source, /tab\.isPreview \? 'is-preview' : ''/);
+  assert.match(source, /activate\.append\(icon, pin, text\)/);
+  assert.match(source, /activate\.setAttribute\('aria-label', tabAccessibleLabel\(tab\)\)/);
+  assert.match(source, /icon\.setAttribute\('aria-hidden', 'true'\)/);
+  assert.doesNotMatch(source, /button\('×'|textContent = '📌'|button\(collapsed \? '▶' : '▼'/);
+  assert.match(panelSource, /codicon-search/);
+  assert.match(panelSource, /codicon-settings-gear/);
+  assert.match(style, /\.tab-seti-icon \{ font-family: "seti"; font-size: 150%; \}/);
+  assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column/);
+  assert.match(style, /\.tab-row\.has-description \.tab-main/);
+  assert.match(style, /\.tab-row\.is-preview \.tab-label \{ font-style: italic; \}/);
 });
 
 test('manual group creation is disabled outside manual mode and accepted only in manual mode', () => {
@@ -260,6 +359,18 @@ test('extension registers the webview message listener before setting html and k
   assert.match(source, /private async toSnapshotTabSafe\(tab: vscode\.Tab\): Promise<SnapshotSourceTab>/);
 });
 
+test('extension restores the prepared rail layout without a fixed visible delay', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /RAIL_SETTLE_DELAY_MS/);
+  assert.match(source, /const initialGroupIndex = await this\.waitForOwnGroup\(\)/);
+  assert.match(source, /const preparedRailGroup = await prepareRailGroup\(context, position\)[\s\S]+vscode\.window\.createWebviewPanel/);
+  assert.match(source, /const layoutAppliedBeforePanel = canApplyBeforePanel[\s\S]+applyRailRatio\(ratio, position, previousLayout\)/);
+  assert.match(source, /return \{ ratio, viewColumn, previousLayout, layoutAppliedBeforePanel \}/);
+  assert.match(source, /if \(!preparedRailGroup\.layoutAppliedBeforePanel\)[\s\S]+setTimeout\(resolve, GROUP_WAIT_INTERVAL_MS\)[\s\S]+applyRailRatio\(preparedRailGroup\.ratio, this\.railPosition, preparedRailGroup\.previousLayout\)/);
+  assert.match(source, /宽度已在 Webview 显示前应用，跳过显示后的布局等待和重复写入/);
+});
+
 test('extension avoids persisting and restoring transient empty-rail widths', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
@@ -271,20 +382,19 @@ test('extension avoids persisting and restoring transient empty-rail widths', ()
   assert.match(source, /lastObservedRailWidth/);
   assert.match(source, /canPersistObservedRatio/);
   assert.match(source, /clampAutomaticRailRatio/);
-  assert.match(source, /自动应用垂直标签栏宽度比例过大，已限制以避免压缩右侧编辑器组/);
+  assert.match(source, /自动应用垂直标签栏宽度比例过大，已限制以避免过度压缩用户编辑器组/);
 });
 
 test('extension logs and skips width application when a rail-sized root group already exists', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /function findExistingRailLikeRootGroup\(layout: EditorLayout, ratio: number\)/);
-  assert.match(source, /准备调整左侧标签栏宽度/);
+  assert.match(source, /function findExistingRailLikeRootGroup\([\s\S]+position: RailPosition/);
+  assert.match(source, /getRailRootGroupIndex\(layout, position\)/);
   assert.match(source, /existingRailLikeGroup/);
-  assert.match(source, /const leading = sizedGroups\.find\(\(group\) => group\.index === 0\)/);
-  assert.match(source, /if \(leadingRatio > MAX_EMPTY_RAIL_RESTORE_RATIO\) return undefined/);
+  assert.match(source, /const railGroup = sizedGroups\.find\(\(group\) => group\.index === railIndex\)/);
+  assert.match(source, /if \(railRatio > MAX_EMPTY_RAIL_RESTORE_RATIO\) return undefined/);
   assert.doesNotMatch(source, /candidate\.ratio >= 0\.6/);
-  assert.match(source, /跳过调整左侧标签栏宽度：当前布局中已有匹配目标比例的小宽度编辑器组/);
-  assert.match(source, /应用左侧标签栏宽度布局/);
+  assert.match(source, /setRailRootGroupWidth\(layout, railWidth, position\)/);
 });
 
 test('extension retries undelivered render messages', () => {
@@ -315,19 +425,26 @@ test('extension inlines the webview script to avoid local resource load failures
   assert.doesNotMatch(source, /src="\$\{scriptUri\}"/);
 });
 
-test('extension inlines the webview stylesheet and keeps nonce-only CSP', () => {
+test('extension inlines styles and restricts icon fonts to local Webview resources', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /private readWebviewStyle\(\): string/);
   assert.match(source, /media', 'vertical-tabs\.css'/);
   assert.match(source, /fs\.readFileSync\(stylePath, 'utf8'\)/);
-  assert.match(source, /已内联读取 Webview 样式/);
+  assert.match(source, /已内联读取 Webview 样式与图标字体/);
   assert.match(source, /读取 Webview 样式失败，将使用最小降级样式/);
   assert.match(source, /Webview 样式加载失败，请查看 Vertical Tabs 输出日志。/);
+  assert.match(source, /font-src \$\{this\.panel\.webview\.cspSource\}/);
   assert.match(source, new RegExp(String.raw`style-src 'nonce-\$\{nonce\}'; script-src 'nonce-\$\{nonce\}'`));
   assert.match(source, new RegExp(String.raw`<style nonce="\$\{nonce\}">\$\{styleContent\}<\/style>`));
   assert.doesNotMatch(source, /<link rel="stylesheet"/);
   assert.doesNotMatch(source, /style-src \$\{cspSource\}/);
+  assert.match(source, /node_modules\/@vscode\/codicons|out', 'codicon\.css'/);
+  assert.match(source, /out', 'codicon\.ttf'/);
+  assert.match(source, /webview\.asWebviewUri\(setiFontPath\)/);
+  assert.match(source, /vscode\.env\.appRoot\), 'extensions', 'theme-seti', 'icons'/);
+  assert.match(source, /localResourceRoots\.push\(setiRoot\)/);
+  assert.match(source, /this\.panel\.webview\.options = createWebviewOptions\(context\)/);
 });
 
 test('extension marks built-in welcome and settings webviews as activatable', () => {
@@ -386,6 +503,27 @@ test('webview collapses an existing multi-selection on click while retaining blo
   assert.match(source, /kind=\$\{target\.identity\.kind\}/);
   assert.match(source, /findCurrentTabByIdentity/);
   assert.match(source, /findCurrentTabByIdentity\(tab\.target\.identity\)/);
+});
+
+test('toolbar position setting fixes the toolbar at either edge and reverses only bottom section order', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+  const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
+
+  assert.match(panelSource, /type ToolbarPosition/);
+  assert.match(panelSource, /this\.toolbarPosition = readToolbarPosition\(\)/);
+  assert.match(panelSource, /event\.affectsConfiguration\('verticalTabs\.toolbarPosition'\)/);
+  assert.match(panelSource, /toolbarPosition: this\.toolbarPosition/);
+  assert.match(panelSource, /data-toolbar-position="\$\{this\.toolbarPosition\}"/);
+  assert.match(panelSource, /<div class="toolbar-actions">[\s\S]+?<div id="toolbar-controls" class="toolbar-selects">[\s\S]+?<div id="search-container" class="search-container">/);
+  assert.match(webviewSource, /verticalTabs\.dataset\.toolbarPosition = message\.snapshot\.toolbarPosition/);
+  assert.match(style, /\.vertical-tabs \{[\s\S]+display: flex;[\s\S]+height: 100vh;[\s\S]+overflow: hidden;/);
+  assert.match(style, /\.vertical-tabs\[data-toolbar-position="bottom"\] \.toolbar \{[\s\S]+flex-direction: column-reverse;[\s\S]+order: 2;/);
+  assert.match(style, /#groups \{[\s\S]+flex: 1 1 auto;[\s\S]+min-height: 0;[\s\S]+overflow-y: auto;/);
+  assert.equal(typeof packageNls['verticalTabs.config.toolbarPosition'], 'string');
+  assert.equal(typeof packageNlsZhCn['verticalTabs.config.toolbarPosition'], 'string');
 });
 
 test('webview only shows the drag cursor on draggable tab rows', () => {
