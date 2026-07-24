@@ -166,7 +166,9 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   min-width: 0;
 }
 .group-toggle { color: var(--vscode-descriptionForeground); flex: 0 0 18px; line-height: 18px; min-width: 18px; }
-.group-actions, .tab-actions { align-items: center; display: flex; flex: 0 0 23px; justify-content: center; padding-right: 3px; }
+.group-actions, .tab-actions { align-items: center; display: flex; justify-content: center; padding-right: 3px; }
+.group-actions { flex: 0 0 23px; }
+.tab-actions { flex: 0 0 auto; min-width: 23px; }
 .group-action { color: inherit; }
 .group-header .tab-action { line-height: 20px; min-width: 20px; padding: 0; }
 .group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -226,6 +228,17 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .is-active .tab-description { color: inherit; opacity: .8; }
 
 .tab-actions { opacity: 1; }
+.tab-dirty-indicator {
+  align-items: center;
+  color: var(--vscode-tab-unfocusedActiveModifiedBorder, var(--vscode-tab-activeModifiedBorder, currentColor));
+  display: inline-flex;
+  flex: 0 0 10px;
+  font-size: 10px;
+  justify-content: center;
+  line-height: 20px;
+  pointer-events: none;
+  user-select: none;
+}
 .tab-action { font-size: 11px; line-height: 20px; min-width: 20px; padding: 0; }
 
 .tab-context-menu {

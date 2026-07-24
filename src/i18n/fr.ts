@@ -9,6 +9,7 @@ const fr: LocaleStrings = {
   pinnedGroup: 'Groupe épinglé',
   closeGroupAndDelete: 'Fermer tous les onglets du groupe et supprimer le groupe',
   closeTab: "Fermer l'onglet",
+  unsavedChanges: 'Modifications non enregistrées',
   close: 'Fermer',
   closeOthers: 'Fermer les autres',
   closeBelow: 'Fermer en dessous',

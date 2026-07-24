@@ -9,6 +9,7 @@ const ptBr: LocaleStrings = {
   pinnedGroup: 'Grupo fixado',
   closeGroupAndDelete: 'Fechar todas as abas do grupo e excluir grupo',
   closeTab: 'Fechar aba',
+  unsavedChanges: 'Alterações não salvas',
   close: 'Fechar',
   closeOthers: 'Fechar outras',
   closeBelow: 'Fechar abaixo',
