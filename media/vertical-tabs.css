@@ -208,8 +208,13 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 #groups {
   flex: 1 1 auto;
   min-height: 0;
+  scrollbar-width: none;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+#groups::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-group { margin-top: 0; }
