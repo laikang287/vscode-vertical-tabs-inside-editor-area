@@ -50,8 +50,8 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
-  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; padding-right: 3px; \}/);
-  assert.match(style, /\.group-actions \{ flex: 0 0 23px; \}/);
+  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; \}/);
+  assert.match(style, /\.group-actions \{ flex: 0 0 23px; padding-right: 3px; \}/);
   assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
@@ -81,7 +81,7 @@ test('pinned tab icons render in a reserved left slot so peer labels stay aligne
   assert.match(source, /if \(tab\.isPinned\) pin\.append\(codicon\('pinned'\)\)/);
   assert.match(source, /activate\.append\(icon, pin, text\)/);
   assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
-  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 14px;[\s\S]+text-align: center; \}/);
+  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 var\(--vertical-tab-pin-slot-width\);[\s\S]+text-align: center; \}/);
   assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column;[\s\S]+min-width: 0;[\s\S]+?\}/);
 });
 
@@ -94,8 +94,26 @@ test('dirty tabs render an accessible status indicator immediately before the cl
   assert.match(source, /dirty\.title = i18n\.unsavedChanges/);
   assert.match(source, /dirty\.setAttribute\('aria-label', i18n\.unsavedChanges\)/);
   assert.match(source, /actions\.append\(dirty\);[\s\S]+actions\.append\(closeSelectionButton\(tab\)\)/);
-  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: 23px; \}/);
+  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: var\(--vertical-tab-action-size\); padding-right: 0; \}/);
   assert.match(style, /\.tab-dirty-indicator \{[\s\S]+pointer-events: none;/);
+});
+
+test('compact tab spacing prioritizes label and path width without shrinking the close target', () => {
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(style, /--vertical-tab-action-size: 22px;/);
+  assert.match(style, /--vertical-tab-dirty-width: 8px;/);
+  assert.match(style, /--vertical-tab-icon-size: 16px;/);
+  assert.match(style, /--vertical-tab-inline-padding: 6px;/);
+  assert.match(style, /--vertical-tab-item-gap: 2px;/);
+  assert.match(style, /--vertical-tab-pin-slot-width: 12px;/);
+  assert.match(style, /--vertical-tab-tree-indent: 12px;/);
+  assert.match(style, /\.tab-row\.tree-level-1 \{ padding-left: var\(--vertical-tab-tree-indent\); \}/);
+  assert.match(style, /\.tab-main \{[\s\S]+gap: var\(--vertical-tab-item-gap\);[\s\S]+padding: 2px 0 2px var\(--vertical-tab-inline-padding\);/);
+  assert.match(style, /\.tab-icon \{[\s\S]+flex: 0 0 var\(--vertical-tab-icon-size\);[\s\S]+margin: 0;[\s\S]+width: var\(--vertical-tab-icon-size\);/);
+  assert.match(style, /\.tab-label \{ flex: 1 1 auto; min-width: 0;[\s\S]+text-overflow: ellipsis;/);
+  assert.match(style, /\.tab-dirty-indicator \{[\s\S]+flex: 0 0 var\(--vertical-tab-dirty-width\);/);
+  assert.match(style, /\.tab-action \{[\s\S]+height: var\(--vertical-tab-action-size\);[\s\S]+min-width: var\(--vertical-tab-action-size\);/);
 });
 
 test('pinned groups render an indicator, sort first, and reject unsupported host messages', () => {
