@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
+  countLayoutLeaves,
   correctMinimizedEditorGroupWidth,
   DEFAULT_RAIL_RATIO,
   getEditorAreaWidth,
@@ -11,6 +12,7 @@ import {
   getRailGroupRatio,
   isEditorLayout,
   normalizeRailRatio,
+  prependRailPreservingEditorWidths,
   resolveRailRatio,
   SAFE_RAIL_WIDTH,
   shouldPersistRailGroupRatio,
@@ -51,6 +53,11 @@ const WEBVIEW_POST_RETRY_DELAY_MS = 250;
 const WEBVIEW_POST_MAX_ATTEMPTS = 8;
 const RENDER_ACK_TIMEOUT_MS = 1200;
 const RENDER_ACK_MAX_ATTEMPTS = 6;
+
+interface PreparedRailGroup {
+  readonly ratio: number;
+  readonly previousLayout?: EditorLayout;
+}
 
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
@@ -239,7 +246,7 @@ export class VerticalTabsPanel {
   private static async create(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
     logInfo('开始创建新的垂直标签面板', { editorGroups: vscode.window.tabGroups.all.length });
     const previouslyActiveEditor = vscode.window.activeTextEditor;
-    const ratio = await prepareLeftRailGroup(context);
+    const preparedRailGroup = await prepareLeftRailGroup(context);
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
       TITLE,
@@ -256,7 +263,7 @@ export class VerticalTabsPanel {
       (existing) => { void existing.reveal(false); },
     );
     await VerticalTabsPanel.setVisibilityContext(true);
-    await instance.settleAndEnsureRail(previouslyActiveEditor, ratio);
+    await instance.settleAndEnsureRail(previouslyActiveEditor, preparedRailGroup);
     logInfo('新的垂直标签面板创建流程完成', { settled: instance.hasSettledRail() });
     return instance;
   }
@@ -306,7 +313,7 @@ export class VerticalTabsPanel {
     return update;
   }
 
-  private async settleAndEnsureRail(previousEditor?: vscode.TextEditor, preparedRatio?: number): Promise<void> {
+  private async settleAndEnsureRail(previousEditor?: vscode.TextEditor, preparedRailGroup?: PreparedRailGroup): Promise<void> {
     await VerticalTabsPanel.enqueueLayout(async () => {
       this.arrangingRail = true;
       logDebug('等待编辑器状态稳定后安排左侧标签栏', {
@@ -320,7 +327,7 @@ export class VerticalTabsPanel {
       }
 
       try {
-        if (await this.ensureRail(previousEditor, preparedRatio)) {
+        if (await this.ensureRail(previousEditor, preparedRailGroup)) {
           this.arrangingRail = false;
           logInfo('左侧标签栏安排完成');
           return;
@@ -332,7 +339,7 @@ export class VerticalTabsPanel {
     });
   }
 
-  private async ensureRail(previousEditor?: vscode.TextEditor, preparedRatio?: number): Promise<boolean> {
+  private async ensureRail(previousEditor?: vscode.TextEditor, preparedRailGroup?: PreparedRailGroup): Promise<boolean> {
     const initialGroupIndex = await this.waitForOwnGroup();
     if (initialGroupIndex < 0) {
       logWarn('未能在编辑器标签中找到垂直标签 Webview');
@@ -360,16 +367,16 @@ export class VerticalTabsPanel {
       });
       return false;
     }
-    if (preparedRatio !== undefined) {
+    if (preparedRailGroup !== undefined) {
       // VS Code publishes the new group before its native split layout has
       // committed. Wait one event-loop turn, then write the width once.
       await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-      if (!await applyLeadingRailRatio(preparedRatio)) {
+      if (!await applyLeadingRailRatio(preparedRailGroup.ratio, preparedRailGroup.previousLayout)) {
         logWarn('无法在创建垂直标签 Webview 后应用宽度比例');
         return false;
       }
-      if (shouldRememberState()) await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, preparedRatio);
-      logDebug('保存首次使用的垂直标签栏宽度比例', { ratio: preparedRatio });
+      if (shouldRememberState()) await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, preparedRailGroup.ratio);
+      logDebug('保存首次使用的垂直标签栏宽度比例', { ratio: preparedRailGroup.ratio });
     }
     if (!await this.focusAndLockOwnGroup()) {
       return false;
@@ -2394,10 +2401,11 @@ async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   }
 }
 
-async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<number | undefined> {
+async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<PreparedRailGroup | undefined> {
   const savedRatio = shouldRememberState() ? context.globalState.get<number>(WIDTH_RATIO_STORAGE_KEY) : undefined;
   const configuredRatio = readConfiguredRailRatio();
   const ratio = getConfiguredRailRatio(context);
+  const previousLayout = await getEditorLayout();
   try {
     await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
     await vscode.commands.executeCommand('workbench.action.newGroupLeft');
@@ -2406,10 +2414,11 @@ async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<n
       savedRatio,
       configuredRatio,
       ratio,
+      previousLayout,
     });
-    return ratio;
+    return { ratio, previousLayout };
   } catch (error) {
-    logError('创建左侧空编辑器分组失败', { savedRatio, configuredRatio, ratio, error });
+    logError('创建左侧空编辑器分组失败', { savedRatio, configuredRatio, ratio, previousLayout, error });
     return undefined;
   }
 }
@@ -2432,7 +2441,7 @@ function getEmptyRailRestoreRatio(context: vscode.ExtensionContext): number {
   return clampAutomaticRailRatio(getDefaultRailRatio(), { savedRatio, source: 'emptyRestoreFallback' });
 }
 
-async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
+async function applyLeadingRailRatio(ratio: number, previousLayout?: EditorLayout): Promise<boolean> {
   const layout = await getEditorLayout();
   if (!layout || layout.orientation !== 0 || layout.groups.length < 2) {
     logWarn('无法在当前布局中调整左侧标签栏宽度', { layout });
@@ -2441,6 +2450,27 @@ async function applyLeadingRailRatio(ratio: number): Promise<boolean> {
   const totalWidth = getEditorAreaWidth(layout);
   const normalizedRatio = clampAutomaticRailRatio(ratio, { source: 'applyLeadingRailRatio' });
   const railWidth = Math.max(SAFE_RAIL_WIDTH, Math.ceil(totalWidth * normalizedRatio));
+  if (previousLayout && countLayoutLeaves(layout) === countLayoutLeaves(previousLayout) + 1) {
+    const previousTotalWidth = getEditorAreaWidth(previousLayout);
+    const preservedRailWidth = Math.max(SAFE_RAIL_WIDTH, Math.ceil(previousTotalWidth * normalizedRatio));
+    const preservedLayout = prependRailPreservingEditorWidths(previousLayout, preservedRailWidth);
+    if (preservedLayout) {
+      logDebug('按创建前布局应用左侧标签栏宽度，仅压缩原最左侧编辑器组', {
+        requestedRatio: ratio,
+        normalizedRatio,
+        previousLayout,
+        currentLayout: layout,
+        nextLayout: preservedLayout,
+      });
+      return applyEditorLayout(preservedLayout);
+    }
+    logWarn('创建前最左侧编辑器组空间不足，回退到当前布局调整方式', {
+      requestedRatio: ratio,
+      normalizedRatio,
+      previousLayout,
+      currentLayout: layout,
+    });
+  }
   const existingRailLikeGroup = findExistingRailLikeRootGroup(layout, normalizedRatio);
   logDebug('准备调整左侧标签栏宽度', {
     requestedRatio: ratio,

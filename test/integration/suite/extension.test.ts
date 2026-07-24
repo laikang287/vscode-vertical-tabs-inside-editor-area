@@ -68,6 +68,41 @@ suite('Vertical Tabs extension', () => {
     assert.equal(verticalTabs()[0].group.viewColumn, vscode.ViewColumn.One, 'Reopening from the launcher should put the rail back on the far left.');
   });
 
+  test('takes rail space only from the editor group that was originally left-most', async function () {
+    this.timeout(15_000);
+    await vscode.commands.executeCommand('verticalTabs.close');
+    await waitFor(() => verticalTabs().length === 0);
+    await closeNonVerticalTabs();
+
+    const firstDocument = await vscode.workspace.openTextDocument({ content: 'preserved first editor width' });
+    await vscode.window.showTextDocument(firstDocument, { preserveFocus: false });
+    await vscode.commands.executeCommand('workbench.action.newGroupRight');
+    const secondDocument = await vscode.workspace.openTextDocument({ content: 'preserved second editor width' });
+    await vscode.window.showTextDocument(secondDocument, { preserveFocus: false });
+    await waitFor(() => vscode.window.tabGroups.all.length === 2);
+
+    await vscode.commands.executeCommand('vscode.setEditorLayout', {
+      orientation: 0,
+      groups: [{ size: 800 }, { size: 300 }],
+    });
+    const previousLayout = await waitForEditorLayout((candidate) => (
+      candidate.groups.length === 2
+      && candidate.groups.every((group) => typeof group.size === 'number')
+    ));
+    const previousSizes = previousLayout.groups.map((group) => group.size as number);
+
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length === 3);
+    const nextLayout = await waitForEditorLayout((candidate) => (
+      candidate.groups.length === 3
+      && candidate.groups.every((group) => typeof group.size === 'number')
+    ));
+    const nextSizes = nextLayout.groups.map((group) => group.size as number);
+
+    assert.ok(Math.abs(nextSizes[2] - previousSizes[1]) <= 1, `The non-leading editor width should remain unchanged; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
+    assert.ok(Math.abs(nextSizes[0] + nextSizes[1] - previousSizes[0]) <= 1, `Only the original leading editor should provide space for the rail; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
+  });
+
   test('declares the startup and webview restoration activation events', () => {
     const manifestPath = path.resolve(__dirname, '../../../../package.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
