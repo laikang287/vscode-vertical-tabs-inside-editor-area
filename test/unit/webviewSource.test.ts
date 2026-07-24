@@ -51,7 +51,8 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
   assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; \}/);
-  assert.match(style, /\.group-actions \{ flex: 0 0 23px; padding-right: 3px; \}/);
+  assert.match(style, /\.group-actions \{ flex: 0 0 23px; opacity: 0; padding-right: 3px; pointer-events: none; \}/);
+  assert.match(style, /\.group-header:hover \.group-actions \{ opacity: 1; pointer-events: auto; \}/);
   assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
