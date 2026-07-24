@@ -54,6 +54,17 @@ const en: LocaleStrings = {
   searchGroup: "Search group names",
   showSearch: "Show search",
   hideSearch: "Hide search",
+  regexSearch: "Use regular expression",
+  invalidRegex: "Invalid regular expression: {0}",
+  filterTabs: "Filter tabs",
+  filterUnsaved: "Unsaved tabs",
+  filterPinned: "Pinned tabs",
+  filterCurrentGroup: "Tabs in current editor group",
+  filterFileType: "Filter by file type",
+  allFileTypes: "All file types",
+  searchResultCount: "{0} matching tabs",
+  searchResultCountWithGroups: "{0} matching tabs · {1} matching groups",
+  noSearchResults: "No tabs match the current search and filters.",
 };
 
 export default en;

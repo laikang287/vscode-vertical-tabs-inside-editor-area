@@ -54,6 +54,17 @@ const zhCn: LocaleStrings = {
   searchGroup: "搜索标签组",
   showSearch: "显示搜索",
   hideSearch: "隐藏搜索",
+  regexSearch: "使用正则表达式",
+  invalidRegex: "正则表达式无效：{0}",
+  filterTabs: "过滤标签",
+  filterUnsaved: "未保存标签",
+  filterPinned: "已固定标签",
+  filterCurrentGroup: "当前编辑器组中的标签",
+  filterFileType: "按文件类型过滤",
+  allFileTypes: "所有文件类型",
+  searchResultCount: "匹配 {0} 个标签",
+  searchResultCountWithGroups: "匹配 {0} 个标签 · {1} 个分组",
+  noSearchResults: "没有标签与当前搜索和过滤条件匹配。",
 };
 
 export default zhCn;

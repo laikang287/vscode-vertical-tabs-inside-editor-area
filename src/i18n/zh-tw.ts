@@ -54,6 +54,17 @@ const zhTw: LocaleStrings = {
   searchGroup: "搜尋標籤組",
   showSearch: "顯示搜尋",
   hideSearch: "隱藏搜尋",
+  regexSearch: "使用規則運算式",
+  invalidRegex: "規則運算式無效：{0}",
+  filterTabs: "篩選標籤",
+  filterUnsaved: "未儲存標籤",
+  filterPinned: "已釘選標籤",
+  filterCurrentGroup: "目前編輯器群組中的標籤",
+  filterFileType: "依檔案類型篩選",
+  allFileTypes: "所有檔案類型",
+  searchResultCount: "符合 {0} 個標籤",
+  searchResultCountWithGroups: "符合 {0} 個標籤 · {1} 個群組",
+  noSearchResults: "沒有標籤符合目前的搜尋和篩選條件。",
 };
 
 export default zhTw;

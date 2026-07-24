@@ -54,6 +54,17 @@ const ru: LocaleStrings = {
   searchGroup: "Поиск по именам групп",
   showSearch: "Показать поиск",
   hideSearch: "Скрыть поиск",
+  regexSearch: "Использовать регулярное выражение",
+  invalidRegex: "Недопустимое регулярное выражение: {0}",
+  filterTabs: "Фильтровать вкладки",
+  filterUnsaved: "Несохранённые вкладки",
+  filterPinned: "Закреплённые вкладки",
+  filterCurrentGroup: "Вкладки текущей группы редакторов",
+  filterFileType: "Фильтровать по типу файла",
+  allFileTypes: "Все типы файлов",
+  searchResultCount: "Совпавших вкладок: {0}",
+  searchResultCountWithGroups: "Совпавших вкладок: {0} · групп: {1}",
+  noSearchResults: "Нет вкладок, соответствующих текущему поиску и фильтрам.",
 };
 
 export default ru;
