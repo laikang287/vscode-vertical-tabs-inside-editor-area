@@ -13,6 +13,7 @@ import {
   normalizeRailWidth,
   prependRailToLayout,
   prependRailPreservingEditorWidths,
+  removeRailRestoringEditorWidths,
   resolveRailRatio,
   setRailRootGroupWidth,
   setLeadingRailWidth,
@@ -161,6 +162,58 @@ test('rejects a preserved insertion when total editor slack cannot provide a saf
   );
   assert.equal(
     insertRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 220 }, { size: 400 }] }, 280, 'right'),
+    undefined,
+  );
+});
+
+test('returns a removed rail width to the editor groups that originally supplied it', () => {
+  const leftLayout = {
+    orientation: 0,
+    groups: [{ size: 300 }, { size: 220 }, { size: 280 }, { size: 220 }],
+  } as const;
+  const rightLayout = {
+    orientation: 0,
+    groups: [{ size: 635, groups: [{ size: 400 }, { size: 555 }] }, { size: 220 }, { size: 320 }],
+  } as const;
+
+  assert.deepEqual(
+    removeRailRestoringEditorWidths(leftLayout, 'left', [
+      { editorGroupIndex: 0, contribution: 180 },
+      { editorGroupIndex: 1, contribution: 120 },
+    ]),
+    { orientation: 0, groups: [{ size: 400 }, { size: 400 }, { size: 220 }] },
+  );
+  assert.deepEqual(
+    removeRailRestoringEditorWidths(rightLayout, 'right', [
+      { editorGroupIndex: 0, contribution: 320 },
+    ]),
+    {
+      orientation: 0,
+      groups: [{ size: 955, groups: [{ size: 400 }, { size: 555 }] }, { size: 220 }],
+    },
+  );
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [300, 220, 280, 220]);
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [635, 220, 320]);
+});
+
+test('returns a removed rail width only to the widest editor when contribution history is unavailable', () => {
+  assert.deepEqual(
+    removeRailRestoringEditorWidths(
+      { orientation: 0, groups: [{ size: 260 }, { size: 220 }, { size: 700 }] },
+      'left',
+    ),
+    { orientation: 0, groups: [{ size: 220 }, { size: 960 }] },
+  );
+  assert.deepEqual(
+    removeRailRestoringEditorWidths(
+      { orientation: 0, groups: [{ size: 500 }, { size: 500 }, { size: 240 }] },
+      'right',
+    ),
+    { orientation: 0, groups: [{ size: 500 }, { size: 740 }] },
+    'Equal widths should prefer the editor nearest the configured rail edge.',
+  );
+  assert.equal(
+    removeRailRestoringEditorWidths({ orientation: 1, groups: [{ size: 300 }, { size: 700 }] }, 'left'),
     undefined,
   );
 });

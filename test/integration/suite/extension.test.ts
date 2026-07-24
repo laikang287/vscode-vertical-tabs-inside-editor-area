@@ -103,7 +103,7 @@ suite('Vertical Tabs extension', () => {
     assert.ok(Math.abs(nextSizes[0] + nextSizes[1] - previousSizes[0]) <= 1, `Only the original leading editor should provide space for the rail; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
   });
 
-  test('preserves a minimized edge editor group when opening the rail on either side', async function () {
+  test('preserves a minimized edge editor group when opening and hiding the rail on either side', async function () {
     this.timeout(30_000);
     const configuration = vscode.workspace.getConfiguration('verticalTabs');
 
@@ -150,7 +150,6 @@ suite('Vertical Tabs extension', () => {
         ));
         const nextSizes = nextLayout.groups.map((group) => group.size as number);
         const railIndex = position === 'left' ? 0 : 2;
-        const shiftedMinimizedIndex = position === 'left' ? 1 : 1;
         const widestIndexBefore = position === 'left' ? 1 : 0;
         const widestIndexAfter = position === 'left' ? 2 : 0;
         const railWidth = nextSizes[railIndex];
@@ -158,12 +157,25 @@ suite('Vertical Tabs extension', () => {
 
         assert.ok(railWidth >= 222, `The ${position} rail should receive a safe width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
         assert.ok(
-          Math.abs(nextSizes[shiftedMinimizedIndex] - previousSizes[minimizedIndex]) <= 1,
+          Math.abs(nextSizes[1] - previousSizes[minimizedIndex]) <= 1,
           `The minimized ${position} edge editor should keep its width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
         );
         assert.ok(
           Math.abs(donatedWidth - railWidth) <= 1,
           `Only the widest editor should provide the ${position} rail width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+        );
+
+        await vscode.commands.executeCommand('verticalTabs.close');
+        await waitFor(() => verticalTabs().length === 0 && vscode.window.tabGroups.all.length === 2);
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+        const hiddenLayout = await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 2
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
+        const hiddenSizes = hiddenLayout.groups.map((group) => group.size as number);
+        assert.ok(
+          hiddenSizes.every((size, index) => Math.abs(size - previousSizes[index]) <= 1),
+          `Hiding the ${position} rail should return its width to the original donor without redistributing other editors; before ${JSON.stringify(previousLayout)}, hidden ${JSON.stringify(hiddenLayout)}.`,
         );
       }
     } finally {

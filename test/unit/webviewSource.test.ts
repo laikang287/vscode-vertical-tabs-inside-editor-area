@@ -431,6 +431,17 @@ test('extension keeps the native new-group layout when preserved rail allocation
   );
 });
 
+test('extension returns rail width to its original editor donors when hidden', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /await this\.captureCloseLayoutRestore\(preparedRailGroup\?\.previousLayout\)/);
+  assert.match(source, /removeRailRestoringEditorWidths\(currentLayout, this\.railPosition, contributions\)/);
+  assert.match(
+    source,
+    /vscode\.window\.tabGroups\.close\(group, true\)[\s\S]+waitForEditorLayoutLeafCount\(countLayoutLeaves\(restoredLayout\)\)[\s\S]+applyEditorLayout\(restoredLayout\)/,
+  );
+});
+
 test('extension retries undelivered render messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 

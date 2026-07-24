@@ -10,6 +10,11 @@ export const SAFE_RAIL_WIDTH = 222;
 
 export type RailPosition = 'left' | 'right';
 
+export interface RailWidthContribution {
+  readonly editorGroupIndex: number;
+  readonly contribution: number;
+}
+
 export interface EditorLayoutGroup {
   readonly size?: number;
   readonly groups?: readonly EditorLayoutGroup[];
@@ -122,6 +127,88 @@ export function insertRailPreservingEditorWidths(
       ? [rail, ...resizedGroups]
       : [...resizedGroups, rail],
   };
+}
+
+/**
+ * Removes an edge rail and returns its width to the editor groups that
+ * originally supplied it. When no valid contribution history is available,
+ * the widest editor group receives the released width so native proportional
+ * redistribution is avoided.
+ */
+export function removeRailRestoringEditorWidths(
+  layout: EditorLayout,
+  position: RailPosition,
+  contributions: readonly RailWidthContribution[] = [],
+): EditorLayout | undefined {
+  if ((layout.orientation ?? 0) !== 0 || layout.groups.length < 2) {
+    return undefined;
+  }
+
+  const railIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const railWidth = layout.groups[railIndex]?.size;
+  if (typeof railWidth !== 'number' || !Number.isFinite(railWidth) || railWidth <= 0) {
+    return undefined;
+  }
+
+  const editorGroups = layout.groups
+    .filter((_, index) => index !== railIndex)
+    .map(copyGroup);
+  const contributionByIndex = new Map<number, number>();
+  for (const item of contributions) {
+    const editorWidth = editorGroups[item.editorGroupIndex]?.size;
+    if (
+      !Number.isInteger(item.editorGroupIndex)
+      || item.editorGroupIndex < 0
+      || typeof item.contribution !== 'number'
+      || !Number.isFinite(item.contribution)
+      || item.contribution <= 0
+      || typeof editorWidth !== 'number'
+      || !Number.isFinite(editorWidth)
+      || editorWidth <= 0
+    ) {
+      continue;
+    }
+    contributionByIndex.set(
+      item.editorGroupIndex,
+      (contributionByIndex.get(item.editorGroupIndex) ?? 0) + item.contribution,
+    );
+  }
+
+  let recipients = [...contributionByIndex.entries()].map(([index, weight]) => ({ index, weight }));
+  if (recipients.length === 0) {
+    recipients = editorGroups
+      .flatMap((group, index) => (
+        typeof group.size === 'number' && Number.isFinite(group.size) && group.size > 0
+          ? [{ index, weight: group.size }]
+          : []
+      ))
+      .sort((left, right) => {
+        if (right.weight !== left.weight) return right.weight - left.weight;
+        const leftDistance = position === 'left' ? left.index : editorGroups.length - 1 - left.index;
+        const rightDistance = position === 'left' ? right.index : editorGroups.length - 1 - right.index;
+        return leftDistance - rightDistance;
+      })
+      .slice(0, 1);
+  }
+  if (recipients.length === 0) {
+    return undefined;
+  }
+
+  let remainingWidth = railWidth;
+  let remainingWeight = recipients.reduce((sum, recipient) => sum + recipient.weight, 0);
+  recipients.forEach((recipient, index) => {
+    const editorGroup = editorGroups[recipient.index];
+    const editorWidth = editorGroup?.size;
+    if (typeof editorWidth !== 'number' || !Number.isFinite(editorWidth)) return;
+    const returnedWidth = index === recipients.length - 1
+      ? remainingWidth
+      : Math.round(remainingWidth * recipient.weight / remainingWeight);
+    editorGroups[recipient.index] = { ...editorGroup, size: editorWidth + returnedWidth };
+    remainingWidth -= returnedWidth;
+    remainingWeight -= recipient.weight;
+  });
+
+  return { orientation: 0, groups: editorGroups };
 }
 
 /** Updates the first leaf, which is the rail after it has been moved left. */
