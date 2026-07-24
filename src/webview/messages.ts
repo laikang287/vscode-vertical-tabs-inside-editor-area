@@ -9,10 +9,16 @@ export type SortMode = 'none' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'na
 export type RelativePathDisplay = 'off' | 'duplicates' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
+export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
+export type ProductIconName = 'file' | 'diff' | 'notebook' | 'terminal' | 'preview' | 'settings-gear' | 'compass' | 'symbol-misc';
+export type TabVisualIcon =
+  | { readonly kind: 'seti'; readonly fontCharacter: string; readonly fontColor?: string; readonly fontSize?: string }
+  | { readonly kind: 'codicon'; readonly name: ProductIconName };
 export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean; readonly isFocused: boolean;
   readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly activationKind: TabActivationKind; readonly manualGroupId?: string;
-  readonly groupId?: string; readonly isFile: boolean; readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number;
+  readonly groupId?: string; readonly isFile: boolean; readonly inputKind: TabInputKind; readonly languageId?: string; readonly icon: TabVisualIcon;
+  readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number;
 }
 export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }
 export interface VerticalTabDisplayGroup {

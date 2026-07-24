@@ -39,7 +39,7 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
   assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
-  assert.match(source, /const remove = button\('×', i18n\.closeGroupAndDelete\)/);
+  assert.match(source, /const remove = iconButton\('close', i18n\.closeGroupAndDelete\)/);
  assert.match(source, /remove\.className = 'group-action tab-action'/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
   assert.match(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
@@ -52,7 +52,7 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(source, /main\.className = 'group-main'/);
   assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; padding-right: 3px; \}/);
   assert.match(style, /\.group-actions \{ flex: 0 0 23px; \}/);
-  assert.match(style, /\.group-header \.tab-action \{ line-height: 20px; min-width: 20px; padding: 0; \}/);
+  assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
 test('tab close buttons are always visible and context menu labels use the requested short wording', () => {
@@ -71,11 +71,11 @@ test('pinned tab icons render in a reserved left slot so peer labels stay aligne
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(source, /pin\.className = 'tab-pin-slot'/);
-  assert.match(source, /pin\.textContent = tab\.isPinned \? '📌' : ''/);
-  assert.match(source, /activate\.append\(pin\)[\s\S]+copy\.append\(label\)[\s\S]+activate\.append\(copy\)/);
+  assert.match(source, /if \(tab\.isPinned\) pin\.append\(codicon\('pinned'\)\)/);
+  assert.match(source, /activate\.append\(icon, pin, text\)/);
   assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
   assert.match(style, /\.tab-pin-slot \{ flex: 0 0 14px;[\s\S]+text-align: center; \}/);
-  assert.match(style, /\.tab-copy \{ display: flex; flex: 1; flex-direction: column;[\s\S]+min-width: 0; \}/);
+  assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column;[\s\S]+min-width: 0;[\s\S]+?\}/);
 });
 
 test('dirty tabs render an accessible status indicator immediately before the close button', () => {
@@ -95,8 +95,9 @@ test('pinned groups render an indicator, sort first, and reject unsupported host
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /pin\.className = 'group-pin-indicator'/);
-  assert.match(source, /pin\.textContent = '📌'/);
+  assert.match(source, /pin\.className = 'group-pin-indicator codicon codicon-pinned'/);
+  assert.match(source, /pin\.setAttribute\('aria-hidden', 'true'\)/);
+  assert.doesNotMatch(source, /pin\.textContent = '📌'/);
   assert.match(source, /const disabled = group\.mode === 'vscode'/);
   assert.match(panelSource, /!displayGroup \|\| !displayGroup\.showHeader \|\| displayGroup\.mode === 'vscode'/);
   assert.match(panelSource, /this\.pinnedGroupIds\.add\(message\.groupId\)/);
@@ -117,8 +118,8 @@ test('multi-selection drives batch close, pin, and cross-group drag messages thr
   assert.match(source, /const groupId = group\.mode === 'manual' && group\.id === '__ungrouped' \? undefined : group\.id/);
   assert.match(panelSource, /await this\.moveActiveEditorToGroup\(tab, destination\)/);
   assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedKeys, beforeKey\)/);
-  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
-  assert.match(style, /\.tab-row\.is-selected(?:\:not\(\.is-active\))? \{\s*background: color-mix\(in srgb, var\(--vscode-list-activeSelectionBackground\) 35%, var\(--vscode-editor-background\)\)/);
+  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-tab-unfocusedActiveBackground/);
+  assert.match(style, /\.tab-row\.is-selected \{\s*background: var\(--vscode-list-inactiveSelectionBackground/);
 });
 
 test('tab colors distinguish selection, shown editors, and the focused editor', () => {
@@ -128,8 +129,9 @@ test('tab colors distinguish selection, shown editors, and the focused editor', 
 
   assert.match(panelSource, /isFocused: tab\.isActive && tab\.group\.isActive/);
   assert.match(source, /tab\.isFocused \? 'is-focused' : ''/);
-  assert.match(style, /\.tab-row\.is-selected \{\s*background: color-mix/);
-  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
+  assert.match(style, /\.tab-row\.is-selected \{\s*background: var\(--vscode-list-inactiveSelectionBackground/);
+  assert.match(style, /\.tab-row\.is-active \{\s*background: var\(--vscode-tab-unfocusedActiveBackground/);
+  assert.match(style, /\.tab-row\.is-focused \{\s*background: var\(--vscode-list-activeSelectionBackground\)/);
   assert.match(style, /\.tab-row\.is-focused::before \{[\s\S]+var\(--vscode-tab-activeBorderTop/);
 });
 
@@ -189,8 +191,8 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊞<\/button>/);
- assert.match(panelSource, /class="toolbar-icon"[^>]+aria-label="">⊟<\/button>/);
+  assert.match(panelSource, /id="expand-all"[^>]+aria-label=""><span class="codicon codicon-expand-all" aria-hidden="true"><\/span><\/button>/);
+ assert.match(panelSource, /id="collapse-all"[^>]+aria-label=""><span class="codicon codicon-collapse-all" aria-hidden="true"><\/span><\/button>/);
   assert.match(panelSource, /<span>\$\{i18n\.groupModeLabel\}<\/span><select id="group-mode">/);
   assert.match(panelSource, /<span>\$\{i18n\.sortModeLabel\}<\/span><select id="sort-mode">/);
   assert.match(panelSource, /<option value="none">\$\{i18n\.sortModeNone\}<\/option>/);
@@ -206,6 +208,28 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /id="toolbar-controls" class="toolbar-selects"/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '分组方式'/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
+});
+
+test('webview renders Seti file icons and Codicon actions in a compact two-line layout', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /function createTabIcon\(tab: VerticalTabItem\): HTMLSpanElement/);
+  assert.match(source, /icon\.className = 'tab-icon tab-seti-icon'/);
+  assert.match(source, /const result = iconButton\('close', i18n\.closeTab\)/);
+  assert.match(source, /codicon\('pinned'\)/);
+  assert.match(source, /tab\.isPreview \? 'is-preview' : ''/);
+  assert.match(source, /activate\.append\(icon, pin, text\)/);
+  assert.match(source, /activate\.setAttribute\('aria-label', tabAccessibleLabel\(tab\)\)/);
+  assert.match(source, /icon\.setAttribute\('aria-hidden', 'true'\)/);
+  assert.doesNotMatch(source, /button\('×'|textContent = '📌'|button\(collapsed \? '▶' : '▼'/);
+  assert.match(panelSource, /codicon-search/);
+  assert.match(panelSource, /codicon-settings-gear/);
+  assert.match(style, /\.tab-seti-icon \{ font-family: "seti"; font-size: 150%; \}/);
+  assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column/);
+  assert.match(style, /\.tab-row\.has-description \.tab-main/);
+  assert.match(style, /\.tab-row\.is-preview \.tab-label \{ font-style: italic; \}/);
 });
 
 test('manual group creation is disabled outside manual mode and accepted only in manual mode', () => {
@@ -375,19 +399,26 @@ test('extension inlines the webview script to avoid local resource load failures
   assert.doesNotMatch(source, /src="\$\{scriptUri\}"/);
 });
 
-test('extension inlines the webview stylesheet and keeps nonce-only CSP', () => {
+test('extension inlines styles and restricts icon fonts to local Webview resources', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /private readWebviewStyle\(\): string/);
   assert.match(source, /media', 'vertical-tabs\.css'/);
   assert.match(source, /fs\.readFileSync\(stylePath, 'utf8'\)/);
-  assert.match(source, /已内联读取 Webview 样式/);
+  assert.match(source, /已内联读取 Webview 样式与图标字体/);
   assert.match(source, /读取 Webview 样式失败，将使用最小降级样式/);
   assert.match(source, /Webview 样式加载失败，请查看 Vertical Tabs 输出日志。/);
+  assert.match(source, /font-src \$\{this\.panel\.webview\.cspSource\}/);
   assert.match(source, new RegExp(String.raw`style-src 'nonce-\$\{nonce\}'; script-src 'nonce-\$\{nonce\}'`));
   assert.match(source, new RegExp(String.raw`<style nonce="\$\{nonce\}">\$\{styleContent\}<\/style>`));
   assert.doesNotMatch(source, /<link rel="stylesheet"/);
   assert.doesNotMatch(source, /style-src \$\{cspSource\}/);
+  assert.match(source, /node_modules\/@vscode\/codicons|out', 'codicon\.css'/);
+  assert.match(source, /out', 'codicon\.ttf'/);
+  assert.match(source, /webview\.asWebviewUri\(setiFontPath\)/);
+  assert.match(source, /vscode\.env\.appRoot\), 'extensions', 'theme-seti', 'icons'/);
+  assert.match(source, /localResourceRoots\.push\(setiRoot\)/);
+  assert.match(source, /this\.panel\.webview\.options = createWebviewOptions\(context\)/);
 });
 
 test('extension marks built-in welcome and settings webviews as activatable', () => {

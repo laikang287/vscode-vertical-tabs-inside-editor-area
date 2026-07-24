@@ -22,10 +22,11 @@ import {
 } from '../layout/RailLayout';
 import { getStrings, resolveLocale } from '../i18n';
 import type { LocaleStrings } from '../i18n/locale';
+import { fallbackTabVisualIcon, SetiIconResolver, type SetiThemeVariant } from '../icons/SetiIconResolver';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
-import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
+import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
@@ -52,6 +53,8 @@ const WEBVIEW_POST_RETRY_DELAY_MS = 250;
 const WEBVIEW_POST_MAX_ATTEMPTS = 8;
 const RENDER_ACK_TIMEOUT_MS = 1200;
 const RENDER_ACK_MAX_ATTEMPTS = 6;
+const SETI_THEME_FILE = 'vs-seti-icon-theme.json';
+const SETI_FONT_FILE = 'seti.woff';
 
 interface PreparedRailGroup {
   readonly ratio: number;
@@ -97,11 +100,13 @@ export class VerticalTabsPanel {
  private readonly pinnedGroupIds: Set<string>;
   private localeStrings: LocaleStrings;
  private rememberStateEnabled: boolean;
+  private setiIconResolver: SetiIconResolver;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext,
   ) {
+    this.panel.webview.options = createWebviewOptions(context);
     this.rememberStateEnabled = shouldRememberState();
     this.groupMode = readGroupMode(context);
     this.sortMode = readSortMode(context);
@@ -114,6 +119,7 @@ export class VerticalTabsPanel {
     this.manualOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
     this.pinnedGroupIds = this.rememberStateEnabled ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
     this.localeStrings = this.resolveUiLocale();
+    this.setiIconResolver = loadSetiIconResolver(vscode.window.activeColorTheme.kind);
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn });
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
@@ -131,6 +137,10 @@ export class VerticalTabsPanel {
         if (event.affectsConfiguration('verticalTabs')) {
           void this.handleConfigurationChange(event).catch((error) => logError('应用垂直标签配置变更失败', error));
         }
+      }),
+      vscode.window.onDidChangeActiveColorTheme((theme) => {
+        this.setiIconResolver = loadSetiIconResolver(theme.kind);
+        this.scheduleRefresh();
       }),
     );
     this.configureWebview();
@@ -253,11 +263,7 @@ export class VerticalTabsPanel {
       VIEW_TYPE,
       TITLE,
       { viewColumn: vscode.ViewColumn.One, preserveFocus: true },
-      {
-        enableScripts: true,
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out'), vscode.Uri.joinPath(context.extensionUri, 'media')],
-        retainContextWhenHidden: true,
-      },
+      createWebviewPanelOptions(context),
     );
     logDebug('WebviewPanel 创建完成', { viewType: VIEW_TYPE, requestedViewColumn: vscode.ViewColumn.One });
     const instance = VerticalTabsPanel.panels.show(
@@ -754,6 +760,7 @@ export class VerticalTabsPanel {
         isPinned: tab.isPinned,
         isPreview: tab.isPreview,
         inputKind: 'unknown',
+        icon: fallbackTabVisualIcon('unknown', tab.label),
         targetIdentity: { kind: 'unknown', label: tab.label || 'Unknown' },
         isActivatable: false,
         isVerticalTabsPanel: isVerticalTabsPanel(tab),
@@ -763,6 +770,8 @@ export class VerticalTabsPanel {
 
   private async toSnapshotTab(tab: vscode.Tab): Promise<SnapshotSourceTab> {
     const path = inputPath(tab.input);
+    const kind = inputKind(tab.input);
+    const languageId = inputLanguageId(tab.input);
     return {
       label: tab.label,
       isActive: tab.isActive,
@@ -770,7 +779,14 @@ export class VerticalTabsPanel {
       isDirty: tab.isDirty,
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,
-      inputKind: inputKind(tab.input),
+      inputKind: kind,
+      languageId,
+      icon: this.setiIconResolver.resolve({
+        label: tab.label,
+        resourcePath: path,
+        languageId,
+        inputKind: kind,
+      }),
       path,
       relativePath: inputWorkspaceRelativePath(tab.input),
       tooltipPath: inputTooltipPath(tab.input),
@@ -2058,7 +2074,7 @@ export class VerticalTabsPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${this.panel.webview.cspSource}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <style nonce="${nonce}">${styleContent}</style>
   <title>${TITLE}</title>
 </head>
@@ -2066,10 +2082,10 @@ export class VerticalTabsPanel {
   <main class="vertical-tabs" data-toolbar-position="${this.toolbarPosition}" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
-        <button id="toggle-search" class="toolbar-icon" type="button" title="" aria-label="">🔍</button>
-        <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="" aria-label="">□</button>
-        <button id="expand-all" class="toolbar-icon" type="button" title="" aria-label="">⊞</button>
-        <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label="">⊟</button>
+        <button id="toggle-search" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-search" aria-hidden="true"></span></button>
+        <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-settings-gear" aria-hidden="true"></span></button>
+        <button id="expand-all" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-expand-all" aria-hidden="true"></span></button>
+        <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-collapse-all" aria-hidden="true"></span></button>
       </div>
       <div id="toolbar-controls" class="toolbar-selects">
         <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
@@ -2077,7 +2093,7 @@ export class VerticalTabsPanel {
       </div>
       <div id="search-container" class="search-container">
         <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" />
-        <button id="search-group-toggle" class="search-group-toggle" type="button" title="${i18n.searchGroup}">G</button>
+        <button id="search-group-toggle" class="search-group-toggle" type="button" title="${i18n.searchGroup}" aria-label="${i18n.searchGroup}"><span class="codicon codicon-group-by-ref-type" aria-hidden="true"></span></button>
       </div>
     </header>
     <p id="description"></p>
@@ -2092,9 +2108,18 @@ export class VerticalTabsPanel {
   private readWebviewStyle(): string {
     const stylePath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vertical-tabs.css').fsPath;
     try {
-      const source = fs.readFileSync(stylePath, 'utf8').replace(/<\/style/gi, '<\\/style');
-      logDebug('已内联读取 Webview 样式', { stylePath, bytes: source.length });
-      return source;
+      const source = fs.readFileSync(stylePath, 'utf8');
+      const codiconStylePath = vscode.Uri.joinPath(this.context.extensionUri, 'out', 'codicon.css').fsPath;
+      const codiconFontUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'out', 'codicon.ttf')).toString();
+      const codiconSource = fs.readFileSync(codiconStylePath, 'utf8')
+        .replace(/url\((["']?)\.\/codicon\.ttf[^)]*\)/, `url($1${codiconFontUri}$1)`);
+      const setiFontPath = vscode.Uri.joinPath(setiIconsRoot(), SETI_FONT_FILE);
+      const setiFontFace = fs.existsSync(setiFontPath.fsPath)
+        ? `@font-face { font-family: "seti"; font-display: block; font-style: normal; font-weight: normal; src: url("${this.panel.webview.asWebviewUri(setiFontPath)}") format("woff"); }`
+        : '';
+      const combined = [codiconSource, setiFontFace, source].join('\n').replace(/<\/style/gi, '<\\/style');
+      logDebug('已内联读取 Webview 样式与图标字体', { stylePath, codiconStylePath, bytes: combined.length, setiFontAvailable: Boolean(setiFontFace) });
+      return combined;
     } catch (error) {
       logError('读取 Webview 样式失败，将使用最小降级样式', { stylePath, error });
       return [
@@ -2593,6 +2618,13 @@ function inputKind(input: vscode.Tab['input']): TabInputKind {
   return 'unknown';
 }
 
+function inputLanguageId(input: vscode.Tab['input']): string | undefined {
+  const uri = inputUri(input);
+  if (!uri) return undefined;
+  const key = uri.toString();
+  return vscode.workspace.textDocuments.find((document) => document.uri.toString() === key)?.languageId;
+}
+
 function targetIdentity(tab: vscode.Tab): TabTargetIdentity {
   const input = tab.input;
   if (input instanceof vscode.TabInputText) return { kind: 'text', uri: input.uri.toString() };
@@ -2657,6 +2689,52 @@ function inputWorkspaceRelativePath(input: vscode.Tab['input']): string | undefi
     return undefined;
   }
   return vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
+}
+
+function setiIconsRoot(): vscode.Uri {
+  return vscode.Uri.joinPath(vscode.Uri.file(vscode.env.appRoot), 'extensions', 'theme-seti', 'icons');
+}
+
+function createWebviewOptions(context: vscode.ExtensionContext): vscode.WebviewOptions {
+  const localResourceRoots = [
+    vscode.Uri.joinPath(context.extensionUri, 'out'),
+    vscode.Uri.joinPath(context.extensionUri, 'media'),
+  ];
+  const setiRoot = setiIconsRoot();
+  if (fs.existsSync(setiRoot.fsPath)) {
+    localResourceRoots.push(setiRoot);
+  }
+  return {
+    enableScripts: true,
+    localResourceRoots,
+  };
+}
+
+function createWebviewPanelOptions(context: vscode.ExtensionContext): vscode.WebviewPanelOptions & vscode.WebviewOptions {
+  return {
+    ...createWebviewOptions(context),
+    retainContextWhenHidden: true,
+  };
+}
+
+function loadSetiIconResolver(kind: vscode.ColorThemeKind): SetiIconResolver {
+  const variant = setiThemeVariant(kind);
+  const themePath = vscode.Uri.joinPath(setiIconsRoot(), SETI_THEME_FILE).fsPath;
+  try {
+    const source = fs.readFileSync(themePath, 'utf8');
+    const resolver = new SetiIconResolver(JSON.parse(source) as unknown, variant);
+    logDebug('已加载 VS Code Seti 文件图标主题', { themePath, variant, bytes: source.length });
+    return resolver;
+  } catch (error) {
+    logWarn('加载 VS Code Seti 文件图标主题失败，将回退到通用 Codicon', { themePath, variant, error });
+    return new SetiIconResolver(undefined, variant);
+  }
+}
+
+function setiThemeVariant(kind: vscode.ColorThemeKind): SetiThemeVariant {
+  if (kind === vscode.ColorThemeKind.Light) return 'light';
+  if (kind === vscode.ColorThemeKind.HighContrast || kind === vscode.ColorThemeKind.HighContrastLight) return 'highContrast';
+  return 'dark';
 }
 
 function inputTooltipPath(input: vscode.Tab['input']): string | undefined {
