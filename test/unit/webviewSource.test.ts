@@ -55,6 +55,25 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
+test('tab context menus append an optional VS Code action group with secure opaque actions', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const manifest = readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8');
+
+  assert.match(webviewSource, /if \(tab && snapshot\?\.nativeContextMenuActionsEnabled\)/);
+  assert.match(webviewSource, /type: 'requestNativeTabMenu', requestId, target: tab\.target/);
+  assert.match(webviewSource, /pending\.menu\.append\(createContextMenuSeparator\(\), \.\.\.nativeContextMenuElements/);
+  assert.match(webviewSource, /type: 'runNativeTabMenuAction', actionId: entry\.actionId, target/);
+  assert.match(webviewSource, /pending\.requestId !== requestId/);
+  assert.match(webviewSource, /event\.key === 'ArrowRight'/);
+  assert.match(webviewSource, /event\.key === 'ArrowLeft'/);
+  assert.match(style, /\.tab-context-separator/);
+  assert.match(panelSource, /nativeTabMenuProvider\.resolveAction\(actionId\)/);
+  assert.doesNotMatch(webviewSource, /executeCommand/);
+  assert.match(manifest, /"verticalTabs\.showNativeContextMenuActions"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
+});
+
 test('group names preserve their original capitalization', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 

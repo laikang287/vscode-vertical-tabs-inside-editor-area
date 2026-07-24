@@ -1,4 +1,4 @@
-import type { ExtensionMessage, GroupMode, ProductIconName, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import type { ExtensionMessage, GroupMode, NativeContextMenuEntry, ProductIconName, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
 import { TabSelection } from './TabSelection';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
@@ -52,6 +52,7 @@ const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 const searchCollapsedGroups = new Set<string>();
 let contextMenu: HTMLElement | undefined;
 let contextMenuInvoker: HTMLElement | undefined;
+let pendingNativeMenuRequest: { readonly requestId: string; readonly target: TabTarget; readonly menu: HTMLElement; readonly x: number; readonly y: number } | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let currentSearchQuery = '';
 let currentSearchGroups = false;
@@ -120,6 +121,7 @@ if (fileTypeFilter) {
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
 let dragRequestSequence = 0;
+let nativeMenuRequestSequence = 0;
 let pendingActivateTarget: TabTarget | undefined;
 let pendingActivateTimestamp = 0;
 const selection = new TabSelection();
@@ -131,6 +133,10 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   if (event.data.type === 'renderTabs') {
     logToExtension('debug', '收到标签渲染消息', `revision=${event.data.snapshot.revision}, tabs=${event.data.snapshot.tabs.length}`);
     render(event.data);
+    return;
+  }
+  if (event.data.type === 'nativeTabMenu') {
+    renderNativeContextMenu(event.data.requestId, event.data.entries);
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
@@ -1151,6 +1157,11 @@ function nextDragRequestId(): string {
   return `drag-${dragRequestSequence}`;
 }
 
+function nextNativeMenuRequestId(): string {
+  nativeMenuRequestSequence = (nativeMenuRequestSequence % Number.MAX_SAFE_INTEGER) + 1;
+  return `native-menu-${nativeMenuRequestSequence}`;
+}
+
 function targetDetails(target: TabTarget, label: string, requestId?: string): string {
   return [
     requestId ? `requestId=${requestId}` : undefined,
@@ -1221,12 +1232,110 @@ function showContextMenu(
   });
   menu.addEventListener('keydown', handleContextMenuKeyDown);
   document.body.append(menu);
-  const bounds = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
-  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+  positionContextMenu(menu, x, y);
   contextMenu = menu;
   contextMenuInvoker = invoker;
   focusContextMenuItem(menu, 0);
+  if (tab && snapshot?.nativeContextMenuActionsEnabled) {
+    const requestId = nextNativeMenuRequestId();
+    pendingNativeMenuRequest = { requestId, target: tab.target, menu, x, y };
+    vscode.postMessage({ type: 'requestNativeTabMenu', requestId, target: tab.target });
+  }
+}
+
+function renderNativeContextMenu(requestId: string, entries: readonly NativeContextMenuEntry[]): void {
+  const pending = pendingNativeMenuRequest;
+  if (!pending || pending.requestId !== requestId || contextMenu !== pending.menu || !pending.menu.isConnected) return;
+  pendingNativeMenuRequest = undefined;
+  if (!hasNativeMenuAction(entries)) return;
+  pending.menu.append(createContextMenuSeparator(), ...nativeContextMenuElements(entries, pending.target));
+  positionContextMenu(pending.menu, pending.x, pending.y);
+}
+
+function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], target: TabTarget): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'separator') {
+      if (elements.length > 0 && !elements[elements.length - 1]?.classList.contains('tab-context-separator')) {
+        elements.push(createContextMenuSeparator());
+      }
+      continue;
+    }
+    if (entry.kind === 'submenu') {
+      const children = nativeContextMenuElements(entry.entries, target);
+      if (!children.some((element) => !element.classList.contains('tab-context-separator'))) continue;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'tab-context-submenu';
+      const trigger = button(entry.label, entry.label);
+      trigger.classList.add('tab-context-action', 'tab-context-submenu-trigger');
+      trigger.setAttribute('role', 'menuitem');
+      trigger.setAttribute('aria-haspopup', 'menu');
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.tabIndex = -1;
+      const submenu = document.createElement('div');
+      submenu.className = 'tab-context-submenu-list';
+      submenu.setAttribute('role', 'menu');
+      submenu.append(...children);
+      trigger.addEventListener('click', () => {
+        openContextSubmenu(trigger, submenu);
+        focusContextMenuItem(submenu, 0);
+      });
+      wrapper.addEventListener('mouseenter', () => openContextSubmenu(trigger, submenu));
+      wrapper.addEventListener('mouseleave', () => {
+        if (!wrapper.contains(document.activeElement)) closeContextSubmenu(trigger);
+      });
+      wrapper.addEventListener('focusout', (event) => {
+        if (!(event.relatedTarget instanceof Node) || !wrapper.contains(event.relatedTarget)) closeContextSubmenu(trigger);
+      });
+      wrapper.append(trigger, submenu);
+      elements.push(wrapper);
+      continue;
+    }
+    const action = button(entry.label, entry.label);
+    action.classList.add('tab-context-action');
+    action.setAttribute('role', 'menuitem');
+    action.tabIndex = -1;
+    action.disabled = !entry.enabled;
+    action.addEventListener('click', () => {
+      if (!entry.enabled) return;
+      vscode.postMessage({ type: 'runNativeTabMenuAction', actionId: entry.actionId, target });
+      dismissContextMenu();
+    });
+    elements.push(action);
+  }
+  while (elements[0]?.classList.contains('tab-context-separator')) elements.shift();
+  while (elements[elements.length - 1]?.classList.contains('tab-context-separator')) elements.pop();
+  return elements;
+}
+
+function hasNativeMenuAction(entries: readonly NativeContextMenuEntry[]): boolean {
+  return entries.some((entry) => entry.kind === 'action' || (entry.kind === 'submenu' && hasNativeMenuAction(entry.entries)));
+}
+
+function createContextMenuSeparator(): HTMLDivElement {
+  const separator = document.createElement('div');
+  separator.className = 'tab-context-separator';
+  separator.setAttribute('role', 'separator');
+  return separator;
+}
+
+function positionContextMenu(menu: HTMLElement, x: number, y: number): void {
+  const bounds = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+}
+
+function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement): void {
+  const wrapper = trigger.parentElement;
+  if (!wrapper) return;
+  trigger.setAttribute('aria-expanded', 'true');
+  wrapper.classList.add('is-open');
+  wrapper.classList.toggle('opens-left', submenu.getBoundingClientRect().right > window.innerWidth - 4);
+}
+
+function closeContextSubmenu(trigger: HTMLButtonElement): void {
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.parentElement?.classList.remove('is-open', 'opens-left');
 }
 
 function openKeyboardContextMenu(
@@ -1266,17 +1375,52 @@ function handleContextMenuKeyDown(event: KeyboardEvent): void {
     action.click();
     return;
   }
+  if (event.key === 'ArrowRight') {
+    const action = event.target;
+    if (!(action instanceof HTMLButtonElement) || !action.classList.contains('tab-context-submenu-trigger')) return;
+    const submenu = action.nextElementSibling;
+    if (!(submenu instanceof HTMLElement)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openContextSubmenu(action, submenu);
+    focusContextMenuItem(submenu, 0);
+    return;
+  }
+  if (event.key === 'ArrowLeft') {
+    const action = event.target;
+    if (!(action instanceof HTMLButtonElement)) return;
+    const submenu = action.closest<HTMLElement>('.tab-context-submenu-list');
+    const trigger = submenu?.parentElement?.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger');
+    if (!trigger) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeContextSubmenu(trigger);
+    trigger.focus();
+    return;
+  }
   if (!isVerticalNavigationKey(event.key)) return;
   event.preventDefault();
   event.stopPropagation();
-  const actions = enabledContextMenuItems(menu);
+  const level = event.target instanceof HTMLElement
+    ? event.target.closest<HTMLElement>('.tab-context-submenu-list') ?? menu
+    : menu;
+  const actions = enabledContextMenuItems(level);
   const currentIndex = actions.findIndex((item) => item === document.activeElement);
   const nextIndex = nextVerticalNavigationIndex(currentIndex, actions.length, event.key, true);
-  focusContextMenuItem(menu, nextIndex);
+  focusContextMenuItem(level, nextIndex);
 }
 
 function enabledContextMenuItems(menu: HTMLElement): HTMLButtonElement[] {
-  return Array.from(menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+  const result: HTMLButtonElement[] = [];
+  for (const child of Array.from(menu.children)) {
+    if (child instanceof HTMLButtonElement && !child.disabled) {
+      result.push(child);
+    } else if (child.classList.contains('tab-context-submenu')) {
+      const trigger = child.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger:not(:disabled)');
+      if (trigger) result.push(trigger);
+    }
+  }
+  return result;
 }
 
 function focusContextMenuItem(menu: HTMLElement, index: number): void {
@@ -1405,6 +1549,7 @@ function dismissContextMenu(restoreFocus = false): void {
   contextMenu?.remove();
   contextMenu = undefined;
   contextMenuInvoker = undefined;
+  pendingNativeMenuRequest = undefined;
   if (!restoreFocus || !invoker?.isConnected) return;
   if (invoker.classList.contains('tree-navigation-item')) setTreeTabStop(invoker);
   invoker.focus({ preventScroll: true });

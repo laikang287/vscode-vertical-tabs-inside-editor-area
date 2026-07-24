@@ -326,6 +326,8 @@ suite('Vertical Tabs extension', () => {
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].default, 'top');
     assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].enum, ['top', 'bottom']);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].scope, 'window');
+    assert.equal(manifest.contributes.configuration.properties['verticalTabs.showNativeContextMenuActions'].default, true);
+    assert.equal(manifest.contributes.configuration.properties['verticalTabs.showNativeContextMenuActions'].scope, 'window');
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));
     const configurableCommands = [
       'verticalTabs.previousInGroup',

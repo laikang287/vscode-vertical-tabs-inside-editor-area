@@ -469,6 +469,12 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   outline-offset: -1px;
 }
 
+.tab-context-separator {
+  border-top: 1px solid var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
+  height: 0;
+  margin: 3px 7px;
+}
+
 .tab-context-submenu {
   position: relative;
 }
@@ -489,9 +495,15 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   padding: 3px;
   position: absolute;
   top: -4px;
+  z-index: 11;
 }
 
 .tab-context-submenu:hover .tab-context-submenu-list,
-.tab-context-submenu:focus-within .tab-context-submenu-list {
+.tab-context-submenu.is-open .tab-context-submenu-list {
   display: grid;
+}
+
+.tab-context-submenu.opens-left > .tab-context-submenu-list {
+  left: auto;
+  right: 100%;
 }
