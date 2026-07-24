@@ -65,6 +65,18 @@ test('tab close buttons are always visible and context menu labels use the reque
   assert.doesNotMatch(source, /关闭其它标签|关闭下侧标签/);
 });
 
+test('pinned tab icons render in a reserved left slot so peer labels stay aligned', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /pin\.className = 'tab-pin-slot'/);
+  assert.match(source, /pin\.textContent = tab\.isPinned \? '📌' : ''/);
+  assert.match(source, /activate\.append\(pin\)[\s\S]+copy\.append\(label\)[\s\S]+activate\.append\(copy\)/);
+  assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
+  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 14px;[\s\S]+text-align: center; \}/);
+  assert.match(style, /\.tab-copy \{ display: flex; flex: 1; flex-direction: column;[\s\S]+min-width: 0; \}/);
+});
+
 test('pinned groups render an indicator, sort first, and reject unsupported host messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
