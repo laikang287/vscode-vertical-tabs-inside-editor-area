@@ -157,6 +157,18 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
+test('webview selection is synchronized for command-driven multi-tab moves', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const messages = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /vscode\.postMessage\(\{ type: 'selectionChanged', targets \}\)/);
+  assert.match(messages, /type: 'selectionChanged'; readonly targets: readonly TabTarget\[\]/);
+  assert.match(panelSource, /private commandSelectedTargets: readonly TabTarget\[\] = \[\]/);
+  assert.match(panelSource, /moveItemsOneStep\(currentOrder, selectedTabs, direction\)/);
+  assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedTabs, undefined\)/);
+});
+
 test('relative path display is configurable and uses a subdued second line', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
@@ -198,7 +210,7 @@ test('adjacent navigation reuses an open panel without stealing the active edito
 
   assert.match(
     panelSource,
-    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction\)/,
+    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction, scope\)/,
   );
 });
 

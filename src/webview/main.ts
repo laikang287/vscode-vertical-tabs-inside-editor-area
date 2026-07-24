@@ -165,6 +165,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   updateTreeActionState();
   correctPendingActivation();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
+  postSelectionChanged();
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${tabs.length}, groups=${displayGroups.length}`);
 }
 
@@ -844,10 +845,12 @@ function selectSingle(tab: VerticalTabItem): void {
     row.classList.remove('is-selected', 'is-multi-selected');
   }
   findTabRow(tab.target)?.classList.add('is-selected');
+  postSelectionChanged();
 }
 
 function updateSelection(tab: VerticalTabItem, keys: { readonly shiftKey: boolean; readonly toggleKey: boolean }): void {
   selection.update(selectableTabs(), tab, keys);
+  postSelectionChanged();
   if (latestSnapshot) render({ type: 'renderTabs', title: 'Vertical Tabs', snapshot: latestSnapshot });
 }
 
@@ -862,6 +865,14 @@ function selectedTabsFor(tab: VerticalTabItem): readonly VerticalTabItem[] {
 
 function pruneSelectedTabs(tabs: readonly VerticalTabItem[]): void {
   selection.prune(tabs);
+}
+
+function postSelectionChanged(): void {
+  const targets = latestSnapshot?.displayGroups
+    .flatMap((group) => group.tabs)
+    .filter((tab) => selection.isSelected(tab))
+    .map((tab) => tab.target) ?? [];
+  vscode.postMessage({ type: 'selectionChanged', targets });
 }
 
 function selectableTabs(): readonly VerticalTabItem[] {

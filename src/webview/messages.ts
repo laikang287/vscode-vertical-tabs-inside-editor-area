@@ -33,6 +33,7 @@ export interface VerticalTabsSnapshot {
 }
 export type WebviewMessage =
   | { readonly type: 'ready' } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
+  | { readonly type: 'selectionChanged'; readonly targets: readonly TabTarget[] }
   | { readonly type: 'renderAck'; readonly revision: number }
   | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
   | { readonly type: 'closeAll' } | { readonly type: 'requestCreateGroup' } | { readonly type: 'setGroupMode'; readonly groupMode: GroupMode }
@@ -61,6 +62,7 @@ const MAX_BATCH_TAB_TARGETS = 2000;
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
   if (value.type === 'ready' || value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll' || value.type === 'requestCreateGroup') return { type: value.type };
+  if (value.type === 'selectionChanged' && isTabTargetArray(value.targets)) return { type: 'selectionChanged', targets: value.targets };
   if (value.type === 'renderAck' && isNonNegativeInteger(value.revision)) return { type: 'renderAck', revision: value.revision };
   if (value.type === 'webviewLog' && isWebviewLogLevel(value.level) && isLogMessage(value.message) && (value.details === undefined || isLogDetails(value.details))) {
     return { type: 'webviewLog', level: value.level, message: value.message, ...(value.details === undefined ? {} : { details: value.details }) };
@@ -116,7 +118,10 @@ function isTabTarget(value: unknown): value is TabTarget {
     && isTabTargetIdentity(value.identity);
 }
 function isTabTargets(value: unknown): value is readonly TabTarget[] {
-  return Array.isArray(value) && value.length > 0 && value.length <= MAX_BATCH_TAB_TARGETS && value.every(isTabTarget);
+  return isTabTargetArray(value) && value.length > 0;
+}
+function isTabTargetArray(value: unknown): value is readonly TabTarget[] {
+  return Array.isArray(value) && value.length <= MAX_BATCH_TAB_TARGETS && value.every(isTabTarget);
 }
 function isTabTargetIdentity(value: unknown): value is TabTargetIdentity {
   if (!isRecord(value) || typeof value.kind !== 'string') return false;

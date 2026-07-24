@@ -27,6 +27,7 @@ import { getStrings, resolveLocale } from '../i18n';
 import type { LocaleStrings } from '../i18n/locale';
 import { fallbackTabVisualIcon, SetiIconResolver, type SetiThemeVariant } from '../icons/SetiIconResolver';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
+import { adjacentCyclicIndex, moveItemsOneStep, type TabCommandDirection } from '../tabs/TabCommands';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
@@ -100,6 +101,7 @@ export class VerticalTabsPanel {
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, tabs: [], manualGroups: [], displayGroups: [] };
+  private commandSelectedTargets: readonly TabTarget[] = [];
   private groupMode: GroupMode;
   private sortMode: SortMode;
   private toolbarPosition: ToolbarPosition;
@@ -263,13 +265,19 @@ export class VerticalTabsPanel {
     VerticalTabsPanel.panels.current?.panel.dispose();
   }
 
-  static async navigate(context: vscode.ExtensionContext, direction: 1 | -1): Promise<void> {
-    logDebug('请求相邻标签导航', { direction });
+  static async navigate(context: vscode.ExtensionContext, direction: TabCommandDirection, scope: 'group' | 'all' = 'all'): Promise<void> {
+    logDebug('请求相邻标签导航', { direction, scope });
     // Reuse an attached panel without revealing it first. Revealing the rail
     // would steal focus from the active user tab before navigate() determines
     // the previous/next snapshot position.
     const instance = VerticalTabsPanel.panels.current ?? await VerticalTabsPanel.open(context);
-    await instance?.navigate(direction);
+    await instance?.navigate(direction, scope);
+  }
+
+  static async moveTab(context: vscode.ExtensionContext, direction: TabCommandDirection, scope: 'tab' | 'group'): Promise<void> {
+    logDebug('请求移动活动标签或垂直栏多选标签', { direction, scope });
+    const instance = VerticalTabsPanel.panels.current ?? await VerticalTabsPanel.open(context);
+    await instance?.moveByCommand(direction, scope);
   }
 
   private static async create(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
@@ -917,6 +925,12 @@ export class VerticalTabsPanel {
       if (message.level === 'error') logError(`Webview: ${message.message}`, details);
       else if (message.level === 'warn') logWarn(`Webview: ${message.message}`, details);
       else logDebug(`Webview: ${message.message}`, details);
+      return;
+    }
+
+    if (message.type === 'selectionChanged') {
+      this.commandSelectedTargets = message.targets;
+      logDebug('同步垂直标签多选状态', { count: message.targets.length });
       return;
     }
 
@@ -2095,19 +2109,109 @@ export class VerticalTabsPanel {
     return undefined;
   }
 
-  private async navigate(direction: 1 | -1): Promise<void> {
+  private async navigate(direction: TabCommandDirection, scope: 'group' | 'all'): Promise<void> {
     await this.refresh({ reason: 'operation' });
-    const tabs = this.currentSnapshot.tabs.filter((tab) => tab.isActivatable);
+    const anchor = this.commandAnchorTab();
+    const groups = userEditorGroups();
+    const tabs = (scope === 'group' && anchor
+      ? anchor.group.tabs
+      : groups.flatMap((group) => group.tabs))
+      .filter((tab) => !isVerticalTabsPanel(tab) && isActivatableTabForCommands(tab));
     if (tabs.length === 0) {
-      logDebug('相邻标签导航无需处理：没有可激活标签');
+      logDebug('相邻标签导航无需处理：没有可激活标签', { direction, scope });
       return;
     }
-    const activeIndex = tabs.findIndex((tab) => tab.isActive);
-    const index = activeIndex < 0 ? 0 : (activeIndex + direction + tabs.length) % tabs.length;
-    const tab = this.resolveTab(tabs[index].target);
+    const activeIndex = anchor ? tabs.indexOf(anchor) : -1;
+    const index = adjacentCyclicIndex(tabs.length, activeIndex, direction);
+    const tab = tabs[index];
     if (tab) {
-      logDebug('相邻标签导航选择目标', { direction, label: tab.label, inputKind: inputKind(tab.input) });
+      logDebug('相邻标签导航选择目标', { direction, scope, label: tab.label, inputKind: inputKind(tab.input) });
       await this.activateTab(tab);
+    }
+  }
+
+  private async moveByCommand(direction: TabCommandDirection, scope: 'tab' | 'group'): Promise<void> {
+    await this.refresh({ reason: 'operation' });
+    const anchor = this.commandAnchorTab();
+    if (!anchor || isVerticalTabsPanel(anchor)) {
+      logDebug('标签移动命令无需处理：没有活动用户标签', { direction, scope });
+      return;
+    }
+    const sourceGroup = anchor.group;
+    const selectedTabs = this.commandTabsInGroup(sourceGroup, anchor);
+    if (scope === 'tab') {
+      const currentOrder = sourceGroup.tabs.filter((tab) => !isVerticalTabsPanel(tab));
+      const desiredOrder = moveItemsOneStep(currentOrder, selectedTabs, direction);
+      if (desiredOrder.every((tab, index) => tab === currentOrder[index])) {
+        logDebug('组内标签移动命令已位于边界', { direction, count: selectedTabs.length });
+        return;
+      }
+      try {
+        await this.syncVsCodeGroupTabOrder(sourceGroup, desiredOrder);
+      } finally {
+        await this.restoreCommandAnchor(anchor);
+      }
+      await this.refresh({ reason: 'operation' });
+      logInfo('组内标签移动命令完成', { direction, count: selectedTabs.length });
+      return;
+    }
+
+    const groups = userEditorGroups();
+    const sourceIndex = groups.indexOf(sourceGroup);
+    const destination = groups[sourceIndex + direction];
+    if (sourceIndex < 0 || !destination) {
+      logDebug('跨组标签移动命令已位于边界', { direction, count: selectedTabs.length, sourceIndex, groupCount: groups.length });
+      return;
+    }
+
+    try {
+      for (const tab of selectedTabs) {
+        if (tab.group !== destination) {
+          await this.activateTab(tab);
+          await this.moveActiveEditorToGroup(tab, destination);
+        }
+      }
+      const destinationTabs = destination.tabs.filter((tab) => !isVerticalTabsPanel(tab));
+      const movedTabs = selectedTabs.filter((tab) => destinationTabs.includes(tab));
+      await this.syncVsCodeGroupTabOrder(destination, moveItemsBefore(destinationTabs, movedTabs, undefined));
+    } finally {
+      await this.restoreCommandAnchor(anchor);
+    }
+    await this.refresh({ reason: 'operation' });
+    logInfo('跨编辑器组标签移动命令完成', { direction, count: selectedTabs.length });
+  }
+
+  private commandAnchorTab(): vscode.Tab | undefined {
+    const activeGroup = userEditorGroups().find((group) => group.isActive);
+    if (activeGroup?.activeTab && !isVerticalTabsPanel(activeGroup.activeTab)) {
+      return activeGroup.activeTab;
+    }
+    const selectedTabs = this.commandSelectedTargets
+      .map((target) => this.resolveTab(target))
+      .filter((tab): tab is vscode.Tab => tab !== undefined);
+    const snapshotAnchor = this.currentSnapshot.tabs.find((tab) => tab.isFocused)
+      ?? this.currentSnapshot.tabs.find((tab) => tab.isActive && this.commandSelectedTargets.some((target) => (
+        target.groupIndex === tab.target.groupIndex && sameIdentity(target.identity, tab.target.identity)
+      )));
+    return selectedTabs.find((tab) => tab.group.activeTab === tab)
+      ?? selectedTabs[0]
+      ?? (snapshotAnchor ? this.resolveTab(snapshotAnchor.target) : undefined);
+  }
+
+  private commandTabsInGroup(group: vscode.TabGroup, anchor: vscode.Tab): readonly vscode.Tab[] {
+    const selectedTabs = this.commandSelectedTargets
+      .map((target) => this.resolveTab(target))
+      .filter((tab): tab is vscode.Tab => tab !== undefined && tab.group === group);
+    const selectedSet = new Set(selectedTabs);
+    if (selectedTabs.length <= 1 || !selectedSet.has(anchor)) {
+      return [anchor];
+    }
+    return group.tabs.filter((tab) => selectedSet.has(tab));
+  }
+
+  private async restoreCommandAnchor(anchor: vscode.Tab): Promise<void> {
+    if (findTabPosition(anchor) && isActivatableTabForCommands(anchor)) {
+      await this.activateTab(anchor, 'restore-active-after-command-move');
     }
   }
 
@@ -2550,6 +2654,10 @@ function activeUserTabIdentity(): TabTargetIdentity | undefined {
     return undefined;
   }
   return targetIdentity(tab);
+}
+
+function userEditorGroups(): vscode.TabGroup[] {
+  return vscode.window.tabGroups.all.filter((group) => !group.tabs.some((tab) => isVerticalTabsPanel(tab)));
 }
 
 function captureActiveUserTabRestore(): ActiveUserTabRestore | undefined {
