@@ -1,7 +1,7 @@
 ﻿:root {
   --vertical-tab-action-size: 22px;
   --vertical-tab-inline-padding: 6px;
-  --vertical-tab-group-background-shade: rgba(0, 0, 0, .12);
+  --vertical-tab-group-background-shade: rgba(0, 0, 0, .16);
   --vertical-tab-status-gap: 2px;
   --vertical-tab-status-size: 14px;
   color: var(--vscode-editor-foreground);
@@ -11,7 +11,7 @@
 }
 
 body.vscode-dark {
-  --vertical-tab-group-background-shade: rgba(0, 0, 0, .28);
+  --vertical-tab-group-background-shade: rgba(255, 255, 255, .12);
 }
 
 body.vscode-high-contrast,

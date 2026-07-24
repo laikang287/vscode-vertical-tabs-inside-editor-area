@@ -85,8 +85,8 @@ test('group names preserve their original capitalization', () => {
 test('group headers use a deeper theme-aware background than tab content', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(style, /--vertical-tab-group-background-shade: rgba\(0, 0, 0, \.12\);/);
-  assert.match(style, /body\.vscode-dark \{\s*--vertical-tab-group-background-shade: rgba\(0, 0, 0, \.28\);/);
+  assert.match(style, /--vertical-tab-group-background-shade: rgba\(0, 0, 0, \.16\);/);
+  assert.match(style, /body\.vscode-dark \{\s*--vertical-tab-group-background-shade: rgba\(255, 255, 255, \.12\);/);
   assert.match(style, /\.group-header \{[\s\S]*?linear-gradient\(var\(--vertical-tab-group-background-shade\), var\(--vertical-tab-group-background-shade\)\),[\s\S]*?var\(--vscode-sideBarSectionHeader-background, var\(--vscode-editor-background\)\);/);
   assert.match(style, /body\.vscode-high-contrast,[\s\S]*?body\.vscode-high-contrast-light \{\s*--vertical-tab-group-background-shade: transparent;/);
 });
