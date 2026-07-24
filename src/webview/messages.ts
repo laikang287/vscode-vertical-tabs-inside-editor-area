@@ -6,7 +6,7 @@
 export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
 export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
 export type SortMode = 'none' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
-export type RelativePathDisplay = 'off' | 'duplicates' | 'always';
+export type RelativePathDisplay = 'off' | 'duplicatesDirectory' | 'duplicates' | 'alwaysDirectory' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
 export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';

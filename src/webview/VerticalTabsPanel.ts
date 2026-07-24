@@ -893,6 +893,7 @@ export class VerticalTabsPanel {
         inputKind: kind,
       }),
       path,
+      directoryName: inputDirectoryName(tab.input),
       relativePath: inputWorkspaceRelativePath(tab.input),
       tooltipPath: inputTooltipPath(tab.input),
       uri: inputUri(tab.input)?.toString(),
@@ -3013,6 +3014,22 @@ function inputWorkspaceRelativePath(input: vscode.Tab['input']): string | undefi
   return vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
 }
 
+function inputDirectoryName(input: vscode.Tab['input']): string | undefined {
+  const uri = inputUri(input);
+  if (!uri) {
+    return undefined;
+  }
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+  if (workspaceFolder) {
+    const relativePath = vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
+    const directoryPath = path.posix.dirname(relativePath);
+    return directoryPath === '.' ? workspaceFolder.name : path.posix.basename(directoryPath);
+  }
+  const directoryPath = path.posix.dirname(uri.path.replace(/\\/g, '/'));
+  const directoryName = path.posix.basename(directoryPath);
+  return directoryName && directoryName !== '.' ? directoryName : undefined;
+}
+
 function setiIconsRoot(): vscode.Uri {
   return vscode.Uri.joinPath(vscode.Uri.file(vscode.env.appRoot), 'extensions', 'theme-seti', 'icons');
 }
@@ -3226,7 +3243,11 @@ function isGroupMode(value: unknown): value is GroupMode {
 }
 
 function isRelativePathDisplay(value: unknown): value is RelativePathDisplay {
-  return value === 'off' || value === 'duplicates' || value === 'always';
+  return value === 'off'
+    || value === 'duplicatesDirectory'
+    || value === 'duplicates'
+    || value === 'alwaysDirectory'
+    || value === 'always';
 }
 
 function isSortMode(value: unknown): value is SortMode {
