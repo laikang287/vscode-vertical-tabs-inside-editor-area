@@ -5,18 +5,35 @@
   font-size: var(--vscode-font-size);
 }
 
-body { margin: 0; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+}
 
 .vertical-tabs {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
   min-width: 180px;
-  min-height: 100vh;
+  overflow: hidden;
   padding: 6px;
 }
 
 .toolbar {
-  display: block;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
   padding: 4px 2px 8px;
+}
+
+.vertical-tabs[data-toolbar-position="bottom"] .toolbar {
+  flex-direction: column-reverse;
+  order: 2;
+  padding: 8px 2px 4px;
 }
 
 .toolbar-actions {
@@ -24,7 +41,6 @@ body { margin: 0; }
   display: flex;
   gap: 4px;
   justify-content: flex-end;
-  margin-bottom: 6px;
 }
 
 .toolbar-selects {
@@ -38,7 +54,7 @@ body { margin: 0; }
   align-items: center;
   display: flex;
   gap: 0;
-  padding: 2px 0 6px;
+  padding: 0;
   position: relative;
 }
 .search-container[hidden] { display: none; }
@@ -131,6 +147,13 @@ button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground);
 button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 
 #description { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.5; margin: 4px 6px; }
+
+#groups {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
 
 .tab-group { margin-top: 1px; }
 .tab-group.without-header { margin-top: 0; }

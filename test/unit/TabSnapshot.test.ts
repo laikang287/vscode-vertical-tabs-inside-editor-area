@@ -11,6 +11,11 @@ const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'README.md', path: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
 ] }];
 
+test('defaults the toolbar to the top and preserves an explicit bottom position', () => {
+  assert.equal(buildSnapshot(source, 1, []).toolbarPosition, 'top');
+  assert.equal(buildSnapshot(source, 2, [], { toolbarPosition: 'bottom' }).toolbarPosition, 'bottom');
+});
+
 test('moves single and non-contiguous selected keys to the exact before-target position', () => {
   assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd', 'e'], ['a'], 'd'), ['b', 'c', 'a', 'd', 'e']);
   assert.deepEqual(moveItemsBefore(['a', 'b', 'c', 'd', 'e'], ['b', 'd'], 'a'), ['b', 'd', 'a', 'c', 'e']);

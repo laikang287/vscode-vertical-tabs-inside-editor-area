@@ -73,7 +73,7 @@ suite('Vertical Tabs extension', () => {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
       activationEvents: string[];
       contributes: {
-        configuration: { properties: Record<string, { default: unknown; markdownDescription?: string }> };
+        configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> };
         viewsContainers: { activitybar: Array<{ id: string }> };
       };
     };
@@ -85,6 +85,9 @@ suite('Vertical Tabs extension', () => {
     assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultGroupMode'].default, 'vscode');
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultSortMode'].default, 'none');
+    assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].default, 'top');
+    assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].enum, ['top', 'bottom']);
+    assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].scope, 'window');
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));
   });
 

@@ -6,6 +6,7 @@
 export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
 export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
 export type SortMode = 'none' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
+export type ToolbarPosition = 'top' | 'bottom';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
 export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean; readonly isFocused: boolean;
@@ -19,7 +20,7 @@ export interface VerticalTabDisplayGroup {
   readonly isPinned: boolean;
 }
 export interface VerticalTabsSnapshot {
-  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
+  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
   readonly searchVisible: boolean; readonly searchGroups: boolean;
 }

@@ -26,5 +26,8 @@
   "verticalTabs.config.language.es": "Español",
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский",
-  "verticalTabs.config.defaultToolbarControlsVisible": "分组方式与排序方式下拉控件的默认可见性。开启自动记忆时仅在无已保存的可见性时使用该值；关闭自动记忆时始终使用该值。"
+  "verticalTabs.config.defaultToolbarControlsVisible": "分组方式与排序方式下拉控件的默认可见性。开启自动记忆时仅在无已保存的可见性时使用该值；关闭自动记忆时始终使用该值。",
+  "verticalTabs.config.toolbarPosition": "垂直标签栏中搜索及分组操作图标、分组与排序控件和搜索框的位置。修改后立即生效。",
+  "verticalTabs.config.toolbarPosition.top": "将工具区固定在标签列表上方。",
+  "verticalTabs.config.toolbarPosition.bottom": "将工具区固定在标签列表下方，并反转各区域的纵向顺序。"
 }

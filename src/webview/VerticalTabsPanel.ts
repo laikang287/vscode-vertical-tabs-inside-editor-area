@@ -23,7 +23,7 @@ import type { LocaleStrings } from '../i18n/locale';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type SortMode, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type SortMode, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
@@ -77,9 +77,10 @@ export class VerticalTabsPanel {
   private lastObservedRailWidth: number | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, tabs: [], manualGroups: [], displayGroups: [] };
   private groupMode: GroupMode;
   private sortMode: SortMode;
+  private toolbarPosition: ToolbarPosition;
   private toolbarControlsVisible: boolean;
   private searchVisible: boolean;
   private searchGroups: boolean;
@@ -97,6 +98,7 @@ export class VerticalTabsPanel {
     this.rememberStateEnabled = shouldRememberState();
     this.groupMode = readGroupMode(context);
     this.sortMode = readSortMode(context);
+    this.toolbarPosition = readToolbarPosition();
     this.toolbarControlsVisible = readToolbarControlsVisible(context);
     this.searchVisible = readSearchVisible(context);
     this.searchGroups = readSearchGroups(context);
@@ -675,6 +677,7 @@ export class VerticalTabsPanel {
       localeStrings: this.localeStrings,
       groupMode: this.groupMode,
       sortMode: this.sortMode,
+      toolbarPosition: this.toolbarPosition,
       rememberState: shouldRememberState(),
       toolbarControlsVisible: this.toolbarControlsVisible,
       searchVisible: this.searchVisible,
@@ -1124,6 +1127,11 @@ export class VerticalTabsPanel {
     const rememberStateEnabled = shouldRememberState();
     const memoryChanged = rememberStateEnabled !== this.rememberStateEnabled;
     this.rememberStateEnabled = rememberStateEnabled;
+
+    if (event.affectsConfiguration('verticalTabs.toolbarPosition')) {
+      this.toolbarPosition = readToolbarPosition();
+      logInfo('更新垂直标签工具区位置', { toolbarPosition: this.toolbarPosition });
+    }
 
     if (event.affectsConfiguration('verticalTabs.language')) {
       this.localeStrings = this.resolveUiLocale();
@@ -2042,7 +2050,7 @@ export class VerticalTabsPanel {
   <title>${TITLE}</title>
 </head>
 <body>
-  <main class="vertical-tabs" aria-live="polite">
+  <main class="vertical-tabs" data-toolbar-position="${this.toolbarPosition}" aria-live="polite">
     <header class="toolbar">
       <div class="toolbar-actions">
         <button id="toggle-search" class="toolbar-icon" type="button" title="" aria-label="">🔍</button>
@@ -2078,8 +2086,11 @@ export class VerticalTabsPanel {
       logError('读取 Webview 样式失败，将使用最小降级样式', { stylePath, error });
       return [
         ':root { color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }',
-        'body { margin: 0; }',
-        '.vertical-tabs { box-sizing: border-box; min-width: 180px; min-height: 100vh; padding: 6px; }',
+        'html, body { height: 100%; }',
+        'body { margin: 0; overflow: hidden; }',
+        '.vertical-tabs { box-sizing: border-box; display: flex; flex-direction: column; height: 100vh; min-width: 180px; overflow: hidden; padding: 6px; }',
+        '.vertical-tabs[data-toolbar-position="bottom"] .toolbar { flex-direction: column-reverse; order: 2; }',
+        '#groups { flex: 1 1 auto; min-height: 0; overflow: auto; }',
         '#description { color: var(--vscode-errorForeground, var(--vscode-descriptionForeground)); font-size: 12px; line-height: 1.5; margin: 4px 6px; }',
         '#description::after { content: " Webview 样式加载失败，请查看 Vertical Tabs 输出日志。"; }',
         '.tab-row, .group-header, .toolbar-actions { display: flex; min-width: 0; }',
@@ -2738,6 +2749,11 @@ function readDefaultSortMode(): SortMode {
 function readDefaultToolbarControlsVisible(): boolean {
   const value = vscode.workspace.getConfiguration('verticalTabs').get<unknown>('defaultToolbarControlsVisible', true);
   return typeof value === 'boolean' ? value : true;
+}
+
+function readToolbarPosition(): ToolbarPosition {
+  const value = vscode.workspace.getConfiguration('verticalTabs').get<unknown>('toolbarPosition', 'top');
+  return value === 'bottom' ? 'bottom' : 'top';
 }
 
 function isGroupMode(value: unknown): value is GroupMode {
