@@ -6,10 +6,20 @@
   --vertical-tab-item-gap: 2px;
   --vertical-tab-pin-slot-width: 12px;
   --vertical-tab-tree-indent: 12px;
+  --vertical-tab-group-background-shade: rgba(0, 0, 0, .12);
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
+}
+
+body.vscode-dark {
+  --vertical-tab-group-background-shade: rgba(0, 0, 0, .28);
+}
+
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --vertical-tab-group-background-shade: transparent;
 }
 
 html, body { height: 100%; }
@@ -242,7 +252,9 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-group.empty-manual-root { min-height: 22px; }
 .group-header {
   align-items: center;
-  background: var(--vscode-sideBarSectionHeader-background, transparent);
+  background:
+    linear-gradient(var(--vertical-tab-group-background-shade), var(--vertical-tab-group-background-shade)),
+    var(--vscode-sideBarSectionHeader-background, var(--vscode-editor-background));
   border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
   color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
   cursor: pointer;
