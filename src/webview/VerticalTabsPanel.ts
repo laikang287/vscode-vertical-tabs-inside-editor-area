@@ -14,6 +14,7 @@ import {
   isEditorLayout,
   normalizeRailRatio,
   insertRailPreservingEditorWidths,
+  nudgeNarrowEdgeEditorGroupWidth,
   removeRailRestoringEditorWidths,
   resolveRailRatio,
   SAFE_RAIL_WIDTH,
@@ -2981,13 +2982,17 @@ async function prepareRailGroup(
   const configuredRatio = readConfiguredRailRatio();
   const ratio = getConfiguredRailRatio(context);
   const previousLayout = await getEditorLayout();
+  const creationLayoutPreparation = previousLayout
+    ? await prepareNarrowEdgeEditorGroupBeforeRailCreation(previousLayout, position)
+    : undefined;
+  const creationLayout = creationLayoutPreparation?.layout ?? previousLayout;
   const createCommand = position === 'left'
     ? 'workbench.action.newGroupLeft'
     : 'workbench.action.newGroupRight';
   const activeViewColumn = vscode.window.tabGroups.activeTabGroup.viewColumn;
-  const anchorViewColumn = previousLayout
+  const anchorViewColumn = creationLayout
     ? selectWidestEditorGroupViewColumn(
-      previousLayout,
+      creationLayout,
       vscode.window.tabGroups.all.map((group) => group.viewColumn),
       activeViewColumn,
     )
@@ -3015,6 +3020,10 @@ async function prepareRailGroup(
       createCommand,
       emptyGroupMoved: moveResult.moved,
       emptyGroupReachedEdge: moveResult.success,
+      edgeNudgeApplied: creationLayoutPreparation?.applied ?? false,
+      edgeNudgeMode: creationLayoutPreparation?.mode,
+      edgeWidthBeforeNudge: creationLayoutPreparation?.previousWidth,
+      edgeWidthAfterNudge: creationLayoutPreparation?.preparedWidth,
       viewColumn,
       editorGroups: vscode.window.tabGroups.all.length,
       expectedGroupCount,
@@ -3027,6 +3036,9 @@ async function prepareRailGroup(
     });
     return { ratio, viewColumn, previousLayout, layoutAppliedBeforePanel };
   } catch (error) {
+    if (creationLayoutPreparation?.applied && previousLayout) {
+      await applyEditorLayout(previousLayout).catch(() => false);
+    }
     logError('创建边缘空编辑器分组失败', {
       position,
       activeViewColumn,
@@ -3040,6 +3052,101 @@ async function prepareRailGroup(
     });
     return undefined;
   }
+}
+
+interface RailCreationLayoutPreparation {
+  readonly layout: EditorLayout;
+  readonly applied: boolean;
+  readonly mode?: 'pixel' | 'ratio';
+  readonly previousWidth?: number;
+  readonly preparedWidth?: number;
+}
+
+async function prepareNarrowEdgeEditorGroupBeforeRailCreation(
+  layout: EditorLayout,
+  position: RailPosition,
+): Promise<RailCreationLayoutPreparation> {
+  const edgeIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const previousWidth = layout.groups[edgeIndex]?.size;
+  if (typeof previousWidth !== 'number' || !Number.isFinite(previousWidth)) {
+    return { layout, applied: false };
+  }
+
+  const totalWidth = getEditorAreaWidth(layout);
+  const attempts: ReadonlyArray<{ readonly mode: 'pixel' | 'ratio'; readonly delta: number }> = [
+    { mode: 'pixel', delta: 1 },
+    { mode: 'ratio', delta: Math.max(2, Math.ceil(totalWidth * 0.001)) },
+  ];
+  for (const attempt of attempts) {
+    const nextLayout = nudgeNarrowEdgeEditorGroupWidth(layout, position, attempt.delta);
+    if (!nextLayout) {
+      return { layout, applied: false };
+    }
+    logDebug('创建垂直标签栏前预扩宽边缘窄编辑器组', {
+      position,
+      mode: attempt.mode,
+      delta: attempt.delta,
+      previousWidth,
+      nextWidth: nextLayout.groups[edgeIndex]?.size,
+      previousLayout: layout,
+      nextLayout,
+    });
+    if (!await applyEditorLayout(nextLayout)) {
+      continue;
+    }
+    const verifiedLayout = await waitForNarrowEdgeEditorGroupNudge(position, previousWidth);
+    const preparedWidth = verifiedLayout?.groups[edgeIndex]?.size;
+    if (verifiedLayout && typeof preparedWidth === 'number' && preparedWidth > previousWidth) {
+      logInfo('创建垂直标签栏前已预扩宽边缘窄编辑器组', {
+        position,
+        mode: attempt.mode,
+        previousWidth,
+        preparedWidth,
+      });
+      return {
+        layout: verifiedLayout,
+        applied: true,
+        mode: attempt.mode,
+        previousWidth,
+        preparedWidth,
+      };
+    }
+    logWarn(
+      attempt.mode === 'pixel'
+        ? '创建垂直标签栏前的边缘组像素预扩宽未生效，尝试极小比例调整'
+        : '创建垂直标签栏前的边缘组极小比例预扩宽未生效',
+      {
+        position,
+        mode: attempt.mode,
+        previousWidth,
+        requestedWidth: nextLayout.groups[edgeIndex]?.size,
+      },
+    );
+  }
+
+  logWarn('无法在创建垂直标签栏前安全预扩宽边缘窄编辑器组，将继续使用原布局', {
+    position,
+    previousWidth,
+    layout,
+  });
+  return { layout, applied: false };
+}
+
+async function waitForNarrowEdgeEditorGroupNudge(
+  position: RailPosition,
+  previousWidth: number,
+): Promise<EditorLayout | undefined> {
+  for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
+    const layout = await getEditorLayout();
+    const edgeIndex = layout ? (position === 'left' ? 0 : layout.groups.length - 1) : -1;
+    const width = edgeIndex >= 0 ? layout?.groups[edgeIndex]?.size : undefined;
+    if (layout && countLayoutLeaves(layout) === vscode.window.tabGroups.all.length
+      && typeof width === 'number' && width > previousWidth) {
+      return layout;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+  }
+  return undefined;
 }
 
 async function moveActiveEmptyGroupToRailEdge(

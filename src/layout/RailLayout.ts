@@ -292,6 +292,62 @@ export function selectWidestEditorGroupViewColumn(
 }
 
 /**
+ * Moves a narrow edge editor group just above its minimized width before VS
+ * Code creates the rail group. The delta is taken from the widest other root
+ * group so total width, ordering, and nested layout content remain unchanged.
+ */
+export function nudgeNarrowEdgeEditorGroupWidth(
+  layout: EditorLayout,
+  position: RailPosition,
+  delta = 1,
+  maximumNarrowWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+): EditorLayout | undefined {
+  if (
+    (layout.orientation ?? 0) !== 0
+    || layout.groups.length < 2
+    || !Number.isFinite(delta)
+    || delta <= 0
+  ) {
+    return undefined;
+  }
+
+  const edgeIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const edgeWidth = layout.groups[edgeIndex]?.size;
+  if (
+    typeof edgeWidth !== 'number'
+    || !Number.isFinite(edgeWidth)
+    || edgeWidth <= 0
+    || edgeWidth > maximumNarrowWidth
+  ) {
+    return undefined;
+  }
+
+  const donor = layout.groups
+    .flatMap((group, index) => {
+      const width = group.size;
+      return index !== edgeIndex
+        && typeof width === 'number'
+        && Number.isFinite(width)
+        && width - delta >= edgeWidth
+        ? [{ index, width }]
+        : [];
+    })
+    .sort((left, right) => right.width - left.width || left.index - right.index)[0];
+  if (!donor) {
+    return undefined;
+  }
+
+  return {
+    ...layout,
+    groups: layout.groups.map((group, index) => {
+      if (index === edgeIndex) return { ...copyGroup(group), size: edgeWidth + delta };
+      if (index === donor.index) return { ...copyGroup(group), size: donor.width - delta };
+      return copyGroup(group);
+    }),
+  };
+}
+
+/**
  * Nudges only the editor group identified by `viewColumn` above VS Code's
  * native minimized width. The size is taken from the deepest horizontal split
  * that controls the target leaf's width, so nested layouts remain intact.

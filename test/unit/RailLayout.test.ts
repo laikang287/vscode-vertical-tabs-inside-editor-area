@@ -11,6 +11,7 @@ import {
   MAX_PERSISTED_RAIL_RATIO,
   MIN_RAIL_WIDTH,
   normalizeRailWidth,
+  nudgeNarrowEdgeEditorGroupWidth,
   prependRailToLayout,
   prependRailPreservingEditorWidths,
   removeRailRestoringEditorWidths,
@@ -287,6 +288,47 @@ test('selects the widest group as the rail creation anchor without activating a 
   assert.equal(selectWidestEditorGroupViewColumn(leftMinimized, [1, 2], 1), 2);
   assert.equal(selectWidestEditorGroupViewColumn(rightMinimized, [1, 2], 1), 1);
   assert.equal(selectWidestEditorGroupViewColumn(rightMinimized, [1, 2], 2), 1);
+});
+
+test('nudges a 120px edge group before rail creation on either side', () => {
+  const leftLayout = {
+    orientation: 0,
+    groups: [{ size: 120 }, { size: 1280, groups: [{ size: 500 }, { size: 780 }] }],
+  } as const;
+  const rightLayout = {
+    orientation: 0,
+    groups: [{ size: 1280, groups: [{ size: 500 }, { size: 780 }] }, { size: 120 }],
+  } as const;
+
+  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(leftLayout, 'left'), {
+    orientation: 0,
+    groups: [{ size: 121 }, { size: 1279, groups: [{ size: 500 }, { size: 780 }] }],
+  });
+  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(rightLayout, 'right'), {
+    orientation: 0,
+    groups: [{ size: 1279, groups: [{ size: 500 }, { size: 780 }] }, { size: 121 }],
+  });
+  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(leftLayout, 'left', 2), {
+    orientation: 0,
+    groups: [{ size: 122 }, { size: 1278, groups: [{ size: 500 }, { size: 780 }] }],
+  });
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [120, 1280]);
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [1280, 120]);
+});
+
+test('skips the pre-creation edge nudge when the layout or donor is unsafe', () => {
+  assert.equal(
+    nudgeNarrowEdgeEditorGroupWidth({ orientation: 0, groups: [{ size: 221 }, { size: 1179 }] }, 'left'),
+    undefined,
+  );
+  assert.equal(
+    nudgeNarrowEdgeEditorGroupWidth({ orientation: 0, groups: [{ size: 120 }, { size: 120 }] }, 'right'),
+    undefined,
+  );
+  assert.equal(
+    nudgeNarrowEdgeEditorGroupWidth({ orientation: 1, groups: [{ size: 120 }, { size: 1280 }] }, 'left'),
+    undefined,
+  );
 });
 
 test('prefers the active group only when rail creation anchor widths tie', () => {
