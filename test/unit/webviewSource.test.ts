@@ -55,9 +55,10 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
-test('group names preserve their original capitalization', () => {
+test('group names are centered and preserve their original capitalization', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
+  assert.match(style, /\.group-name \{[\s\S]*?text-align: center;[\s\S]*?\}/);
   assert.match(style, /\.group-name \{[\s\S]*?text-transform: none;[\s\S]*?\}/);
   assert.doesNotMatch(style, /\.group-name \{[\s\S]*?text-transform: uppercase;[\s\S]*?\}/);
 });
