@@ -265,6 +265,33 @@ export function getEditorGroupWidth(layout: EditorLayout, viewColumn: number): n
 }
 
 /**
+ * Chooses a wide editor group as the temporary anchor used to create a new
+ * rail group. Activating an existing minimized group can make VS Code expand
+ * it, so the active group is only preferred when it ties for the widest width.
+ */
+export function selectWidestEditorGroupViewColumn(
+  layout: EditorLayout,
+  viewColumns: readonly number[],
+  activeViewColumn?: number,
+): number | undefined {
+  const candidates = viewColumns.flatMap((viewColumn) => {
+    const width = getEditorGroupWidth(layout, viewColumn);
+    return typeof width === 'number' && Number.isFinite(width) && width > 0
+      ? [{ viewColumn, width }]
+      : [];
+  });
+  candidates.sort((left, right) => {
+    if (right.width !== left.width) {
+      return right.width - left.width;
+    }
+    if (left.viewColumn === activeViewColumn) return -1;
+    if (right.viewColumn === activeViewColumn) return 1;
+    return left.viewColumn - right.viewColumn;
+  });
+  return candidates[0]?.viewColumn;
+}
+
+/**
  * Nudges only the editor group identified by `viewColumn` above VS Code's
  * native minimized width. The size is taken from the deepest horizontal split
  * that controls the target leaf's width, so nested layouts remain intact.

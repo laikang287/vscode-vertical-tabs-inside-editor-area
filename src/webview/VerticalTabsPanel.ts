@@ -17,6 +17,7 @@ import {
   removeRailRestoringEditorWidths,
   resolveRailRatio,
   SAFE_RAIL_WIDTH,
+  selectWidestEditorGroupViewColumn,
   setRailRootGroupWidth,
   shouldPersistRailGroupRatio,
   shouldPersistObservedRailWidth,
@@ -382,6 +383,9 @@ export class VerticalTabsPanel {
       }
       logError('垂直标签栏安排失败', { position: this.railPosition });
     });
+    if (VerticalTabsPanel.panels.current === this && !this.hasVisibleUserTabs()) {
+      await this.ensureUsableEmptyRailLayout();
+    }
   }
 
   private async ensureRail(
@@ -2829,19 +2833,28 @@ async function prepareRailGroup(
   const configuredRatio = readConfiguredRailRatio();
   const ratio = getConfiguredRailRatio(context);
   const previousLayout = await getEditorLayout();
-  const focusCommand = position === 'left'
-    ? 'workbench.action.focusFirstEditorGroup'
-    : 'workbench.action.focusLastEditorGroup';
   const createCommand = position === 'left'
     ? 'workbench.action.newGroupLeft'
     : 'workbench.action.newGroupRight';
+  const activeViewColumn = vscode.window.tabGroups.activeTabGroup.viewColumn;
+  const anchorViewColumn = previousLayout
+    ? selectWidestEditorGroupViewColumn(
+      previousLayout,
+      vscode.window.tabGroups.all.map((group) => group.viewColumn),
+      activeViewColumn,
+    )
+    : activeViewColumn;
   try {
-    await vscode.commands.executeCommand(focusCommand);
+    if (anchorViewColumn !== undefined && anchorViewColumn !== activeViewColumn) {
+      await focusEditorGroup(anchorViewColumn);
+    }
     await vscode.commands.executeCommand(createCommand);
-    const viewColumn = vscode.window.tabGroups.activeTabGroup.viewColumn;
+    const moveResult = await moveActiveEmptyGroupToRailEdge(position);
+    const viewColumn = moveResult.viewColumn;
     const expectedGroupCount = previousLayout ? countLayoutLeaves(previousLayout) + 1 : undefined;
     const edgeGroup = vscode.window.tabGroups.all.find((group) => group.viewColumn === viewColumn);
     const canApplyBeforePanel = previousLayout !== undefined
+      && moveResult.success
       && vscode.window.tabGroups.all.length === expectedGroupCount
       && edgeGroup?.tabs.length === 0;
     const layoutAppliedBeforePanel = canApplyBeforePanel
@@ -2849,8 +2862,11 @@ async function prepareRailGroup(
       : false;
     logDebug('在创建 Webview 前通过原生命令新建边缘空编辑器分组', {
       position,
-      focusCommand,
+      activeViewColumn,
+      anchorViewColumn,
       createCommand,
+      emptyGroupMoved: moveResult.moved,
+      emptyGroupReachedEdge: moveResult.success,
       viewColumn,
       editorGroups: vscode.window.tabGroups.all.length,
       expectedGroupCount,
@@ -2865,7 +2881,8 @@ async function prepareRailGroup(
   } catch (error) {
     logError('创建边缘空编辑器分组失败', {
       position,
-      focusCommand,
+      activeViewColumn,
+      anchorViewColumn,
       createCommand,
       savedRatio,
       configuredRatio,
@@ -2875,6 +2892,60 @@ async function prepareRailGroup(
     });
     return undefined;
   }
+}
+
+async function moveActiveEmptyGroupToRailEdge(
+  position: RailPosition,
+): Promise<{ readonly viewColumn: vscode.ViewColumn; readonly success: boolean; readonly moved: boolean }> {
+  const command = position === 'left'
+    ? 'workbench.action.moveActiveEditorGroupLeft'
+    : 'workbench.action.moveActiveEditorGroupRight';
+  const maxMoves = Math.max(1, vscode.window.tabGroups.all.length);
+  let moved = false;
+
+  for (let attempt = 0; attempt <= maxMoves; attempt += 1) {
+    const activeGroup = vscode.window.tabGroups.activeTabGroup;
+    if (activeGroup.tabs.length !== 0) {
+      logWarn('无法在显示前移动新建组：活动组已包含标签', {
+        position,
+        attempt,
+        viewColumn: activeGroup.viewColumn,
+        tabGroups: describeTabGroups(),
+      });
+      return { viewColumn: activeGroup.viewColumn, success: false, moved };
+    }
+    if (isGroupAtRailPosition(activeGroup, position)) {
+      return { viewColumn: activeGroup.viewColumn, success: true, moved };
+    }
+    if (attempt === maxMoves) {
+      break;
+    }
+
+    const beforeColumn = activeGroup.viewColumn;
+    await vscode.commands.executeCommand(command);
+    await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    const nextGroup = vscode.window.tabGroups.activeTabGroup;
+    if (nextGroup.viewColumn === beforeColumn) {
+      logWarn('移动新建空编辑器组的命令未改变位置', {
+        position,
+        command,
+        beforeColumn,
+        tabGroups: describeTabGroups(),
+      });
+      return { viewColumn: nextGroup.viewColumn, success: false, moved };
+    }
+    moved = true;
+  }
+
+  const activeGroup = vscode.window.tabGroups.activeTabGroup;
+  logWarn('新建空编辑器组在安全次数内未到达配置边缘', {
+    position,
+    command,
+    maxMoves,
+    viewColumn: activeGroup.viewColumn,
+    tabGroups: describeTabGroups(),
+  });
+  return { viewColumn: activeGroup.viewColumn, success: false, moved };
 }
 
 function getConfiguredRailRatio(context: vscode.ExtensionContext): number {
