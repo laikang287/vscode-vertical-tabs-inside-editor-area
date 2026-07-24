@@ -80,6 +80,11 @@ Luego, la extensión utiliza la función de bloqueo de grupo de editores de VS C
 1. Este proyecto utilizó herramientas de programación con IA durante el desarrollo para ayudar en la escritura de código, pruebas y documentación
 2. La documentación se basa en README.zh-CN; las versiones en otros idiomas son traducciones realizadas por IA
 3. La documentación en chino simplificado es la versión principal de mantenimiento de este proyecto
+4. Esta extensión implementa las pestañas verticales mediante una solución indirecta, por lo que se trata de un recurso provisional. La mejor solución sería que VS Code ofreciera compatibilidad oficial con las pestañas verticales.
+
+	Da tu voto favorable al issue relacionado de VS Code para que el equipo reconozca la demanda y preste más atención a esta función:
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## Licencia
 
@@ -87,5 +92,6 @@ Licencia MIT - consulta [LICENSE](LICENSE)
 
 ## Instalación Manual
 
-- Encuentra el archivo `.vsix` más reciente en el directorio releases del repositorio [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) en GitHub y descárgalo
+- Busca el repositorio `vscode-vertical-tabs-inside-editor-area` en GitHub, localiza el archivo `.vsix` más reciente en su directorio releases y descárgalo
+	- Repositorio de GitHub: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - Abre VS Code, ve a la vista de Extensiones en la barra de actividades, haz clic en el menú de tres puntos en la esquina superior derecha de la barra lateral y selecciona "Instalar desde VSIX..."

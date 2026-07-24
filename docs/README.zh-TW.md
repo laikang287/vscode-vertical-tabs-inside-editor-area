@@ -80,6 +80,11 @@ VS Code 預設使用橫向標籤欄。開啟大量檔案後，標籤名稱容易
 1. 本專案在開發過程中使用 AI 程式設計工具輔助完成程式碼編寫、測試和文件整理
 2. 文件以 README.zh-CN 為準，其餘語言版本由 AI 翻譯
 3. 簡體中文文件是本專案的主要維護版本
+4. 本擴充使用間接方式實作垂直標籤頁，屬於權宜方案。最佳方案仍是由 VS Code 官方支援垂直標籤頁。
+
+	請為相關的 VS Code 議題按讚，讓 VS Code 團隊注意到這項需求並更加重視此功能：
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## 授權條款
 
@@ -87,5 +92,6 @@ MIT License - 詳見 [LICENSE](LICENSE)
 
 ## 如何手動安裝擴充
 
-- 在 GitHub 的 [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) 倉庫的 releases 目錄下找到最新版的 .vsix 並下載
+- 在 GitHub 找到 `vscode-vertical-tabs-inside-editor-area` 倉庫，在 releases 目錄下找到最新版的 `.vsix` 並下載
+	- GitHub 倉庫地址：[vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - 開啟 VS Code → 活動欄找到擴充 → 點擊側邊欄右上角的三點選單 → 選擇「從 VSIX 安裝...」

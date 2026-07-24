@@ -91,5 +91,6 @@ MIT License - see [LICENSE](LICENSE)
 
 ## Manual Installation
 
-- Find the latest `.vsix` file in the releases directory of the [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) GitHub repository and download it
+- Find the `vscode-vertical-tabs-inside-editor-area` repository on GitHub, locate the latest `.vsix` file in its releases directory, and download it
+	- GitHub repository: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - Open VS Code, go to the Extensions view in the activity bar, click the three-dot menu in the top-right corner of the sidebar, and select "Install from VSIX..."

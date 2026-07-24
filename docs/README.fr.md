@@ -80,6 +80,11 @@ L'extension utilise ensuite la fonction de verrouillage de groupe d'éditeurs de
 1. Ce projet a utilisé des outils de programmation IA pendant le développement pour aider à la rédaction du code, aux tests et à la documentation
 2. La documentation est basée sur README.zh-CN ; les versions dans d'autres langues sont des traductions IA
 3. La documentation en chinois simplifié est la version principale maintenue de ce projet
+4. Cette extension met en œuvre les onglets verticaux au moyen d'une solution indirecte ; il s'agit donc d'un contournement. La meilleure solution serait que VS Code prenne officiellement en charge les onglets verticaux.
+
+	Veuillez voter en faveur de l'issue VS Code correspondante afin que l'équipe reconnaisse la demande et accorde davantage d'attention à cette fonctionnalité :
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## Licence
 
@@ -87,5 +92,6 @@ Licence MIT - voir [LICENSE](LICENSE)
 
 ## Installation Manuelle
 
-- Trouvez le fichier `.vsix` le plus récent dans le répertoire releases du dépôt [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) sur GitHub et téléchargez-le
+- Recherchez le dépôt `vscode-vertical-tabs-inside-editor-area` sur GitHub, trouvez le dernier fichier `.vsix` dans son répertoire releases et téléchargez-le
+	- Dépôt GitHub : [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - Ouvrez VS Code, allez dans la vue Extensions dans la barre d'activités, cliquez sur le menu à trois points en haut à droite de la barre latérale, et sélectionnez "Installer à partir d'un VSIX..."

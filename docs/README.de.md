@@ -80,6 +80,11 @@ Die Erweiterung verwendet anschließend die Editorgruppen-Sperrfunktion von VS C
 1. Dieses Projekt hat während der Entwicklung KI-Programmierwerkzeuge verwendet, um das Schreiben von Code, Tests und die Dokumentation zu unterstützen
 2. Die Dokumentation basiert auf README.zh-CN; Versionen in anderen Sprachen sind KI-Übersetzungen
 3. Die vereinfachte chinesische Dokumentation ist die primär gepflegte Version dieses Projekts
+4. Diese Erweiterung setzt vertikale Tabs über eine indirekte Umgehungslösung um und ist daher eher ein Behelf. Die beste Lösung wäre eine offizielle Unterstützung vertikaler Tabs durch VS Code.
+
+	Bitte stimmen Sie für das zugehörige VS-Code-Issue, damit das VS-Code-Team den Bedarf erkennt und dieser Funktion mehr Aufmerksamkeit schenkt:
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## Lizenz
 
@@ -87,5 +92,6 @@ MIT-Lizenz - siehe [LICENSE](LICENSE)
 
 ## Manuelle Installation
 
-- Finden Sie die neueste `.vsix`-Datei im releases-Verzeichnis des [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) GitHub-Repositories und laden Sie sie herunter
+- Suchen Sie auf GitHub nach dem Repository `vscode-vertical-tabs-inside-editor-area`, suchen Sie im releases-Verzeichnis nach der neuesten `.vsix`-Datei und laden Sie sie herunter
+	- GitHub-Repository: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - Öffnen Sie VS Code, gehen Sie zur Erweiterungsansicht in der Aktivitätsleiste, klicken Sie auf das Drei-Punkte-Menü oben rechts in der Seitenleiste und wählen Sie "Von VSIX installieren..."

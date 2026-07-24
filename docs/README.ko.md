@@ -80,6 +80,11 @@ VS Code는 기본적으로 가로 탭 막대를 사용합니다. 많은 파일�
 1. 본 프로젝트는 개발 과정에서 AI 프로그래밍 도구를 활용하여 코드 작성, 테스트 및 문서 정리를 지원했습니다
 2. 문서는 README.zh-CN을 기준으로 하며, 다른 언어 버전은 AI 번역입니다
 3. 간체 중국어 문서가 본 프로젝트의 주요 유지 관리 버전입니다
+4. 이 확장은 우회적인 방식으로 세로 탭을 구현하므로 임시방편에 가깝습니다. 가장 좋은 해결책은 VS Code가 세로 탭을 공식적으로 지원하는 것입니다.
+
+	관련 VS Code 이슈에 추천을 눌러 VS Code 팀이 수요를 인식하고 이 기능을 더 중요하게 다루도록 도와주세요:
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## 라이선스
 
@@ -87,5 +92,6 @@ MIT License - 자세한 내용은 [LICENSE](LICENSE)를 참조하세요
 
 ## 수동 설치 방법
 
-- GitHub의 [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) 저장소 releases 디렉터리에서 최신 `.vsix` 파일을 다운로드하세요
+- GitHub에서 `vscode-vertical-tabs-inside-editor-area` 저장소를 열고 releases 디렉터리에서 최신 `.vsix` 파일을 다운로드하세요
+	- GitHub 저장소 주소: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - VS Code 열기 → 활동 표시줄에서 확장 보기 열기 → 사이드바 오른쪽 상단의 점 세 개 메뉴 클릭 → "VSIX에서 설치..." 선택

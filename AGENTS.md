@@ -119,12 +119,20 @@ source: null
 - `README.zh-CN.md` 文件只能由用户手工编写，AI 不可以修改此文档。
 - `README.zh-CN.md` 是 README 的中文规范源。用户要求“翻译文档”时，将它翻译到仓库支持的所有其它 README 语言版本；用户只要求“翻译 README”时，仅翻译 README，不得同时翻译 CHANGELOG 或其它文档。
 - `CHANGELOG.zh-CN.md` 是 CHANGELOG 的中文规范源，只能由用户手工编写和提交，AI 不得创建、修改或代替用户提交该文件。
-- `CHANGELOG.md` 是由 `CHANGELOG.zh-CN.md` 翻译得到的英文版本。AI 不得因功能完成、版本更新、打包、发布或其它代码改动自动更新它；仅当用户明确要求“翻译文档”或“翻译 CHANGELOG.md”时才更新。用户只要求“翻译 CHANGELOG.md”时，仅将 `CHANGELOG.zh-CN.md` 翻译为英文 `CHANGELOG.md`，不得同时翻译 README 或其它文档。
-- 用户要求“翻译文档”时，执行当前纳入文档翻译范围的全部类型：将 `README.zh-CN.md` 翻译到仓库支持的所有其它 README 语言版本，并将 `CHANGELOG.zh-CN.md` 翻译为英文 `CHANGELOG.md`。若任一中文规范源不存在，应报告缺失，不得自行补写规范源。
+- `CHANGELOG.md` 是由 `CHANGELOG.zh-CN.md` 翻译得到的英文版本；其它语言的 CHANGELOG 统一放在 `docs/` 目录中，文件名分别为 `CHANGELOG.zh-TW.md`、`CHANGELOG.ja.md`、`CHANGELOG.ko.md`、`CHANGELOG.es.md`、`CHANGELOG.fr.md`、`CHANGELOG.de.md` 和 `CHANGELOG.ru.md`。
+- 仓库文档当前支持英语、简体中文、繁体中文、日语、韩语、西班牙语、法语、德语和俄语。后续增加或移除文档语言时，必须同步更新 README 与 CHANGELOG 的目标文件清单及语言导航。
+- AI 不得因功能完成、版本更新、打包、发布或其它代码改动自动更新任何 CHANGELOG 译文；仅当用户明确要求“翻译文档”或“翻译 CHANGELOG”时才更新。用户只要求“翻译 CHANGELOG”或“翻译 CHANGELOG.md”时，将 `CHANGELOG.zh-CN.md` 翻译到上述全部其它 CHANGELOG 语言版本，不得同时翻译 README 或其它文档。
+- 用户要求“翻译文档”时，执行当前纳入文档翻译范围的全部类型：将 `README.zh-CN.md` 翻译到仓库支持的所有其它 README 语言版本，并将 `CHANGELOG.zh-CN.md` 翻译到仓库支持的所有其它 CHANGELOG 语言版本。若任一中文规范源不存在，应报告缺失，不得自行补写规范源。
 - README 顶部必须保留 GitHub 可用的语言导航链接，至少覆盖仓库当前支持的所有 README 语言版本。用户明确要求将 `README.zh-CN.md` 翻译为其它语言 README 时，其它语言文件中的以下导航块必须保持原样，不得翻译链接文字、路径、标点或标签结构：
 
 ```
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
+```
+
+- CHANGELOG 顶部必须保留 GitHub 可用的语言导航链接，至少覆盖仓库当前支持的所有 CHANGELOG 语言版本。用户明确要求将 `CHANGELOG.zh-CN.md` 翻译为其它语言 CHANGELOG 时，所有语言文件中的以下导航块必须保持原样，不得翻译链接文字、路径、标点或标签结构：
+
+```
+[English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 ```
 
 

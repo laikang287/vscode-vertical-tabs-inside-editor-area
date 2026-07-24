@@ -80,6 +80,11 @@ VS Code はデフォルトで水平タブバーを使用します。多数のフ
 1. 本プロジェクトの開発では、コードの記述、テスト、ドキュメント作成に AI プログラミングツールを活用しました
 2. ドキュメントは README.zh-CN を基準とし、他の言語版は AI 翻訳によるものです
 3. 簡体字中国語のドキュメントが本プロジェクトの主要メンテナンス版です
+4. この拡張機能は間接的な回避策で垂直タブを実現しているため、いわば暫定的な方法です。最善の解決策は、VS Code が垂直タブを正式にサポートすることです。
+
+	関連する VS Code の Issue に賛成票を投じ、VS Code チームに需要を認識してもらい、この機能をより重視してもらえるようご協力ください：
+
+    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## ライセンス
 
@@ -87,5 +92,6 @@ MIT License - 詳細は [LICENSE](LICENSE) をご覧ください
 
 ## 手動インストール方法
 
-- GitHub の [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases) リポジトリの releases ディレクトリから最新の `.vsix` ファイルをダウンロードします
+- GitHub で `vscode-vertical-tabs-inside-editor-area` リポジトリを開き、releases ディレクトリから最新の `.vsix` ファイルをダウンロードします
+	- GitHub リポジトリ：[vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - VS Code を開く → アクティビティバーの拡張機能ビューを開く → サイドバー右上の三点メニューをクリック → 「VSIX からインストール...」を選択

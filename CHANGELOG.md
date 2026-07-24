@@ -1,5 +1,7 @@
 # Changelog
 
+[English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+
 ## [1.0.0] - 2026-07-23
 
 <mark>This is a major update. Due to the large number of changes, consider reverting to version 0.2.1 if you encounter bugs.</mark>
