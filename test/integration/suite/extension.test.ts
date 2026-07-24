@@ -170,22 +170,40 @@ suite('Vertical Tabs extension', () => {
         const widestIndexAfter = position === 'left' ? 2 : 0;
         const railWidth = nextSizes[railIndex];
         const donatedWidth = previousSizes[widestIndexBefore] - nextSizes[widestIndexAfter];
+        const safeMinimizedWidth = 223;
 
         assert.ok(railWidth >= 222, `The ${position} rail should receive a safe width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
         assert.ok(
-          Math.abs(nextSizes[1] - previousSizes[minimizedIndex]) <= 1,
-          `The minimized ${position} edge editor should keep its width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+          nextSizes[1] === safeMinimizedWidth,
+          `The minimized ${position} edge editor should be nudged above 220px before Show; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
         );
         assert.ok(
-          Math.abs(donatedWidth - railWidth) <= 1,
-          `Only the widest editor should provide the ${position} rail width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+          Math.abs(donatedWidth - railWidth - (safeMinimizedWidth - previousSizes[minimizedIndex])) <= 1,
+          `Only the widest editor should provide the ${position} rail width and 3px safety nudge; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
         );
         await new Promise<void>((resolve) => setTimeout(resolve, 350));
         const stableOpenLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
         assert.ok(
-          Math.abs((stableOpenLayout.groups[1]?.size ?? 0) - previousSizes[minimizedIndex]) <= 1,
-          `The minimized ${position} edge editor should remain narrow after VS Code settles; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(stableOpenLayout)}.`,
+          stableOpenLayout.groups[1]?.size === safeMinimizedWidth,
+          `The ${position} edge editor should remain at the safe narrow width after VS Code settles; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(stableOpenLayout)}.`,
         );
+
+        const minimizedBeforeHideGroups = stableOpenLayout.groups.map((group) => ({ ...group }));
+        const widthReturnedToWidest = safeMinimizedWidth - 220;
+        minimizedBeforeHideGroups[1] = { ...minimizedBeforeHideGroups[1], size: 220 };
+        minimizedBeforeHideGroups[widestIndexAfter] = {
+          ...minimizedBeforeHideGroups[widestIndexAfter],
+          size: (minimizedBeforeHideGroups[widestIndexAfter]?.size ?? 0) + widthReturnedToWidest,
+        };
+        await vscode.commands.executeCommand('vscode.setEditorLayout', {
+          orientation: 0,
+          groups: minimizedBeforeHideGroups,
+        });
+        await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 3
+          && candidate.groups[1]?.size === 220
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
 
         await vscode.commands.executeCommand('verticalTabs.close');
         await waitFor(() => verticalTabs().length === 0 && vscode.window.tabGroups.all.length === 2);
@@ -195,10 +213,16 @@ suite('Vertical Tabs extension', () => {
           && candidate.groups.every((group) => typeof group.size === 'number')
         ));
         const hiddenSizes = hiddenLayout.groups.map((group) => group.size as number);
+        const expectedHiddenSizes = [...previousSizes];
+        expectedHiddenSizes[minimizedIndex] = safeMinimizedWidth;
+        expectedHiddenSizes[widestIndexBefore] -= safeMinimizedWidth - previousSizes[minimizedIndex];
         assert.ok(
-          hiddenSizes.every((size, index) => Math.abs(size - previousSizes[index]) <= 1),
-          `Hiding the ${position} rail should return its width to the original donor without redistributing other editors; before ${JSON.stringify(previousLayout)}, hidden ${JSON.stringify(hiddenLayout)}.`,
+          hiddenSizes.every((size, index) => Math.abs(size - expectedHiddenSizes[index]) <= 1),
+          `Hiding the ${position} rail should keep the adjacent editor above 220px and return rail width to the original donor; before ${JSON.stringify(previousLayout)}, hidden ${JSON.stringify(hiddenLayout)}.`,
         );
+        // Confirm that VS Code does not apply a delayed maximize/minimize transition
+        // before the next Show operation changes the grid.
+        await new Promise<void>((resolve) => setTimeout(resolve, 350));
 
         await vscode.commands.executeCommand('verticalTabs.open');
         await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length === 3 && isRailAtEdge(position));
@@ -207,9 +231,9 @@ suite('Vertical Tabs extension', () => {
         const reopenedLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
         const reopenedSizes = reopenedLayout.groups.map((group) => group.size as number);
         const reopenedRailWidth = reopenedSizes[railIndex];
-        const reopenedDonatedWidth = previousSizes[widestIndexBefore] - reopenedSizes[widestIndexAfter];
+        const reopenedDonatedWidth = hiddenSizes[widestIndexBefore] - reopenedSizes[widestIndexAfter];
         assert.ok(
-          Math.abs(reopenedSizes[1] - previousSizes[minimizedIndex]) <= 1,
+          reopenedSizes[1] === safeMinimizedWidth,
           `Reopening the ${position} rail must not activate and auto-expand the minimized edge editor; before ${JSON.stringify(previousLayout)}, reopened ${JSON.stringify(reopenedLayout)}.`,
         );
         assert.ok(
@@ -582,7 +606,11 @@ suite('Vertical Tabs extension', () => {
       orientation: 0,
       groups: [{ size: 300 }, { size: 1080 }, { size: 220 }],
     });
-    await waitForEditorLayout((candidate) => candidate.groups[2]?.size === 220);
+    await waitForEditorLayout((candidate) => (
+      candidate.groups[0]?.size === 222
+      && candidate.groups[2]?.size === 220
+    ));
+    await new Promise<void>((resolve) => setTimeout(resolve, 250));
 
     await vscode.commands.executeCommand('workbench.action.focusThirdEditorGroup');
     const expandedLayout = await waitForEditorLayout((candidate) => (

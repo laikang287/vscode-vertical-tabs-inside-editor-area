@@ -624,9 +624,9 @@ test('extension restores the prepared rail layout without a fixed visible delay'
   assert.doesNotMatch(source, /RAIL_SETTLE_DELAY_MS/);
   assert.match(source, /const initialGroupIndex = await this\.waitForOwnGroup\(\)/);
   assert.match(source, /const preparedRailGroup = await prepareRailGroup\(context, position\)[\s\S]+vscode\.window\.createWebviewPanel/);
-  assert.match(source, /const layoutAppliedBeforePanel = canApplyBeforePanel[\s\S]+applyRailRatio\(ratio, position, previousLayout\)/);
-  assert.match(source, /return \{ ratio, viewColumn, previousLayout, layoutAppliedBeforePanel \}/);
-  assert.match(source, /if \(!preparedRailGroup\.layoutAppliedBeforePanel\)[\s\S]+setTimeout\(resolve, GROUP_WAIT_INTERVAL_MS\)[\s\S]+applyRailRatio\(preparedRailGroup\.ratio, this\.railPosition, preparedRailGroup\.previousLayout\)/);
+  assert.match(source, /const layoutAppliedBeforePanel = canApplyBeforePanel[\s\S]+applyRailRatio\(ratio, position, creationLayout\)/);
+  assert.match(source, /preparedEditorLayout: creationLayout,[\s\S]+layoutAppliedBeforePanel/);
+  assert.match(source, /if \(!preparedRailGroup\.layoutAppliedBeforePanel\)[\s\S]+setTimeout\(resolve, GROUP_WAIT_INTERVAL_MS\)[\s\S]+applyRailRatio\(preparedRailGroup\.ratio, this\.railPosition, preparedRailGroup\.preparedEditorLayout\)/);
   assert.match(source, /宽度已在 Webview 显示前应用，跳过显示后的布局等待和重复写入/);
 });
 
@@ -643,9 +643,32 @@ test('rail creation avoids activating a narrow edge editor before restoring widt
   );
   assert.match(prepareSource, /selectWidestEditorGroupViewColumn\(/);
   assert.match(prepareSource, /moveActiveEmptyGroupToRailEdge\(position\)/);
-  assert.match(prepareSource, /mode: 'pixel', delta: 1[\s\S]+mode: 'ratio'/);
+  assert.match(prepareSource, /mode: 'pixel', delta: 3[\s\S]+mode: 'ratio'/);
+  assert.match(prepareSource, /previousWidth !== VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH[\s\S]+ready: true/);
+  assert.match(
+    prepareSource,
+    /if \(creationLayoutPreparation && !creationLayoutPreparation\.ready\)[\s\S]+return undefined;[\s\S]+executeCommand\(createCommand\)/,
+  );
+  assert.match(
+    prepareSource,
+    /applyEditorLayoutUntilStable\(nextLayout,[\s\S]+width: requestedWidth,[\s\S]+mode: 'minimum'/,
+  );
+  assert.match(prepareSource, /layoutCommandApplied[\s\S]+applyEditorLayoutUntilStable\(layout\)[\s\S]+ready: false/);
   assert.doesNotMatch(prepareSource, /workbench\.action\.focusFirstEditorGroup/);
   assert.doesNotMatch(prepareSource, /workbench\.action\.focusLastEditorGroup/);
+});
+
+test('rail minimum-width correction verifies the rail without minimizing a user donor', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const layoutSource = readFileSync(path.resolve(__dirname, '../../../src/layout/RailLayout.ts'), 'utf8');
+
+  assert.match(
+    panelSource,
+    /correctMinimizedEditorGroupWidth\(layout, viewColumn\)[\s\S]+applyEditorLayoutUntilStable\(nextLayout, \{[\s\S]+viewColumn,[\s\S]+width: SAFE_RAIL_WIDTH,[\s\S]+mode: 'minimum'/,
+  );
+  assert.match(panelSource, /verifiedWidth === undefined \|\| verifiedWidth < SAFE_RAIL_WIDTH/);
+  assert.match(layoutSource, /availableWidth = Math\.max\(0, Math\.floor\(size - safeWidth\)\)/);
+  assert.match(layoutSource, /contributionByIndex[\s\S]+remainingWidth/);
 });
 
 test('extension avoids persisting and restoring transient empty-rail widths', () => {
@@ -680,19 +703,74 @@ test('extension keeps the native new-group layout when preserved rail allocation
   assert.match(source, /widthContributions: describeRailWidthContributions\(previousLayout, preservedLayout, position\)/);
   assert.match(
     source,
-    /if \(previousLayout && countLayoutLeaves\(layout\) === countLayoutLeaves\(previousLayout\) \+ 1\)[\s\S]+if \(preservedLayout\)[\s\S]+return applyEditorLayout\(preservedLayout\);[\s\S]+return true;\s*}\s*const existingRailLikeGroup/,
+    /if \(previousLayout && countLayoutLeaves\(layout\) === countLayoutLeaves\(previousLayout\) \+ 1\)[\s\S]+if \(preservedLayout\)[\s\S]+applyEditorLayoutUntilStable\(preservedLayout, protectedWidth\)[\s\S]+return true;\s*}\s*const existingRailLikeGroup/,
   );
 });
 
 test('extension returns rail width to its original editor donors when hidden', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const closeStart = source.indexOf('private async close(): Promise<void>');
+  const closeEnd = source.indexOf('private async focusAndLockOwnGroup()', closeStart);
+  const closeSource = source.slice(closeStart, closeEnd);
 
-  assert.match(source, /await this\.captureCloseLayoutRestore\(preparedRailGroup\?\.previousLayout\)/);
-  assert.match(source, /removeRailRestoringEditorWidths\(currentLayout, this\.railPosition, contributions\)/);
+  assert.ok(closeStart >= 0 && closeEnd > closeStart);
   assert.match(
     source,
-    /vscode\.window\.tabGroups\.close\(group, true\)[\s\S]+waitForEditorLayoutLeafCount\(countLayoutLeaves\(restoredLayout\)\)[\s\S]+applyEditorLayout\(restoredLayout\)/,
+    /await this\.captureCloseLayoutRestore\([\s\S]+preparedRailGroup\?\.preparedEditorLayout \?\? preparedRailGroup\?\.previousLayout/,
   );
+  assert.match(source, /Math\.abs\(totalContribution - railWidth\) <= CLOSE_LAYOUT_RESTORE_TOLERANCE_PX/);
+  assert.match(source, /editorLayoutAfterShow: EditorLayout/);
+  assert.match(
+    closeSource,
+    /prepareMinimizedEditorBesideRailBeforeHide\(initialLayout, this\.railPosition\)[\s\S]+removeRailRestoringEditorWidths\(currentLayout, this\.railPosition, contributions\)[\s\S]+tabGroups\.close\(group, true\)/,
+  );
+  assert.match(closeSource, /if \(adjacentPreparation && !adjacentPreparation\.ready\)[\s\S]+hideCancelled = true;[\s\S]+return;/);
+  assert.match(
+    closeSource,
+    /if \(hideCancelled\) \{[\s\S]+return;[\s\S]+this\.panel\.dispose\(\)/,
+  );
+  assert.match(source, /removeRailRestoringEditorWidths\(currentLayout, this\.railPosition, contributions\)/);
+  assert.match(source, /HIDE_MINIMIZED_EDITOR_TARGET_WIDTH = SAFE_MINIMIZED_EDITOR_GROUP_WIDTH/);
+  assert.match(
+    source,
+    /widenMinimizedEditorBesideRailBeforeHide\([\s\S]+HIDE_MINIMIZED_EDITOR_TARGET_WIDTH[\s\S]+applyEditorLayoutUntilStable\(nextLayout, \{[\s\S]+mode: 'exact'/,
+  );
+  assert.match(
+    closeSource,
+    /removeRailPreservingCurrentEditorWidths\(initialLayout, this\.railPosition\)[\s\S]+editorLayoutsMatch\([\s\S]+this\.closeLayoutRestore\.editorLayoutAfterShow,[\s\S]+CLOSE_LAYOUT_RESTORE_TOLERANCE_PX/,
+  );
+  assert.match(closeSource, /restoreSnapshotMatches[\s\S]+\? \(this\.closeLayoutRestore\?\.contributions \?\? \[\]\)[\s\S]+: \[\]/);
+  assert.match(closeSource, /normalizeMinimizedEdgeEditorGroupWidth\(restoredLayout, this\.railPosition\)/);
+  assert.match(
+    closeSource,
+    /const finalRestoredLayout = minimizedEdgeNeedsNormalization[\s\S]+normalizedRestoredLayout[\s\S]+: restoredLayout/,
+  );
+  assert.match(closeSource, /else if \(minimizedEdgeNeedsNormalization\)[\s\S]+保留 VS Code 关闭分组后的原生布局/);
+  assert.match(
+    closeSource,
+    /vscode\.window\.tabGroups\.close\(group, true\)[\s\S]+waitForEditorLayoutLeafCount\(countLayoutLeaves\(finalRestoredLayout\)\)[\s\S]+applyEditorLayoutUntilStable\([\s\S]+mode: 'exact'/,
+  );
+  assert.match(source, /LAYOUT_TRANSACTION_MAX_APPLY_ATTEMPTS = 3/);
+  assert.match(source, /LAYOUT_STABILITY_SAMPLES = 3/);
+  assert.match(source, /LAYOUT_STABILITY_INTERVAL_MS = 50/);
+  assert.match(
+    source,
+    /stableSamples < LAYOUT_STABILITY_SAMPLES[\s\S]+editorLayoutsMatch\(lastObservedLayout, layout\)[\s\S]+hasProtectedEditorGroupWidth/,
+  );
+});
+
+test('final Hide flow removes high-frequency diagnostic snapshots', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const closeStart = source.indexOf('private async close(): Promise<void>');
+  const closeEnd = source.indexOf('private async focusAndLockOwnGroup()', closeStart);
+  const closeSource = source.slice(closeStart, closeEnd);
+
+  assert.ok(closeStart >= 0 && closeEnd > closeStart);
+  assert.doesNotMatch(source, /Hide 布局诊断快照/);
+  assert.doesNotMatch(source, /hideLayoutDiagnosticSequence/);
+  assert.doesNotMatch(source, /for \(const delayMs of \[50, 150, 300\]\)/);
+  assert.match(closeSource, /logDebug\('准备隐藏垂直标签栏并恢复用户编辑器组宽度'/);
+  assert.match(closeSource, /contributionHistoryDiscarded/);
 });
 
 test('extension retries undelivered render messages', () => {
