@@ -250,8 +250,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   height: 22px;
   padding: 0 0 0 8px;
 }
-.group-header[draggable="true"] { cursor: grab; }
-.group-header[draggable="true"]:active { cursor: grabbing; }
 .group-header:hover {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-list-hoverForeground, inherit);
@@ -307,13 +305,12 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   align-items: stretch;
   border: 1px solid transparent;
   box-sizing: border-box;
+  cursor: pointer;
   display: flex;
   min-height: 24px;
   min-width: 0;
   position: relative;
 }
-.tab-row[draggable="true"] { cursor: grab; }
-.tab-row[draggable="true"]:active { cursor: grabbing; }
 .tab-drop-indicator {
   background: var(--vscode-focusBorder, #007fd4);
   box-shadow: 0 0 4px 1px var(--vscode-focusBorder, #007fd4);
