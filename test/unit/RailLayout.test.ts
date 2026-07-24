@@ -15,6 +15,7 @@ import {
   prependRailPreservingEditorWidths,
   removeRailRestoringEditorWidths,
   resolveRailRatio,
+  selectWidestEditorGroupViewColumn,
   setRailRootGroupWidth,
   setLeadingRailWidth,
   shouldPersistObservedRailWidth,
@@ -140,6 +141,25 @@ test('preserves a minimized edge group and takes left or right rail width from t
   assert.deepEqual(rightLayout.groups.map((group) => group.size), [955, 220], 'The right source layout must remain immutable.');
 });
 
+test('preserves a 120px edge group while creating a rail on either side', () => {
+  assert.deepEqual(
+    insertRailPreservingEditorWidths(
+      { orientation: 0, groups: [{ size: 120 }, { size: 1280 }] },
+      320,
+      'left',
+    ),
+    { orientation: 0, groups: [{ size: 320 }, { size: 120 }, { size: 960 }] },
+  );
+  assert.deepEqual(
+    insertRailPreservingEditorWidths(
+      { orientation: 0, groups: [{ size: 1280 }, { size: 120 }] },
+      320,
+      'right',
+    ),
+    { orientation: 0, groups: [{ size: 960 }, { size: 120 }, { size: 320 }] },
+  );
+});
+
 test('combines widest-group slack without shrinking an editor below its native minimum', () => {
   const layout = {
     orientation: 0,
@@ -257,6 +277,24 @@ test('maps view columns to layout leaves in grid appearance order', () => {
   assert.equal(getEditorGroupWidth(layout, 2), 600);
   assert.equal(getEditorGroupWidth(layout, 3), 150);
   assert.equal(getEditorGroupWidth(layout, 5), undefined);
+});
+
+test('selects the widest group as the rail creation anchor without activating a 120px edge group', () => {
+  const leftMinimized = { orientation: 0, groups: [{ size: 120 }, { size: 1280 }] } as const;
+  const rightMinimized = { orientation: 0, groups: [{ size: 1280 }, { size: 120 }] } as const;
+
+  assert.equal(selectWidestEditorGroupViewColumn(leftMinimized, [1, 2], 2), 2);
+  assert.equal(selectWidestEditorGroupViewColumn(leftMinimized, [1, 2], 1), 2);
+  assert.equal(selectWidestEditorGroupViewColumn(rightMinimized, [1, 2], 1), 1);
+  assert.equal(selectWidestEditorGroupViewColumn(rightMinimized, [1, 2], 2), 1);
+});
+
+test('prefers the active group only when rail creation anchor widths tie', () => {
+  const layout = { orientation: 0, groups: [{ size: 600 }, { size: 600 }, { size: 120 }] } as const;
+
+  assert.equal(selectWidestEditorGroupViewColumn(layout, [1, 2, 3], 2), 2);
+  assert.equal(selectWidestEditorGroupViewColumn(layout, [1, 2, 3], 3), 1);
+  assert.equal(selectWidestEditorGroupViewColumn(layout, [4], 4), undefined);
 });
 
 test('corrects only the minimized editor group identified by view column', () => {

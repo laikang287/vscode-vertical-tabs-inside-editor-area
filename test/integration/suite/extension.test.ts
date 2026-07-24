@@ -164,6 +164,12 @@ suite('Vertical Tabs extension', () => {
           Math.abs(donatedWidth - railWidth) <= 1,
           `Only the widest editor should provide the ${position} rail width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
         );
+        await new Promise<void>((resolve) => setTimeout(resolve, 350));
+        const stableOpenLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+        assert.ok(
+          Math.abs((stableOpenLayout.groups[1]?.size ?? 0) - previousSizes[minimizedIndex]) <= 1,
+          `The minimized ${position} edge editor should remain narrow after VS Code settles; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(stableOpenLayout)}.`,
+        );
 
         await vscode.commands.executeCommand('verticalTabs.close');
         await waitFor(() => verticalTabs().length === 0 && vscode.window.tabGroups.all.length === 2);
@@ -176,6 +182,23 @@ suite('Vertical Tabs extension', () => {
         assert.ok(
           hiddenSizes.every((size, index) => Math.abs(size - previousSizes[index]) <= 1),
           `Hiding the ${position} rail should return its width to the original donor without redistributing other editors; before ${JSON.stringify(previousLayout)}, hidden ${JSON.stringify(hiddenLayout)}.`,
+        );
+
+        await vscode.commands.executeCommand('verticalTabs.open');
+        await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length === 3 && isRailAtEdge(position));
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+        await new Promise<void>((resolve) => setTimeout(resolve, 350));
+        const reopenedLayout = await vscode.commands.executeCommand<EditorLayout>('vscode.getEditorLayout');
+        const reopenedSizes = reopenedLayout.groups.map((group) => group.size as number);
+        const reopenedRailWidth = reopenedSizes[railIndex];
+        const reopenedDonatedWidth = previousSizes[widestIndexBefore] - reopenedSizes[widestIndexAfter];
+        assert.ok(
+          Math.abs(reopenedSizes[1] - previousSizes[minimizedIndex]) <= 1,
+          `Reopening the ${position} rail must not activate and auto-expand the minimized edge editor; before ${JSON.stringify(previousLayout)}, reopened ${JSON.stringify(reopenedLayout)}.`,
+        );
+        assert.ok(
+          reopenedRailWidth >= 222 && Math.abs(reopenedDonatedWidth - reopenedRailWidth) <= 1,
+          `Reopening the ${position} rail should keep taking width only from the widest editor; before ${JSON.stringify(previousLayout)}, reopened ${JSON.stringify(reopenedLayout)}.`,
         );
       }
     } finally {

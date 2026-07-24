@@ -213,7 +213,7 @@ test('editor-area position setting supports live left and right placement with a
   assert.match(panelSource, /event\.affectsConfiguration\('verticalTabs\.position'\)/);
   assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupLeft/);
   assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupRight/);
-  assert.match(panelSource, /workbench\.action\.focusLastEditorGroup/);
+  assert.match(panelSource, /selectWidestEditorGroupViewColumn/);
   assert.match(panelSource, /this\.railPosition === 'left'[\s\S]+newGroupRight[\s\S]+newGroupLeft/);
 });
 
@@ -393,6 +393,19 @@ test('extension restores the prepared rail layout without a fixed visible delay'
   assert.match(source, /return \{ ratio, viewColumn, previousLayout, layoutAppliedBeforePanel \}/);
   assert.match(source, /if \(!preparedRailGroup\.layoutAppliedBeforePanel\)[\s\S]+setTimeout\(resolve, GROUP_WAIT_INTERVAL_MS\)[\s\S]+applyRailRatio\(preparedRailGroup\.ratio, this\.railPosition, preparedRailGroup\.previousLayout\)/);
   assert.match(source, /宽度已在 Webview 显示前应用，跳过显示后的布局等待和重复写入/);
+});
+
+test('rail creation avoids activating a narrow edge editor before restoring widths', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const prepareStart = source.indexOf('async function prepareRailGroup(');
+  const prepareEnd = source.indexOf('function getConfiguredRailRatio(', prepareStart);
+  const prepareSource = source.slice(prepareStart, prepareEnd);
+
+  assert.ok(prepareStart >= 0 && prepareEnd > prepareStart);
+  assert.match(prepareSource, /selectWidestEditorGroupViewColumn\(/);
+  assert.match(prepareSource, /moveActiveEmptyGroupToRailEdge\(position\)/);
+  assert.doesNotMatch(prepareSource, /workbench\.action\.focusFirstEditorGroup/);
+  assert.doesNotMatch(prepareSource, /workbench\.action\.focusLastEditorGroup/);
 });
 
 test('extension avoids persisting and restoring transient empty-rail widths', () => {
