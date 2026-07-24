@@ -1,22 +1,14 @@
 ﻿:root {
   --vertical-tab-action-size: 22px;
   --vertical-tab-inline-padding: 6px;
-  --vertical-tab-group-background-shade: rgba(0, 0, 0, .16);
   --vertical-tab-status-gap: 2px;
   --vertical-tab-status-size: 14px;
+  --vertical-tab-group-accent: var(--vscode-textLink-foreground, var(--vscode-focusBorder, #007fd4));
+  --vertical-tab-group-active-accent: var(--vscode-textLink-activeForeground, var(--vertical-tab-group-accent));
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
-}
-
-body.vscode-dark {
-  --vertical-tab-group-background-shade: rgba(255, 255, 255, .12);
-}
-
-body.vscode-high-contrast,
-body.vscode-high-contrast-light {
-  --vertical-tab-group-background-shade: transparent;
 }
 
 html, body { height: 100%; }
@@ -227,10 +219,8 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-group.empty-manual-root { min-height: 22px; }
 .group-header {
   align-items: center;
-  background:
-    linear-gradient(var(--vertical-tab-group-background-shade), var(--vertical-tab-group-background-shade)),
-    var(--vscode-sideBarSectionHeader-background, var(--vscode-editor-background));
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--vertical-tab-group-accent) 45%, transparent);
   color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
   cursor: pointer;
   display: flex;
@@ -240,6 +230,10 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-header:hover {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-list-hoverForeground, inherit);
+}
+.group-header:hover .group-toggle,
+.group-header:hover .group-name {
+  color: var(--vertical-tab-group-active-accent);
 }
 .tab-group.has-focused-tab > .group-header {
   border-left: 2px solid var(--vscode-focusBorder);
@@ -264,7 +258,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   gap: 4px;
   min-width: 0;
 }
-.group-toggle { color: inherit; flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
+.group-toggle { color: var(--vertical-tab-group-accent); flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
 .group-actions, .tab-actions { align-items: center; display: flex; justify-content: center; }
 .group-actions { flex: 0 0 23px; opacity: 0; padding-right: 3px; pointer-events: none; }
 .group-header:hover .group-actions { opacity: 1; pointer-events: auto; }
@@ -272,6 +266,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-action { color: inherit; }
 .group-header .tab-action { height: 20px; line-height: 20px; min-width: 20px; padding: 0; }
 .group-name {
+  color: var(--vertical-tab-group-accent);
   flex: 1;
   font-size: 11px;
   font-weight: 600;
@@ -421,6 +416,11 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   align-items: center;
   display: inline-flex;
   justify-content: center;
+}
+
+body.vscode-high-contrast .group-header,
+body.vscode-high-contrast-light .group-header {
+  border-bottom-color: var(--vscode-contrastBorder, var(--vertical-tab-group-accent));
 }
 
 body.vscode-high-contrast .tab-row.is-focused,

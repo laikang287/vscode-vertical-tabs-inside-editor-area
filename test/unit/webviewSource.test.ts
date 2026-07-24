@@ -144,13 +144,18 @@ test('group names preserve their original capitalization', () => {
   assert.doesNotMatch(style, /\.group-name \{[\s\S]*?text-transform: uppercase;[\s\S]*?\}/);
 });
 
-test('group headers use a deeper theme-aware background than tab content', () => {
+test('group headers use theme-aware accent text and separators without background shading', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(style, /--vertical-tab-group-background-shade: rgba\(0, 0, 0, \.16\);/);
-  assert.match(style, /body\.vscode-dark \{\s*--vertical-tab-group-background-shade: rgba\(255, 255, 255, \.12\);/);
-  assert.match(style, /\.group-header \{[\s\S]*?linear-gradient\(var\(--vertical-tab-group-background-shade\), var\(--vertical-tab-group-background-shade\)\),[\s\S]*?var\(--vscode-sideBarSectionHeader-background, var\(--vscode-editor-background\)\);/);
-  assert.match(style, /body\.vscode-high-contrast,[\s\S]*?body\.vscode-high-contrast-light \{\s*--vertical-tab-group-background-shade: transparent;/);
+  assert.doesNotMatch(style, /--vertical-tab-group-background-shade/);
+  assert.match(style, /--vertical-tab-group-accent: var\(--vscode-textLink-foreground, var\(--vscode-focusBorder, #007fd4\)\);/);
+  assert.match(style, /--vertical-tab-group-active-accent: var\(--vscode-textLink-activeForeground, var\(--vertical-tab-group-accent\)\);/);
+  assert.match(style, /\.group-header \{[\s\S]*?background: transparent;[\s\S]*?border-bottom: 1px solid color-mix\(in srgb, var\(--vertical-tab-group-accent\) 45%, transparent\);/);
+  assert.match(style, /\.group-header:hover \.group-toggle,[\s\S]*?\.group-header:hover \.group-name \{\s*color: var\(--vertical-tab-group-active-accent\);/);
+  assert.match(style, /\.group-toggle \{ color: var\(--vertical-tab-group-accent\);/);
+  assert.match(style, /\.group-name \{\s*color: var\(--vertical-tab-group-accent\);/);
+  assert.match(style, /body\.vscode-high-contrast \.group-header,[\s\S]*?body\.vscode-high-contrast-light \.group-header \{\s*border-bottom-color: var\(--vscode-contrastBorder, var\(--vertical-tab-group-accent\)\);/);
+  assert.match(style, /\.tab-group\.has-focused-tab > \.group-header \{\s*border-left: 2px solid var\(--vscode-focusBorder\);/);
 });
 
 test('tab close buttons reclaim their width until the row is hovered or keyboard-focused', () => {
