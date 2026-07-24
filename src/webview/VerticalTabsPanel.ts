@@ -56,6 +56,7 @@ const RENDER_ACK_MAX_ATTEMPTS = 6;
 interface PreparedRailGroup {
   readonly ratio: number;
   readonly previousLayout?: EditorLayout;
+  readonly layoutAppliedBeforePanel: boolean;
 }
 
 export class VerticalTabsPanel {
@@ -366,12 +367,17 @@ export class VerticalTabsPanel {
       return false;
     }
     if (preparedRailGroup !== undefined) {
-      // VS Code publishes the new group before its native split layout has
-      // committed. Wait one event-loop turn, then write the width once.
-      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
-      if (!await applyLeadingRailRatio(preparedRailGroup.ratio, preparedRailGroup.previousLayout)) {
-        logWarn('无法在创建垂直标签 Webview 后应用宽度比例');
-        return false;
+      if (!preparedRailGroup.layoutAppliedBeforePanel) {
+        // The pre-display write can be skipped when VS Code has not published
+        // the new empty group yet. Keep the proven post-display path as a safe
+        // fallback instead of risking an incorrect editor layout.
+        await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+        if (!await applyLeadingRailRatio(preparedRailGroup.ratio, preparedRailGroup.previousLayout)) {
+          logWarn('无法在创建垂直标签 Webview 后应用宽度比例');
+          return false;
+        }
+      } else {
+        logDebug('垂直标签栏宽度已在 Webview 显示前应用，跳过显示后的布局等待和重复写入');
       }
       if (shouldRememberState()) await this.context.globalState.update(WIDTH_RATIO_STORAGE_KEY, preparedRailGroup.ratio);
       logDebug('保存首次使用的垂直标签栏宽度比例', { ratio: preparedRailGroup.ratio });
@@ -2407,14 +2413,25 @@ async function prepareLeftRailGroup(context: vscode.ExtensionContext): Promise<P
   try {
     await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
     await vscode.commands.executeCommand('workbench.action.newGroupLeft');
+    const expectedGroupCount = previousLayout ? countLayoutLeaves(previousLayout) + 1 : undefined;
+    const leadingGroup = vscode.window.tabGroups.all.find((group) => group.viewColumn === vscode.ViewColumn.One);
+    const canApplyBeforePanel = previousLayout !== undefined
+      && vscode.window.tabGroups.all.length === expectedGroupCount
+      && leadingGroup?.tabs.length === 0;
+    const layoutAppliedBeforePanel = canApplyBeforePanel
+      ? await applyLeadingRailRatio(ratio, previousLayout)
+      : false;
     logDebug('在创建 Webview 前通过原生命令新建左侧空编辑器分组', {
       editorGroups: vscode.window.tabGroups.all.length,
+      expectedGroupCount,
+      leadingGroupIsEmpty: leadingGroup?.tabs.length === 0,
+      layoutAppliedBeforePanel,
       savedRatio,
       configuredRatio,
       ratio,
       previousLayout,
     });
-    return { ratio, previousLayout };
+    return { ratio, previousLayout, layoutAppliedBeforePanel };
   } catch (error) {
     logError('创建左侧空编辑器分组失败', { savedRatio, configuredRatio, ratio, previousLayout, error });
     return undefined;
