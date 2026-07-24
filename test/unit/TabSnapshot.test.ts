@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSnapshot, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
+import { buildSnapshot, displayOrderKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup } from '../../src/tabs/TabSnapshot';
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
@@ -369,7 +369,7 @@ test('orders manual tabs from persisted identity order', () => {
     JSON.stringify({ kind: 'text', uri: 'file:///workspace/test/index.ts' }),
     JSON.stringify({ kind: 'text', uri: 'file:///workspace/src/index.ts' }),
   ]]]);
-  const snapshot = buildSnapshot(manualSource, 13, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual', manualOrderByGroup: order });
+  const snapshot = buildSnapshot(manualSource, 13, [{ id: 'work', name: '工作', collapsed: false }], { groupMode: 'manual', displayOrderByGroup: order });
   const workGroup = snapshot.displayGroups.find((group) => group.id === 'work');
   assert.deepEqual(workGroup?.tabs.map((tab) => tab.description), [undefined, undefined]);
 });
@@ -405,9 +405,42 @@ test('places newly opened manual-order root tabs after root files and before man
   const snapshot = buildSnapshot(manualSource, 25, [
     { id: 'group-1', name: '分组1', collapsed: false },
     { id: 'group-2', name: '分组2', collapsed: false },
-  ], { groupMode: 'manual', sortMode: 'none', manualOrderByGroup: order });
+  ], { groupMode: 'manual', sortMode: 'none', displayOrderByGroup: order });
 
   assert.deepEqual(snapshot.displayGroups.map((group) => group.id), ['__ungrouped', 'group-1', 'group-2']);
   assert.deepEqual(snapshot.displayGroups[0]?.tabs.map((tab) => tab.label), ['标签1', '标签2', '标签3', '新标签']);
   assert.deepEqual(snapshot.displayGroups.slice(1).map((group) => group.title), ['分组1', '分组2']);
+});
+
+test('applies independent persisted vertical order to automatic groups in manual sorting mode', () => {
+  const automaticSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'b.ts', path: 'src/b.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/b.ts' } },
+    { label: 'a.ts', path: 'src/a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/a.ts' } },
+    { label: 'z.md', path: 'docs/z.md', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/docs/z.md' } },
+    { label: 'y.md', path: 'docs/y.md', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/docs/y.md' } },
+  ] }];
+  const order = new Map<string, string[]>([
+    [displayOrderKey('parentDir', 'src'), [
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/src/a.ts' }),
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/src/b.ts' }),
+    ]],
+    [displayOrderKey('fileType', '.md'), [
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/docs/y.md' }),
+      JSON.stringify({ kind: 'text', uri: 'file:///workspace/docs/z.md' }),
+    ]],
+  ]);
+
+  const byParent = buildSnapshot(automaticSource, 31, [], {
+    groupMode: 'parentDir',
+    sortMode: 'none',
+    displayOrderByGroup: order,
+  });
+  const byType = buildSnapshot(automaticSource, 32, [], {
+    groupMode: 'fileType',
+    sortMode: 'none',
+    displayOrderByGroup: order,
+  });
+
+  assert.deepEqual(byParent.displayGroups.find((group) => group.id === 'src')?.tabs.map((tab) => tab.label), ['a.ts', 'b.ts']);
+  assert.deepEqual(byType.displayGroups.find((group) => group.id === '.md')?.tabs.map((tab) => tab.label), ['y.md', 'z.md']);
 });

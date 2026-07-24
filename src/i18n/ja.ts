@@ -23,6 +23,8 @@ const ja: LocaleStrings = {
   pinGroup: 'グループを固定',
   unpinGroup: 'グループの固定を解除',
   cannotPinVscodeGroup: 'VS Code グループ追従時はグループを固定できません',
+  moveRequiresManualSort: 'タブを上下に移動する前に、並べ替えを「手動」に切り替えてください。',
+  cannotMoveBetweenFileTypeGroups: 'ファイル種類グループ間でタブを移動することはできません。',
   rename: '名前を変更',
   renameGroup: 'グループ名を変更',
   groupName: 'グループ名',

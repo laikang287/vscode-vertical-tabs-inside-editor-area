@@ -23,6 +23,8 @@ const zhTw: LocaleStrings = {
   pinGroup: '固定群組',
   unpinGroup: '取消固定群組',
   cannotPinVscodeGroup: '跟隨 VS Code 群組時不能固定群組',
+  moveRequiresManualSort: '請先將排序方式切換為「手動排序」，再向上或向下移動標籤。',
+  cannotMoveBetweenFileTypeGroups: '不能在不同檔案類型分組之間移動標籤。',
   rename: '重新命名',
   renameGroup: '重新命名群組',
   groupName: '群組名稱',

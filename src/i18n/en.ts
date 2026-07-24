@@ -23,6 +23,8 @@ const en: LocaleStrings = {
   pinGroup: 'Pin group',
   unpinGroup: 'Unpin group',
   cannotPinVscodeGroup: 'Cannot pin group when following VS Code groups',
+  moveRequiresManualSort: 'Switch sorting to Manual before moving tabs up or down.',
+  cannotMoveBetweenFileTypeGroups: 'Tabs cannot be moved between file type groups.',
   rename: 'Rename',
   renameGroup: 'Rename group',
   groupName: 'Group name',

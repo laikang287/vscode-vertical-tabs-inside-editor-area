@@ -21,6 +21,8 @@ export interface LocaleStrings {
   readonly pinGroup: string;
   readonly unpinGroup: string;
   readonly cannotPinVscodeGroup: string;
+  readonly moveRequiresManualSort: string;
+  readonly cannotMoveBetweenFileTypeGroups: string;
   readonly rename: string;
   readonly renameGroup: string;
   readonly groupName: string;

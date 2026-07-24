@@ -242,8 +242,9 @@ test('webview selection is synchronized for command-driven multi-tab moves', () 
   assert.match(source, /vscode\.postMessage\(\{ type: 'selectionChanged', targets \}\)/);
   assert.match(messages, /type: 'selectionChanged'; readonly targets: readonly TabTarget\[\]/);
   assert.match(panelSource, /private commandSelectedTargets: readonly TabTarget\[\] = \[\]/);
-  assert.match(panelSource, /moveItemsOneStep\(currentOrder, selectedTabs, direction\)/);
-  assert.match(panelSource, /moveItemsBefore\(destinationTabs, movedTabs, undefined\)/);
+  assert.match(panelSource, /planDisplayedTabMove\(this\.currentSnapshot, anchorTarget, this\.commandSelectedTargets, direction\)/);
+  assert.match(panelSource, /selectedDisplayedTabsInAnchorGroup\(/);
+  assert.match(panelSource, /this\.setDisplayGroupOrder\(plan\.group\.id, plan\.desiredTabs\)/);
 });
 
 test('directory and relative path display is configurable and uses a subdued second line', () => {
@@ -788,9 +789,10 @@ test('manual grouping places newly opened tabs at the root manual-order tail', (
 
   assert.match(source, /vscode\.window\.tabGroups\.onDidChangeTabs\(\(event\) =>/);
   assert.match(source, /private applyManualGroupLifecycle\(event: vscode\.TabChangeEvent\): boolean/);
-  assert.match(source, /for \(const tab of event\.closed\)[\s\S]+?this\.clearManualGroupIdentity\(targetIdentity\(tab\)\)/);
+  assert.match(source, /for \(const tab of event\.closed\)[\s\S]+?this\.clearClosedTabState\(targetIdentity\(tab\)\)/);
   assert.match(source, /const openedGroupId = undefined/);
   assert.match(source, /for \(const tab of event\.opened\)[\s\S]+?this\.setManualGroup\(identity, openedGroupId\)/);
+  assert.match(source, /this\.removeManualDisplayOrderKey\(key\)/);
   assert.match(source, /this\.insertManualOrder\(openedGroupId \?\? '__ungrouped', key, undefined\)/);
   assert.doesNotMatch(source, /manualInsertionGroupId/);
   assert.doesNotMatch(source, /focusedManualGroupIdFromSnapshot/);
