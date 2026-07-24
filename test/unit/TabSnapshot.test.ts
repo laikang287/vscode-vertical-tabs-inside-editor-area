@@ -309,6 +309,36 @@ test('keeps pinned tabs at the front of each display group for every sort mode',
   assert.deepEqual(byModified.displayGroups[0]!.tabs.map((tab) => tab.label), ['b.ts', 'c.ts', 'a.ts', 'd.ts']);
 });
 
+test('sorts all tab kinds by global MRU time and keeps never-activated tabs in native order', () => {
+  const groups: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'never-left.ts', path: 'src/never-left.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/never-left.ts' } },
+    { label: 'older.ts', path: 'src/older.ts', lastActivatedAt: 100, isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/older.ts' } },
+    { label: 'Terminal', lastActivatedAt: 300, isActive: true, isFocused: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
+  ] }, { tabs: [
+    { label: 'never-right.ts', path: 'test/never-right.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/never-right.ts' } },
+    { label: 'newer.ts', path: 'test/newer.ts', lastActivatedAt: 200, isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/newer.ts' } },
+  ] }];
+
+  const snapshot = buildSnapshot(groups, 26, [], { groupMode: 'manual', sortMode: 'mru' });
+
+  assert.deepEqual(
+    snapshot.displayGroups[0]!.tabs.map((tab) => tab.label),
+    ['Terminal', 'newer.ts', 'older.ts', 'never-left.ts', 'never-right.ts'],
+  );
+  assert.equal(snapshot.tabs.find((tab) => tab.label === 'Terminal')?.lastActivatedAt, 300);
+});
+
+test('keeps pinned tabs ahead of more recently used unpinned tabs in MRU mode', () => {
+  const groups: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'recent.ts', path: 'src/recent.ts', lastActivatedAt: 500, isActive: true, isFocused: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/recent.ts' } },
+    { label: 'pinned.ts', path: 'src/pinned.ts', lastActivatedAt: 100, isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/pinned.ts' } },
+  ] }];
+
+  const snapshot = buildSnapshot(groups, 27, [], { groupMode: 'vscode', sortMode: 'mru' });
+
+  assert.deepEqual(snapshot.displayGroups[0]!.tabs.map((tab) => tab.label), ['pinned.ts', 'recent.ts']);
+});
+
 test('orders pinned manual and automatic groups first while retaining their relative order', () => {
   const grouped: SnapshotSourceGroup[] = [{ tabs: [
     { label: 'a.ts', path: 'alpha/a.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///alpha/a.ts' }, manualGroupId: 'alpha' },

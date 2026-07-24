@@ -35,6 +35,7 @@ test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'assignGroup', target }), { type: 'assignGroup', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeAll' }), { type: 'closeAll' });
   assert.deepEqual(parseWebviewMessage({ type: 'setGroupMode', groupMode: 'parentDir' }), { type: 'setGroupMode', groupMode: 'parentDir' });
+  assert.deepEqual(parseWebviewMessage({ type: 'setSortMode', sortMode: 'mru' }), { type: 'setSortMode', sortMode: 'mru' });
   assert.deepEqual(parseWebviewMessage({ type: 'setSortMode', sortMode: 'nameDesc' }), { type: 'setSortMode', sortMode: 'nameDesc' });
   assert.deepEqual(parseWebviewMessage({ type: 'setToolbarControlsVisible', visible: false }), { type: 'setToolbarControlsVisible', visible: false });
   assert.deepEqual(parseWebviewMessage({ type: 'pinTab', target }), { type: 'pinTab', target });

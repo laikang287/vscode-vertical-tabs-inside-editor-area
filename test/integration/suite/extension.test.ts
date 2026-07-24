@@ -322,6 +322,7 @@ suite('Vertical Tabs extension', () => {
     assert.match(manifest.contributes.configuration.properties['verticalTabs.tabWidthRatio'].markdownDescription ?? '', /%verticalTabs\.config\.tabWidthRatio%/);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultGroupMode'].default, 'vscode');
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.defaultSortMode'].default, 'none');
+    assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.defaultSortMode'].enum, ['none', 'mru', 'modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc']);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].default, 'top');
     assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].enum, ['top', 'bottom']);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].scope, 'window');

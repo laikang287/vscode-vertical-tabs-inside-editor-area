@@ -192,6 +192,7 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.equal(properties['verticalTabs.tabWidthRatio']?.default, 0.2);
   assert.equal(properties['verticalTabs.defaultGroupMode']?.default, 'vscode');
   assert.equal(properties['verticalTabs.defaultSortMode']?.default, 'none');
+  assert.deepEqual(properties['verticalTabs.defaultSortMode']?.enum, ['none', 'mru', 'modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc']);
   assert.equal(properties['verticalTabs.defaultToolbarControlsVisible']?.default, true);
   assert.equal(properties['verticalTabs.toolbarPosition']?.default, 'top');
   assert.deepEqual(properties['verticalTabs.toolbarPosition']?.enum, ['top', 'bottom']);
@@ -300,6 +301,7 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /<span>\$\{i18n\.groupModeLabel\}<\/span><select id="group-mode">/);
   assert.match(panelSource, /<span>\$\{i18n\.sortModeLabel\}<\/span><select id="sort-mode">/);
   assert.match(panelSource, /<option value="none">\$\{i18n\.sortModeNone\}<\/option>/);
+  assert.match(panelSource, /<option value="mru">\$\{i18n\.sortModeMru\}<\/option>/);
  assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#group-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLSelectElement>\('#sort-mode'\)/);
   assert.match(webviewSource, /querySelector<HTMLElement>\('#toolbar-controls'\)/);
@@ -312,6 +314,18 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.match(panelSource, /id="toolbar-controls" class="toolbar-selects"/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '分组方式'/);
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
+});
+
+test('MRU sorting tracks verified activations across editor groups without rewriting native tab order', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(panelSource, /private readonly mruTracker = new TabMruTracker<vscode\.Tab>\(\)/);
+  assert.match(panelSource, /const activeGroup = vscode\.window\.tabGroups\.all\.find\(\(group\) => group\.isActive\)/);
+  assert.match(panelSource, /this\.mruTracker\.observeFocused\(focusedUserTab\)/);
+  assert.match(panelSource, /lastActivatedAt: this\.mruTracker\.lastActivatedAt\(tab\)/);
+  assert.match(panelSource, /if \(matched\) \{[\s\S]+this\.mruTracker\.recordSuccessfulActivation\(tab\)/);
+  assert.match(panelSource, /this\.suppressMruTracking = true;[\s\S]+await this\.syncVsCodeGroupOrder[\s\S]+this\.suppressMruTracking = false/);
+  assert.match(panelSource, /if \(this\.sortMode === 'mru'\) \{[\s\S]+最近使用排序不回写 VS Code 原生标签顺序/);
 });
 
 test('webview renders Seti file icons and Codicon actions in a compact two-line layout', () => {

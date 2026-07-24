@@ -45,6 +45,7 @@ const zhCn: LocaleStrings = {
   groupModeFileType: '按文件类型',
   sortModeLabel: '排序方式',
   sortModeNone: '手动排序',
+  sortModeMru: '最近使用',
   sortModeModifiedAsc: '修改时间（升序）',
   sortModeModifiedDesc: '修改时间（降序）',
   sortModeNameAsc: '名称（升序）',

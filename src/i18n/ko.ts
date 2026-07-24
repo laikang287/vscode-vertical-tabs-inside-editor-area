@@ -45,6 +45,7 @@ const ko: LocaleStrings = {
   groupModeFileType: "파일 유형",
   sortModeLabel: "정렬",
   sortModeNone: "수동",
+  sortModeMru: "최근 사용",
   sortModeModifiedAsc: "수정 시간 (오름차순)",
   sortModeModifiedDesc: "수정 시간 (내림차순)",
   sortModeNameAsc: "이름 (오름차순)",

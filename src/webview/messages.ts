@@ -5,7 +5,7 @@
   | { readonly kind: 'terminal' | 'unknown'; readonly label: string };
 export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
 export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
-export type SortMode = 'none' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
+export type SortMode = 'none' | 'mru' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
 export type RelativePathDisplay = 'off' | 'duplicatesDirectory' | 'duplicates' | 'alwaysDirectory' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
@@ -18,7 +18,7 @@ export interface VerticalTabItem {
   readonly target: TabTarget; readonly label: string; readonly description?: string; readonly isActive: boolean; readonly isFocused: boolean;
   readonly isDirty: boolean; readonly isPinned: boolean; readonly isPreview: boolean; readonly isActivatable: boolean; readonly activationKind: TabActivationKind; readonly manualGroupId?: string;
   readonly groupId?: string; readonly isFile: boolean; readonly inputKind: TabInputKind; readonly languageId?: string; readonly icon: TabVisualIcon;
-  readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number;
+  readonly resourcePath?: string; readonly tooltipPath?: string; readonly mtime?: number; readonly lastActivatedAt?: number;
 }
 export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }
 export interface VerticalTabDisplayGroup {
@@ -98,7 +98,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
-function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
+function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
 function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }

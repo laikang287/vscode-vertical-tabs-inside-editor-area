@@ -43,6 +43,7 @@ export interface LocaleStrings {
   readonly groupModeFileType: string;
   readonly sortModeLabel: string;
   readonly sortModeNone: string;
+  readonly sortModeMru: string;
   readonly sortModeModifiedAsc: string;
   readonly sortModeModifiedDesc: string;
   readonly sortModeNameAsc: string;

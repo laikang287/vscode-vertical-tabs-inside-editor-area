@@ -31,6 +31,7 @@ import type { LocaleStrings } from '../i18n/locale';
 import { fallbackTabVisualIcon, SetiIconResolver, type SetiThemeVariant } from '../icons/SetiIconResolver';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import { adjacentCyclicIndex, moveItemsOneStep, type TabCommandDirection } from '../tabs/TabCommands';
+import { TabMruTracker } from '../tabs/TabMruTracker';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
@@ -110,6 +111,7 @@ export class VerticalTabsPanel {
   private closeLayoutRestore: CloseLayoutRestore | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
+  private suppressMruTracking = false;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, tabs: [], manualGroups: [], displayGroups: [] };
   private commandSelectedTargets: readonly TabTarget[] = [];
   private groupMode: GroupMode;
@@ -122,6 +124,7 @@ export class VerticalTabsPanel {
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
   private readonly pinnedGroupIds: Set<string>;
+  private readonly mruTracker = new TabMruTracker<vscode.Tab>();
   private localeStrings: LocaleStrings;
   private rememberStateEnabled: boolean;
   private setiIconResolver: SetiIconResolver;
@@ -156,6 +159,7 @@ export class VerticalTabsPanel {
         void this.handleTabChange(event).catch((error) => logError('处理 VS Code 标签变化失败', error));
       }),
       vscode.window.tabGroups.onDidChangeTabGroups(() => {
+        this.observeFocusedUserTab();
         this.scheduleRefresh();
         this.scheduleMinimizedWidthCorrection('tabGroupsChanged');
       }),
@@ -192,7 +196,7 @@ export class VerticalTabsPanel {
       logDebug('WebviewPanelSerializer 注册完成', { viewType: VIEW_TYPE });
     }
     context.subscriptions.push(
-      vscode.window.onDidChangeActiveTextEditor(() => VerticalTabsPanel.panels.current?.scheduleRefresh()),
+      vscode.window.onDidChangeActiveTextEditor(() => VerticalTabsPanel.panels.current?.handlePossibleActivation()),
       vscode.window.tabGroups.onDidChangeTabs(() => VerticalTabsPanel.syncVisibilityContext()),
       vscode.window.tabGroups.onDidChangeTabGroups(() => VerticalTabsPanel.syncVisibilityContext()),
     );
@@ -809,6 +813,21 @@ export class VerticalTabsPanel {
     }, 0);
   }
 
+  private handlePossibleActivation(): void {
+    this.observeFocusedUserTab();
+    this.scheduleRefresh();
+  }
+
+  private observeFocusedUserTab(): void {
+    if (this.suppressMruTracking) return;
+    const activeGroup = vscode.window.tabGroups.all.find((group) => group.isActive);
+    const activeTab = activeGroup?.activeTab;
+    const focusedUserTab = activeTab && !isVerticalTabsPanel(activeTab) ? activeTab : undefined;
+    if (this.mruTracker.observeFocused(focusedUserTab) && focusedUserTab) {
+      logTrace('记录聚焦标签的最近使用时间', { target: describeTab(focusedUserTab) });
+    }
+  }
+
   private async refresh(options: { readonly reason: string; readonly ensureEmptyLayout?: boolean }): Promise<void> {
     const started = Date.now();
     logDebug('开始刷新垂直标签快照', {
@@ -870,6 +889,7 @@ export class VerticalTabsPanel {
   }
 
   private async createSnapshot(): Promise<VerticalTabsSnapshot> {
+    this.observeFocusedUserTab();
     this.revision += 1;
     const revision = this.revision;
     logDebug('开始创建标签快照', {
@@ -904,6 +924,7 @@ export class VerticalTabsPanel {
     if (changedManualState) {
       await this.persistManualState();
     }
+    this.observeFocusedUserTab();
     this.scheduleRefresh();
   }
 
@@ -956,6 +977,7 @@ export class VerticalTabsPanel {
         targetIdentity: { kind: 'unknown', label: tab.label || 'Unknown' },
         isActivatable: false,
         isVerticalTabsPanel: isVerticalTabsPanel(tab),
+        lastActivatedAt: this.mruTracker.lastActivatedAt(tab),
       };
     }
   }
@@ -985,6 +1007,7 @@ export class VerticalTabsPanel {
       tooltipPath: inputTooltipPath(tab.input),
       uri: inputUri(tab.input)?.toString(),
       mtime: await inputMtime(tab.input),
+      lastActivatedAt: this.mruTracker.lastActivatedAt(tab),
       targetIdentity: targetIdentity(tab),
       isActivatable: isActivatableTab(tab),
       isVerticalTabsPanel: isVerticalTabsPanel(tab),
@@ -2039,8 +2062,15 @@ export class VerticalTabsPanel {
   }
 
   private async syncVsCodeTabOrder(): Promise<void> {
+    if (this.sortMode === 'mru') {
+      // MRU is a live presentation order. Physically moving native tabs would
+      // activate them during the move and corrupt the usage history itself.
+      logDebug('最近使用排序不回写 VS Code 原生标签顺序');
+      return;
+    }
     const activeIdentity = this.currentSnapshot.tabs.find((tab) => tab.isActive)?.target.identity ?? activeUserTabIdentity();
     const snapshot = await this.createSnapshot();
+    this.suppressMruTracking = true;
     try {
       for (const displayGroup of snapshot.displayGroups) {
         if (displayGroup.mode !== 'vscode' || displayGroup.tabs.length <= 1) {
@@ -2053,7 +2083,11 @@ export class VerticalTabsPanel {
         await this.syncVsCodeGroupOrder(group, displayGroup.tabs.map((tab) => tab.target.identity));
       }
     } finally {
-      await this.restoreActiveTabAfterOrderSync(activeIdentity);
+      try {
+        await this.restoreActiveTabAfterOrderSync(activeIdentity);
+      } finally {
+        this.suppressMruTracking = false;
+      }
     }
   }
 
@@ -2397,6 +2431,10 @@ export class VerticalTabsPanel {
       groups: describeTabGroups(),
     };
     if (matched) {
+      if (!this.suppressMruTracking) {
+        this.mruTracker.recordSuccessfulActivation(tab);
+        if (this.sortMode === 'mru') this.scheduleRefresh();
+      }
       logDebug('标签激活完成并通过校验', details);
     } else {
       logWarn('标签激活后校验失败：当前活动标签与目标不一致', details);
@@ -2477,7 +2515,7 @@ export class VerticalTabsPanel {
       </div>
       <div id="toolbar-controls" class="toolbar-selects">
         <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
-        <label class="toolbar-field" for="sort-mode"><span>${i18n.sortModeLabel}</span><select id="sort-mode"><option value="none">${i18n.sortModeNone}</option><option value="modifiedAsc">${i18n.sortModeModifiedAsc}</option><option value="modifiedDesc">${i18n.sortModeModifiedDesc}</option><option value="nameAsc">${i18n.sortModeNameAsc}</option><option value="nameDesc">${i18n.sortModeNameDesc}</option></select></label>
+        <label class="toolbar-field" for="sort-mode"><span>${i18n.sortModeLabel}</span><select id="sort-mode"><option value="none">${i18n.sortModeNone}</option><option value="mru">${i18n.sortModeMru}</option><option value="modifiedAsc">${i18n.sortModeModifiedAsc}</option><option value="modifiedDesc">${i18n.sortModeModifiedDesc}</option><option value="nameAsc">${i18n.sortModeNameAsc}</option><option value="nameDesc">${i18n.sortModeNameDesc}</option></select></label>
       </div>
       <div id="search-container" class="search-container">
         <input id="search-input" class="search-input" type="text" placeholder="${i18n.searchPlaceholder}" />
@@ -3558,7 +3596,7 @@ function isRelativePathDisplay(value: unknown): value is RelativePathDisplay {
 }
 
 function isSortMode(value: unknown): value is SortMode {
-  return value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc' || value === 'none';
+  return value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc' || value === 'none';
 }
 
 function isStoredManualGroup(value: unknown): value is ManualTabGroup {
