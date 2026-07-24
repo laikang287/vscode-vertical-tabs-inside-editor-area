@@ -27,13 +27,29 @@ import {
   type RailPosition,
   type RailWidthContribution,
 } from '../layout/RailLayout';
-import { getStrings, resolveLocale } from '../i18n';
+import { format, getStrings, resolveLocale } from '../i18n';
 import type { LocaleStrings } from '../i18n/locale';
 import { fallbackTabVisualIcon, SetiIconResolver, type SetiThemeVariant } from '../icons/SetiIconResolver';
-import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
+import { logDebug, logError, logInfo, logTrace, logWarn, showLogs } from '../logging/extensionLogger';
 import { adjacentCyclicIndex, moveItemsOneStep, type TabCommandDirection } from '../tabs/TabCommands';
 import { TabMruTracker } from '../tabs/TabMruTracker';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
+import {
+  MAX_WORKSET_NAME_LENGTH,
+  WORKSETS_STORAGE_KEY,
+  normalizeWorksetName,
+  parseStoredWorksets,
+  selectReplacementCandidates,
+  sortWorksets,
+  worksetInputKey,
+  worksetNamesEqual,
+  writeStoredWorksets,
+  type StoredWorksetTab,
+  type StoredWorksetV1,
+  type WorksetRestoreFailure,
+  type WorksetRestoreFailureCategory,
+  type WorksetTabInput,
+} from '../worksets/Worksets';
 import { SingletonPanel } from './SingletonPanel';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -50,6 +66,7 @@ const MANUAL_GROUPS_STORAGE_KEY = 'verticalTabs.manualGroups';
 const MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY = 'verticalTabs.manualGroupByIdentity';
 const MANUAL_ORDER_BY_GROUP_STORAGE_KEY = 'verticalTabs.manualOrderByGroup';
 const PINNED_GROUP_IDS_STORAGE_KEY = 'verticalTabs.pinnedGroupIds';
+const COLLAPSED_GROUP_KEYS_STORAGE_KEY = 'verticalTabs.collapsedGroupKeys';
 const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const POSITION_FOCUS_RESTORE_DELAY_MS = 150;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
@@ -84,6 +101,20 @@ interface CloseLayoutRestore {
   readonly position: RailPosition;
   readonly editorGroupCount: number;
   readonly contributions: readonly RailWidthContribution[];
+}
+
+interface ResolvedWorksetTab {
+  readonly stored: StoredWorksetTab;
+  readonly input: WorksetTabInput;
+  readonly existing?: vscode.Tab;
+}
+
+interface WorksetPreflight {
+  readonly resolved: readonly ResolvedWorksetTab[];
+  readonly failures: readonly WorksetRestoreFailure[];
+  readonly closeTabs: readonly vscode.Tab[];
+  readonly protectedTabs: readonly vscode.Tab[];
+  readonly dirtyTabs: readonly vscode.Tab[];
 }
 
 export class VerticalTabsPanel {
@@ -125,6 +156,8 @@ export class VerticalTabsPanel {
   private readonly manualGroupByIdentity: Map<string, string>;
   private readonly manualOrderByGroup: Map<string, string[]>;
   private readonly pinnedGroupIds: Set<string>;
+  private readonly collapsedGroupKeys: Set<string>;
+  private readonly worksets: StoredWorksetV1[];
   private readonly mruTracker = new TabMruTracker<vscode.Tab>();
   private localeStrings: LocaleStrings;
   private rememberStateEnabled: boolean;
@@ -148,6 +181,8 @@ export class VerticalTabsPanel {
     this.manualGroupByIdentity = this.rememberStateEnabled ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
     this.manualOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, MANUAL_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
     this.pinnedGroupIds = this.rememberStateEnabled ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
+    this.collapsedGroupKeys = this.rememberStateEnabled ? readStringSet(context, COLLAPSED_GROUP_KEYS_STORAGE_KEY) : new Set();
+    this.worksets = parseStoredWorksets(context.workspaceState.get<unknown>(WORKSETS_STORAGE_KEY));
     this.localeStrings = this.resolveUiLocale();
     this.setiIconResolver = loadSetiIconResolver(vscode.window.activeColorTheme.kind);
     this.railPosition = readRailPosition();
@@ -294,6 +329,21 @@ export class VerticalTabsPanel {
     logDebug('请求移动活动标签或垂直栏多选标签', { direction, scope });
     const instance = VerticalTabsPanel.panels.current ?? await VerticalTabsPanel.open(context);
     await instance?.moveByCommand(direction, scope);
+  }
+
+  static async saveWorkset(context: vscode.ExtensionContext): Promise<void> {
+    const instance = VerticalTabsPanel.panels.current ?? await VerticalTabsPanel.open(context);
+    await instance?.saveWorksetAsNew();
+  }
+
+  static async loadWorkset(context: vscode.ExtensionContext): Promise<void> {
+    const instance = VerticalTabsPanel.panels.current ?? await VerticalTabsPanel.open(context);
+    await instance?.pickAndLoadWorkset();
+  }
+
+  static async manageWorksets(context: vscode.ExtensionContext): Promise<void> {
+    const instance = VerticalTabsPanel.panels.current ?? await VerticalTabsPanel.open(context);
+    await instance?.showWorksetManager();
   }
 
   private static async create(context: vscode.ExtensionContext): Promise<VerticalTabsPanel> {
@@ -936,6 +986,7 @@ export class VerticalTabsPanel {
       relativePathDisplay: readRelativePathDisplay(),
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
+      collapsedGroupKeys: Array.from(this.collapsedGroupKeys),
     });
     logDebug('标签快照创建完成', { revision, visibleTabs: snapshot.tabs.length, displayGroups: snapshot.displayGroups.length });
     return snapshot;
@@ -1095,7 +1146,23 @@ export class VerticalTabsPanel {
       return;
     }
 
+    if (message.type === 'setCollapsedGroups') {
+      this.collapsedGroupKeys.clear();
+      for (const key of message.keys) this.collapsedGroupKeys.add(key);
+      await this.persistCollapsedGroups();
+      return;
+    }
+
+    if (message.type === 'manageWorksets') {
+      await this.showWorksetManager();
+      return;
+    }
+
     if (message.type === 'ready' || message.type === 'requestRefresh') {
+      if (message.type === 'ready' && this.rememberStateEnabled && message.collapsedGroupKeys && this.collapsedGroupKeys.size === 0) {
+        for (const key of message.collapsedGroupKeys) this.collapsedGroupKeys.add(key);
+        await this.persistCollapsedGroups();
+      }
       if (message.type === 'ready' && this.initialHostRefreshTimer) {
         clearTimeout(this.initialHostRefreshTimer);
         this.initialHostRefreshTimer = undefined;
@@ -1426,6 +1493,7 @@ export class VerticalTabsPanel {
       this.manualGroupByIdentity.clear();
       this.manualOrderByGroup.clear();
       this.pinnedGroupIds.clear();
+      this.collapsedGroupKeys.clear();
       logInfo('自动记忆关闭，已恢复垂直标签默认状态', { groupMode: this.groupMode, sortMode: this.sortMode });
     } else if (rememberStateEnabled && memoryChanged) {
       // Enabling memory starts from the state currently visible to the user.
@@ -1437,6 +1505,7 @@ export class VerticalTabsPanel {
         this.persistToolbarControlsVisible(),
         this.persistManualState(),
         this.persistPinnedGroups(),
+        this.persistCollapsedGroups(),
       ]);
       logInfo('自动记忆开启，已保存当前垂直标签状态', { groupMode: this.groupMode, sortMode: this.sortMode });
     }
@@ -1541,6 +1610,537 @@ export class VerticalTabsPanel {
       return;
     }
     await this.activateTab(tab);
+  }
+
+  private async saveWorksetAsNew(): Promise<void> {
+    const name = await vscode.window.showInputBox({
+      title: this.localeStrings.saveWorkset,
+      prompt: this.localeStrings.worksetNamePrompt,
+      placeHolder: this.localeStrings.worksetNamePlaceholder,
+      validateInput: (value) => this.validateWorksetName(value),
+    });
+    if (!name) return;
+    const normalizedName = normalizeWorksetName(name);
+    const existing = this.worksets.find((candidate) => worksetNamesEqual(candidate.name, normalizedName));
+    if (existing) {
+      const overwrite = await vscode.window.showWarningMessage(
+        format(this.localeStrings.worksetOverwriteConfirm, existing.name),
+        { modal: true, detail: format(this.localeStrings.worksetOverwriteDetail, existing.tabs.length) },
+        this.localeStrings.overwrite,
+      );
+      if (overwrite !== this.localeStrings.overwrite) return;
+      await this.overwriteWorkset(existing, normalizedName);
+      return;
+    }
+    const workset = this.captureWorkset(normalizedName);
+    this.worksets.push(workset);
+    await this.persistWorksets();
+    void vscode.window.showInformationMessage(format(this.localeStrings.worksetSaved, workset.name, workset.tabs.length));
+  }
+
+  private async pickAndLoadWorkset(): Promise<void> {
+    const workset = await this.pickWorkset(this.localeStrings.loadWorkset);
+    if (workset) await this.restoreWorkset(workset);
+  }
+
+  private async showWorksetManager(): Promise<void> {
+    type ManagerItem = vscode.QuickPickItem & { readonly itemType: 'create' | 'workset'; readonly workset?: StoredWorksetV1 };
+    const items: ManagerItem[] = [{
+      label: `$(add) ${this.localeStrings.createWorkset}`,
+      description: this.localeStrings.createWorksetDescription,
+      itemType: 'create',
+    }, ...sortWorksets(this.worksets).map((workset) => ({
+      label: `$(archive) ${workset.name}`,
+      description: format(this.localeStrings.worksetTabCount, workset.tabs.length),
+      detail: format(this.localeStrings.worksetUpdatedAt, new Date(workset.updatedAt).toLocaleString(this.resolveConfiguredLanguage())),
+      itemType: 'workset' as const,
+      workset,
+    }))];
+    const selected = await vscode.window.showQuickPick(items, {
+      title: this.localeStrings.manageWorksets,
+      placeHolder: this.worksets.length === 0 ? this.localeStrings.noWorksets : this.localeStrings.selectWorkset,
+      matchOnDescription: true,
+      matchOnDetail: true,
+    });
+    if (!selected) return;
+    if (selected.itemType === 'create') {
+      await this.saveWorksetAsNew();
+      return;
+    }
+    if (!selected.workset) return;
+    type ActionItem = vscode.QuickPickItem & { readonly action: 'load' | 'overwrite' | 'rename' | 'delete' };
+    const action = await vscode.window.showQuickPick<ActionItem>([
+      { label: `$(folder-opened) ${this.localeStrings.load}`, action: 'load' },
+      { label: `$(save-all) ${this.localeStrings.overwrite}`, action: 'overwrite' },
+      { label: `$(edit) ${this.localeStrings.rename}`, action: 'rename' },
+      { label: `$(trash) ${this.localeStrings.delete}`, action: 'delete' },
+    ], {
+      title: selected.workset.name,
+      placeHolder: this.localeStrings.selectWorksetAction,
+    });
+    if (!action) return;
+    if (action.action === 'load') {
+      await this.restoreWorkset(selected.workset);
+      return;
+    }
+    if (action.action === 'overwrite') {
+      const confirmed = await vscode.window.showWarningMessage(
+        format(this.localeStrings.worksetOverwriteConfirm, selected.workset.name),
+        { modal: true, detail: format(this.localeStrings.worksetOverwriteDetail, selected.workset.tabs.length) },
+        this.localeStrings.overwrite,
+      );
+      if (confirmed === this.localeStrings.overwrite) await this.overwriteWorkset(selected.workset);
+      return;
+    }
+    if (action.action === 'rename') {
+      await this.renameWorkset(selected.workset);
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      format(this.localeStrings.worksetDeleteConfirm, selected.workset.name),
+      { modal: true, detail: this.localeStrings.worksetDeleteDetail },
+      this.localeStrings.delete,
+    );
+    if (confirmed !== this.localeStrings.delete) return;
+    const index = this.worksets.findIndex((candidate) => candidate.id === selected.workset?.id);
+    if (index >= 0) this.worksets.splice(index, 1);
+    await this.persistWorksets();
+    void vscode.window.showInformationMessage(format(this.localeStrings.worksetDeleted, selected.workset.name));
+  }
+
+  private async pickWorkset(title: string): Promise<StoredWorksetV1 | undefined> {
+    if (this.worksets.length === 0) {
+      void vscode.window.showInformationMessage(this.localeStrings.noWorksets);
+      return undefined;
+    }
+    type WorksetItem = vscode.QuickPickItem & { readonly workset: StoredWorksetV1 };
+    const selected = await vscode.window.showQuickPick<WorksetItem>(
+      sortWorksets(this.worksets).map((workset) => ({
+        label: workset.name,
+        description: format(this.localeStrings.worksetTabCount, workset.tabs.length),
+        detail: format(this.localeStrings.worksetUpdatedAt, new Date(workset.updatedAt).toLocaleString(this.resolveConfiguredLanguage())),
+        workset,
+      })),
+      { title, placeHolder: this.localeStrings.selectWorkset, matchOnDescription: true, matchOnDetail: true },
+    );
+    return selected?.workset;
+  }
+
+  private validateWorksetName(value: string, currentId?: string): string | undefined {
+    const name = normalizeWorksetName(value);
+    if (!name) return this.localeStrings.worksetNameRequired;
+    if (name.length > MAX_WORKSET_NAME_LENGTH) return format(this.localeStrings.worksetNameTooLong, MAX_WORKSET_NAME_LENGTH);
+    const duplicate = this.worksets.find((candidate) => candidate.id !== currentId && worksetNamesEqual(candidate.name, name));
+    return duplicate ? format(this.localeStrings.worksetNameExists, duplicate.name) : undefined;
+  }
+
+  private async renameWorkset(workset: StoredWorksetV1): Promise<void> {
+    const name = await vscode.window.showInputBox({
+      title: this.localeStrings.renameWorkset,
+      value: workset.name,
+      prompt: this.localeStrings.worksetNamePrompt,
+      validateInput: (value) => this.validateWorksetName(value, workset.id),
+    });
+    if (!name) return;
+    const index = this.worksets.findIndex((candidate) => candidate.id === workset.id);
+    if (index < 0) return;
+    const normalizedName = normalizeWorksetName(name);
+    this.worksets[index] = { ...workset, name: normalizedName, updatedAt: Date.now() };
+    await this.persistWorksets();
+    void vscode.window.showInformationMessage(format(this.localeStrings.worksetRenamed, normalizedName));
+  }
+
+  private async overwriteWorkset(workset: StoredWorksetV1, name = workset.name): Promise<void> {
+    const index = this.worksets.findIndex((candidate) => candidate.id === workset.id);
+    if (index < 0) return;
+    const replacement = this.captureWorkset(name, workset);
+    this.worksets[index] = replacement;
+    await this.persistWorksets();
+    void vscode.window.showInformationMessage(format(this.localeStrings.worksetOverwritten, replacement.name, replacement.tabs.length));
+  }
+
+  private async persistWorksets(): Promise<void> {
+    await writeStoredWorksets(this.context.workspaceState, this.worksets);
+  }
+
+  private captureWorkset(name: string, existing?: StoredWorksetV1): StoredWorksetV1 {
+    const groups = userEditorGroups();
+    const tabs: StoredWorksetTab[] = [];
+    const entryIdsByIdentity = new Map<string, string[]>();
+    let activeTabId: string | undefined;
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+      const group = groups[groupIndex];
+      const userTabs = group.tabs.filter((tab) => !isVerticalTabsPanel(tab));
+      for (let tabIndex = 0; tabIndex < userTabs.length; tabIndex += 1) {
+        const tab = userTabs[tabIndex];
+        const id = crypto.randomBytes(9).toString('base64url');
+        const identity = targetIdentity(tab);
+        const resource = inputUri(tab.input);
+        const folder = resource ? vscode.workspace.getWorkspaceFolder(resource) : undefined;
+        tabs.push({
+          id,
+          label: tab.label,
+          input: worksetInputFromTab(tab),
+          groupIndex,
+          tabIndex,
+          isPinned: tab.isPinned,
+          wasDirty: tab.isDirty,
+          manualGroupId: this.manualGroupByIdentity.get(identityKey(identity)),
+          ...(folder ? { workspaceFolderUri: folder.uri.toString(), workspaceFolderName: folder.name } : {}),
+        });
+        const key = identityKey(identity);
+        entryIdsByIdentity.set(key, [...(entryIdsByIdentity.get(key) ?? []), id]);
+        if (tab.isActive && group.isActive) activeTabId = id;
+      }
+    }
+    const manualOrderByGroup = Array.from(this.manualOrderByGroup.entries()).map(([groupId, order]) => [
+      groupId,
+      order.flatMap((key) => entryIdsByIdentity.get(key)?.slice(0, 1) ?? []),
+    ] as const);
+    const now = Date.now();
+    return {
+      schemaVersion: 1,
+      id: existing?.id ?? crypto.randomBytes(9).toString('base64url'),
+      name: normalizeWorksetName(name),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      groupCount: groups.length,
+      groupMode: this.groupMode,
+      sortMode: this.sortMode,
+      tabs,
+      manualGroups: this.manualGroups.map((group) => ({ ...group })),
+      manualOrderByGroup,
+      pinnedGroupIds: Array.from(this.pinnedGroupIds),
+      collapsedGroupKeys: Array.from(this.collapsedGroupKeys),
+      ...(activeTabId ? { activeTabId } : {}),
+    };
+  }
+
+  private async restoreWorkset(workset: StoredWorksetV1): Promise<void> {
+    const preflight = await this.preflightWorkset(workset);
+    if (workset.tabs.length > 0 && preflight.resolved.length === 0) {
+      await this.showWorksetRestoreReport(workset, 0, preflight.failures);
+      return;
+    }
+    if (!await this.confirmWorksetRestore(workset, preflight)) return;
+    const failures = [...preflight.failures];
+    const restoredById = new Map<string, vscode.Tab>();
+    this.suppressScheduledRefresh = true;
+    this.suppressMruTracking = true;
+    try {
+      const targetGroupCount = Math.max(1, workset.groupCount);
+      let groups = await this.ensureWorksetEditorGroups(targetGroupCount);
+      for (const candidate of [...preflight.resolved].sort((left, right) =>
+        left.stored.groupIndex - right.stored.groupIndex || left.stored.tabIndex - right.stored.tabIndex)) {
+        groups = userEditorGroups();
+        const destination = groups[Math.min(candidate.stored.groupIndex, groups.length - 1)];
+        if (!destination) {
+          failures.push({ category: 'openFailed', label: candidate.stored.label, detail: this.localeStrings.worksetEditorGroupUnavailable });
+          continue;
+        }
+        try {
+          const restored = candidate.existing
+            ? await this.moveExistingWorksetTab(candidate.existing, destination)
+            : await this.openWorksetTab(candidate.input, candidate.stored.label, destination);
+          if (restored) restoredById.set(candidate.stored.id, restored);
+          else failures.push({ category: 'openFailed', label: candidate.stored.label, detail: this.localeStrings.worksetOpenDidNotCreateTab });
+        } catch (error) {
+          failures.push({ category: isPermissionError(error) ? 'permission' : 'openFailed', label: candidate.stored.label, detail: errorMessage(error) });
+        }
+      }
+      const staleTabs = preflight.closeTabs.filter((tab) => findTabPosition(tab) !== undefined);
+      if (staleTabs.length > 0) await vscode.window.tabGroups.close(staleTabs, true);
+      await this.applyRestoredPinnedState(workset, restoredById);
+      await this.applyRestoredTabOrder(workset, restoredById);
+      this.applyRestoredPresentationState(workset, restoredById);
+      await Promise.all([
+        this.persistGroupMode(),
+        this.persistSortMode(),
+        this.persistManualState(),
+        this.persistPinnedGroups(),
+        this.persistCollapsedGroups(),
+      ]);
+      failures.push(...await this.closeExtraWorksetGroups(targetGroupCount));
+      const active = workset.activeTabId ? restoredById.get(workset.activeTabId) : undefined;
+      if (active) await this.activateTab(active, 'workset-active');
+      await this.settleAndEnsureRail();
+    } finally {
+      this.suppressMruTracking = false;
+      this.suppressScheduledRefresh = false;
+      await this.refresh({ reason: 'worksetRestore' });
+    }
+    await this.showWorksetRestoreReport(workset, restoredById.size, failures);
+  }
+
+  private async preflightWorkset(workset: StoredWorksetV1): Promise<WorksetPreflight> {
+    const currentTabs = userEditorGroups().flatMap((group) => group.tabs.filter((tab) => !isVerticalTabsPanel(tab)));
+    const replacement = selectReplacementCandidates(
+      currentTabs.map((tab) => ({ key: worksetInputKey(worksetInputFromTab(tab)), isDirty: tab.isDirty, isPinned: tab.isPinned })),
+      workset.tabs.map((tab) => worksetInputKey(tab.input)),
+    );
+    const unused = new Set(currentTabs);
+    const resolved: ResolvedWorksetTab[] = [];
+    const failures: WorksetRestoreFailure[] = [];
+    for (const stored of [...workset.tabs].sort((left, right) => left.groupIndex - right.groupIndex || left.tabIndex - right.tabIndex)) {
+      const expectedKey = worksetInputKey(stored.input);
+      const matching = Array.from(unused).filter((tab) => worksetInputKey(worksetInputFromTab(tab)) === expectedKey);
+      const existing = matching.find((tab) => userEditorGroups().indexOf(tab.group) === stored.groupIndex) ?? matching[0];
+      if (existing) {
+        unused.delete(existing);
+        resolved.push({ stored, input: stored.input, existing });
+        continue;
+      }
+      const result = await this.resolveStoredWorksetInput(stored);
+      if ('failure' in result) failures.push(result.failure);
+      else resolved.push({ stored, input: result.input });
+    }
+    return {
+      resolved,
+      failures,
+      closeTabs: replacement.closeIndexes.map((index) => currentTabs[index]),
+      protectedTabs: replacement.protectedIndexes.map((index) => currentTabs[index]),
+      dirtyTabs: currentTabs.filter((tab) => tab.isDirty),
+    };
+  }
+
+  private async confirmWorksetRestore(workset: StoredWorksetV1, preflight: WorksetPreflight): Promise<boolean> {
+    const currentTabs = userEditorGroups().flatMap((group) => group.tabs).filter((tab) => !isVerticalTabsPanel(tab));
+    if (currentTabs.length === 0 && this.manualGroups.length === 0) return true;
+    const detail: string[] = [
+      format(this.localeStrings.worksetRestoreCloseCount, preflight.closeTabs.length),
+      format(this.localeStrings.worksetRestoreProtectedCount, preflight.protectedTabs.length),
+    ];
+    if (preflight.dirtyTabs.length > 0) {
+      detail.push('', this.localeStrings.worksetAffectedUnsaved);
+      detail.push(...preflight.dirtyTabs.map((tab) =>
+        `• ${tab.label} — ${inputTooltipPath(tab.input) ?? format(this.localeStrings.editorGroup, userEditorGroups().indexOf(tab.group) + 1)}`));
+    }
+    if (preflight.failures.length > 0) detail.push('', format(this.localeStrings.worksetPreflightFailures, preflight.failures.length));
+    const confirmed = await vscode.window.showWarningMessage(
+      format(this.localeStrings.worksetLoadConfirm, workset.name),
+      { modal: true, detail: detail.join('\n') },
+      this.localeStrings.load,
+    );
+    return confirmed === this.localeStrings.load;
+  }
+
+  private async resolveStoredWorksetInput(
+    stored: StoredWorksetTab,
+  ): Promise<{ readonly input: WorksetTabInput } | { readonly failure: WorksetRestoreFailure }> {
+    const input = stored.input;
+    if (input.kind === 'terminal' || input.kind === 'unknown' || (input.kind === 'webview' && !input.builtIn)) {
+      return { failure: { category: 'unsupported', label: stored.label, detail: this.localeStrings.worksetUnsupportedTab } };
+    }
+    if (input.kind === 'webview') return { input };
+    if (input.kind === 'text' || input.kind === 'custom' || input.kind === 'notebook') {
+      const resolved = await this.resolveWorksetUri(input.uri, stored);
+      if ('failure' in resolved) return { failure: { ...resolved.failure, label: stored.label } };
+      return { input: { ...input, uri: resolved.uri } };
+    }
+    const original = await this.resolveWorksetUri(input.originalUri, stored);
+    if ('failure' in original) return { failure: { ...original.failure, label: stored.label } };
+    const modified = await this.resolveWorksetUri(input.modifiedUri, stored);
+    if ('failure' in modified) return { failure: { ...modified.failure, label: stored.label } };
+    return { input: { ...input, originalUri: original.uri, modifiedUri: modified.uri } };
+  }
+
+  private async resolveWorksetUri(
+    raw: string,
+    stored: StoredWorksetTab,
+  ): Promise<{ readonly uri: string } | { readonly failure: Omit<WorksetRestoreFailure, 'label'> }> {
+    let uri: vscode.Uri;
+    try {
+      uri = vscode.Uri.parse(raw, true);
+    } catch (error) {
+      return { failure: { category: 'notFound', detail: errorMessage(error) } };
+    }
+    if (uri.scheme === 'untitled') return { failure: { category: 'unsupported', detail: this.localeStrings.worksetUntitledUnavailable } };
+    if (uri.scheme !== 'file') return { uri: uri.toString() };
+    try {
+      await vscode.workspace.fs.stat(uri);
+      return { uri: uri.toString() };
+    } catch (error) {
+      if (isPermissionError(error)) return { failure: { category: 'permission', detail: uri.fsPath } };
+      if (!isFileNotFoundError(error)) return { failure: { category: 'notFound', detail: `${uri.fsPath}: ${errorMessage(error)}` } };
+    }
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const folder = folders.find((candidate) => candidate.uri.toString() === stored.workspaceFolderUri)
+      ?? folders.find((candidate) => stored.workspaceFolderName !== undefined && candidate.name === stored.workspaceFolderName)
+      ?? vscode.workspace.getWorkspaceFolder(uri);
+    if (!folder && stored.workspaceFolderUri) {
+      return { failure: { category: 'notFound', detail: format(this.localeStrings.worksetWorkspaceUnavailable, stored.workspaceFolderName ?? stored.workspaceFolderUri) } };
+    }
+    const basename = path.posix.basename(uri.path);
+    if (!folder || !basename) return { failure: { category: 'deleted', detail: uri.fsPath } };
+    try {
+      const candidates = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, `**/${escapeGlobSegment(basename)}`), undefined, 3);
+      if (candidates.length === 1) return { uri: candidates[0].toString() };
+      if (candidates.length === 0) return { failure: { category: 'deleted', detail: uri.fsPath } };
+      return { failure: { category: 'moved', detail: format(this.localeStrings.worksetAmbiguousCandidates, uri.fsPath, candidates.length) } };
+    } catch (error) {
+      return {
+        failure: {
+          category: isPermissionError(error) ? 'permission' : 'notFound',
+          detail: `${uri.fsPath}: ${errorMessage(error)}`,
+        },
+      };
+    }
+  }
+
+  private async ensureWorksetEditorGroups(count: number): Promise<vscode.TabGroup[]> {
+    await this.ensureUsableEmptyRailLayout();
+    for (let attempt = 0; userEditorGroups().length < count && attempt < count + 8; attempt += 1) {
+      const groups = userEditorGroups();
+      const anchor = groups[groups.length - 1];
+      if (anchor?.viewColumn !== undefined) await focusEditorGroup(anchor.viewColumn);
+      await vscode.commands.executeCommand('workbench.action.newGroupRight');
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    }
+    return userEditorGroups();
+  }
+
+  private async moveExistingWorksetTab(tab: vscode.Tab, destination: vscode.TabGroup): Promise<vscode.Tab | undefined> {
+    const input = worksetInputFromTab(tab);
+    if (tab.group !== destination) {
+      const source = findTabPosition(tab);
+      await this.activateTab(tab, 'workset-move');
+      if (!source || !activeTabMatches(source, tab)) {
+        throw new Error(this.localeStrings.worksetExistingTabActivationFailed);
+      }
+      await this.moveActiveEditorToGroup(tab, destination);
+    }
+    return findMatchingTabInGroup(destination, input) ?? tab;
+  }
+
+  private async openWorksetTab(input: WorksetTabInput, label: string, destination: vscode.TabGroup): Promise<vscode.Tab | undefined> {
+    const viewColumn = destination.viewColumn;
+    const options: vscode.TextDocumentShowOptions = { viewColumn, preserveFocus: true, preview: false };
+    if (input.kind === 'text') {
+      await vscode.window.showTextDocument(vscode.Uri.parse(input.uri, true), options);
+    } else if (input.kind === 'diff' || input.kind === 'notebookDiff') {
+      await vscode.commands.executeCommand('vscode.diff', vscode.Uri.parse(input.originalUri, true), vscode.Uri.parse(input.modifiedUri, true), label, options);
+    } else if (input.kind === 'custom') {
+      await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.parse(input.uri, true), input.viewType, options);
+    } else if (input.kind === 'notebook') {
+      await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.parse(input.uri, true), input.notebookType, options);
+    } else if (input.kind === 'webview' && input.builtIn) {
+      await focusEditorGroup(viewColumn);
+      if (input.builtIn === 'welcome') await openWelcomeEditor();
+      else await vscode.commands.executeCommand('workbench.action.openSettings');
+    } else {
+      return undefined;
+    }
+    return this.waitForWorksetTab(input, destination);
+  }
+
+  private async waitForWorksetTab(input: WorksetTabInput, destination: vscode.TabGroup): Promise<vscode.Tab | undefined> {
+    for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
+      const match = findMatchingTabInGroup(destination, input);
+      if (match) return match;
+      if (input.kind === 'webview' && destination.activeTab && !isVerticalTabsPanel(destination.activeTab)) return destination.activeTab;
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    }
+    return undefined;
+  }
+
+  private async applyRestoredPinnedState(workset: StoredWorksetV1, restoredById: ReadonlyMap<string, vscode.Tab>): Promise<void> {
+    for (const stored of workset.tabs) {
+      const tab = restoredById.get(stored.id);
+      if (!tab || tab.isPinned === stored.isPinned || !isActivatableTabForCommands(tab)) continue;
+      await this.activateTab(tab, 'workset-pin');
+      await vscode.commands.executeCommand(stored.isPinned ? 'workbench.action.pinEditor' : 'workbench.action.unpinEditor');
+    }
+  }
+
+  private async applyRestoredTabOrder(workset: StoredWorksetV1, restoredById: ReadonlyMap<string, vscode.Tab>): Promise<void> {
+    for (let groupIndex = 0; groupIndex < Math.max(1, workset.groupCount); groupIndex += 1) {
+      const group = userEditorGroups()[groupIndex];
+      if (!group) continue;
+      const desired = workset.tabs
+        .filter((tab) => tab.groupIndex === groupIndex)
+        .sort((left, right) => left.tabIndex - right.tabIndex)
+        .map((tab) => restoredById.get(tab.id))
+        .filter((tab): tab is vscode.Tab => tab !== undefined);
+      await this.syncVsCodeGroupTabOrder(group, desired);
+    }
+  }
+
+  private applyRestoredPresentationState(workset: StoredWorksetV1, restoredById: ReadonlyMap<string, vscode.Tab>): void {
+    this.groupMode = workset.groupMode;
+    this.sortMode = workset.sortMode;
+    this.manualGroups.splice(0, this.manualGroups.length, ...workset.manualGroups.map((group) => ({ ...group })));
+    this.manualGroupByIdentity.clear();
+    for (const stored of workset.tabs) {
+      const tab = restoredById.get(stored.id);
+      if (tab && stored.manualGroupId && this.manualGroups.some((group) => group.id === stored.manualGroupId)) {
+        this.manualGroupByIdentity.set(identityKey(targetIdentity(tab)), stored.manualGroupId);
+      }
+    }
+    this.manualOrderByGroup.clear();
+    for (const [groupId, entryIds] of workset.manualOrderByGroup) {
+      this.manualOrderByGroup.set(groupId, entryIds.flatMap((id) => {
+        const tab = restoredById.get(id);
+        return tab ? [identityKey(targetIdentity(tab))] : [];
+      }));
+    }
+    this.pinnedGroupIds.clear();
+    for (const id of workset.pinnedGroupIds) this.pinnedGroupIds.add(id);
+    this.collapsedGroupKeys.clear();
+    for (const key of workset.collapsedGroupKeys) this.collapsedGroupKeys.add(key);
+  }
+
+  private async closeExtraWorksetGroups(targetGroupCount: number): Promise<WorksetRestoreFailure[]> {
+    const failures: WorksetRestoreFailure[] = [];
+    const groups = userEditorGroups();
+    for (let index = groups.length - 1; index >= targetGroupCount; index -= 1) {
+      const group = groups[index];
+      if (group.tabs.length === 0) {
+        await vscode.window.tabGroups.close(group, true);
+      } else {
+        failures.push({
+          category: 'openFailed',
+          label: format(this.localeStrings.editorGroup, index + 1),
+          detail: format(this.localeStrings.worksetProtectedGroupRetained, group.tabs.length),
+        });
+      }
+    }
+    return failures;
+  }
+
+  private async showWorksetRestoreReport(
+    workset: StoredWorksetV1,
+    restoredCount: number,
+    failures: readonly WorksetRestoreFailure[],
+  ): Promise<void> {
+    if (failures.length === 0) {
+      void vscode.window.showInformationMessage(format(this.localeStrings.worksetLoaded, workset.name, restoredCount));
+      return;
+    }
+    const grouped = new Map<WorksetRestoreFailureCategory, WorksetRestoreFailure[]>();
+    for (const failure of failures) grouped.set(failure.category, [...(grouped.get(failure.category) ?? []), failure]);
+    const detail: string[] = [format(this.localeStrings.worksetRestoreSummary, restoredCount, failures.length)];
+    for (const category of ['notFound', 'moved', 'deleted', 'permission', 'unsupported', 'openFailed'] as const) {
+      const categoryFailures = grouped.get(category);
+      if (!categoryFailures?.length) continue;
+      detail.push('', this.worksetFailureCategoryLabel(category));
+      detail.push(...categoryFailures.map((failure) => `• ${failure.label} — ${failure.detail}`));
+    }
+    logWarn('工作集恢复存在未恢复项目', { workset: workset.name, restoredCount, failures });
+    const action = await vscode.window.showWarningMessage(
+      format(this.localeStrings.worksetRestoreReportTitle, workset.name),
+      { modal: true, detail: detail.join('\n') },
+      this.localeStrings.showReport,
+    );
+    if (action === this.localeStrings.showReport) showLogs();
+  }
+
+  private worksetFailureCategoryLabel(category: WorksetRestoreFailureCategory): string {
+    if (category === 'notFound') return this.localeStrings.worksetFailureNotFound;
+    if (category === 'moved') return this.localeStrings.worksetFailureMoved;
+    if (category === 'deleted') return this.localeStrings.worksetFailureDeleted;
+    if (category === 'permission') return this.localeStrings.worksetFailurePermission;
+    if (category === 'unsupported') return this.localeStrings.worksetFailureUnsupported;
+    return this.localeStrings.worksetFailureOpen;
   }
 
   private async closeTargets(targets: readonly TabTarget[]): Promise<void> {
@@ -2214,6 +2814,12 @@ export class VerticalTabsPanel {
     if (shouldRememberState()) await this.context.workspaceState.update(PINNED_GROUP_IDS_STORAGE_KEY, Array.from(this.pinnedGroupIds));
   }
 
+  private async persistCollapsedGroups(): Promise<void> {
+    if (shouldRememberState()) {
+      await this.context.workspaceState.update(COLLAPSED_GROUP_KEYS_STORAGE_KEY, Array.from(this.collapsedGroupKeys));
+    }
+  }
+
   private resolveTab(target: TabTarget): vscode.Tab | undefined {
     const indexedTab = vscode.window.tabGroups.all[target.groupIndex]?.tabs[target.tabIndex];
     if (indexedTab && !isVerticalTabsPanel(indexedTab) && sameIdentity(targetIdentity(indexedTab), target.identity)) {
@@ -2531,6 +3137,7 @@ export class VerticalTabsPanel {
     <header class="toolbar">
       <div class="toolbar-actions">
         <button id="toggle-search" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-search" aria-hidden="true"></span></button>
+        <button id="worksets" class="toolbar-icon" type="button" title="${i18n.worksets}" aria-label="${i18n.worksets}"><span class="codicon codicon-archive" aria-hidden="true"></span></button>
         <button id="toggle-toolbar-controls" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-settings-gear" aria-hidden="true"></span></button>
         <button id="expand-all" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-expand-all" aria-hidden="true"></span></button>
         <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-collapse-all" aria-hidden="true"></span></button>
@@ -3442,6 +4049,59 @@ function targetIdentity(tab: vscode.Tab): TabTargetIdentity {
   if (input instanceof vscode.TabInputWebview) return { kind: 'webview', viewType: input.viewType, label: tab.label };
   if (input instanceof vscode.TabInputTerminal) return { kind: 'terminal', label: tab.label };
   return { kind: 'unknown', label: tab.label };
+}
+
+function worksetInputFromTab(tab: vscode.Tab): WorksetTabInput {
+  const input = tab.input;
+  if (input instanceof vscode.TabInputText) return { kind: 'text', uri: input.uri.toString() };
+  if (input instanceof vscode.TabInputTextDiff) {
+    return { kind: 'diff', originalUri: input.original.toString(), modifiedUri: input.modified.toString() };
+  }
+  if (input instanceof vscode.TabInputCustom) {
+    return { kind: 'custom', uri: input.uri.toString(), viewType: input.viewType };
+  }
+  if (input instanceof vscode.TabInputNotebook) {
+    return { kind: 'notebook', uri: input.uri.toString(), notebookType: input.notebookType };
+  }
+  if (input instanceof vscode.TabInputNotebookDiff) {
+    return {
+      kind: 'notebookDiff',
+      originalUri: input.original.toString(),
+      modifiedUri: input.modified.toString(),
+      notebookType: input.notebookType,
+    };
+  }
+  if (input instanceof vscode.TabInputWebview) {
+    const builtIn = getActivatableBuiltInWebviewTarget(tab);
+    return { kind: 'webview', viewType: input.viewType, label: tab.label, ...(builtIn ? { builtIn } : {}) };
+  }
+  if (input instanceof vscode.TabInputTerminal) return { kind: 'terminal', label: tab.label };
+  return { kind: 'unknown', label: tab.label };
+}
+
+function findMatchingTabInGroup(group: vscode.TabGroup, input: WorksetTabInput): vscode.Tab | undefined {
+  const key = worksetInputKey(input);
+  return group.tabs.find((tab) => !isVerticalTabsPanel(tab) && worksetInputKey(worksetInputFromTab(tab)) === key);
+}
+
+function escapeGlobSegment(value: string): string {
+  return value.replace(/[\\*?{}[\]]/g, (character) => `[${character}]`);
+}
+
+function isPermissionError(error: unknown): boolean {
+  return error instanceof vscode.FileSystemError
+    ? error.code === 'NoPermissions'
+    : error instanceof Error && /permission|access denied|eacces/i.test(error.message);
+}
+
+function isFileNotFoundError(error: unknown): boolean {
+  return error instanceof vscode.FileSystemError
+    ? error.code === 'FileNotFound'
+    : error instanceof Error && /not found|enoent/i.test(error.message);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isActivatableTab(tab: vscode.Tab): boolean | undefined {

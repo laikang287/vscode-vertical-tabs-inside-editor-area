@@ -33,6 +33,7 @@ const groups = document.querySelector<HTMLElement>('#groups');
 const verticalTabs = document.querySelector<HTMLElement>('.vertical-tabs');
 const toolbarControls = document.querySelector<HTMLElement>('#toolbar-controls');
 const toggleToolbarControlsButton = document.querySelector<HTMLButtonElement>('#toggle-toolbar-controls');
+const worksetsButton = document.querySelector<HTMLButtonElement>('#worksets');
 const expandAllButton = document.querySelector<HTMLButtonElement>('#expand-all');
 const collapseAllButton = document.querySelector<HTMLButtonElement>('#collapse-all');
 const groupModeSelect = document.querySelector<HTMLSelectElement>('#group-mode');
@@ -80,6 +81,7 @@ const EN_DEFAULTS: Record<string, string> = {
   newGroup: 'New group', newGroupOnlyManual: 'Only manual grouping mode can create groups',
   previewSuffix: ' (preview)', bestEffortActivation: 'Navigate using VS Code built-in commands',
   unsupportedActivation: 'Cannot be navigated by extension',
+  worksets: 'Worksets',
   hideToolbarControls: 'Hide grouping and sorting controls', showToolbarControls: 'Show grouping and sorting controls',
   searchPlaceholder: 'Search', searchGroup: 'Search group names',
   showSearch: 'Show search', hideSearch: 'Hide search',
@@ -107,6 +109,7 @@ const i18n = new Proxy(resolveI18n(), {
 
 setAccessibleButtonLabel(expandAllButton, i18n.expand);
 setAccessibleButtonLabel(collapseAllButton, i18n.collapse);
+setAccessibleButtonLabel(worksetsButton, i18n.worksets);
 setAccessibleButtonLabel(searchGroupToggle, i18n.searchGroup);
 setAccessibleButtonLabel(regexSearchToggle, i18n.regexSearch);
 setAccessibleButtonLabel(unsavedFilterToggle, i18n.filterUnsaved);
@@ -143,6 +146,9 @@ toggleToolbarControlsButton?.addEventListener('click', () => {
   const visible = toolbarControls?.hidden ?? false;
   setToolbarControlsVisible(visible);
   vscode.postMessage({ type: 'setToolbarControlsVisible', visible });
+});
+worksetsButton?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'manageWorksets' });
 });
 expandAllButton?.addEventListener('click', () => setAllGroupsCollapsed(false));
 collapseAllButton?.addEventListener('click', () => setAllGroupsCollapsed(true));
@@ -233,11 +239,12 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
     return;
   }
   latestSnapshot = message.snapshot;
-  clearDropIndicator();
-  if (!message.snapshot.rememberState && collapsedGroups.size > 0) {
+  if (message.snapshot.collapsedGroupKeys) {
     collapsedGroups.clear();
-    vscode.setState({});
+    for (const key of message.snapshot.collapsedGroupKeys) collapsedGroups.add(key);
+    if (message.snapshot.rememberState) vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
   }
+  clearDropIndicator();
   const followedTarget = prepareActiveTabFollow(message.snapshot);
   pruneSelectedTabs(message.snapshot.tabs);
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
@@ -382,7 +389,9 @@ function renderCurrentTabs(): void {
 
 function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
   logToExtension('debug', '请求标签快照', `type=${type}, attempt=${refreshAttempts + 1}`);
-  vscode.postMessage({ type });
+  vscode.postMessage(type === 'ready'
+    ? { type, collapsedGroupKeys: Array.from(collapsedGroups) }
+    : { type });
   refreshAttempts += 1;
   window.setTimeout(() => {
     if (!latestSnapshot && refreshAttempts < 5) {
@@ -770,8 +779,11 @@ function openGroupCollapseKey(group: VerticalTabDisplayGroup): string {
 }
 
 function saveCollapsedGroups(): void {
-  if (latestSnapshot?.rememberState) vscode.setState({ collapsedGroups: Array.from(collapsedGroups) });
+  const keys = Array.from(collapsedGroups);
+  if (latestSnapshot) latestSnapshot = { ...latestSnapshot, collapsedGroupKeys: keys };
+  if (latestSnapshot?.rememberState) vscode.setState({ collapsedGroups: keys });
   else vscode.setState({});
+  vscode.postMessage({ type: 'setCollapsedGroups', keys });
 }
 
 function updateTreeActionState(): void {

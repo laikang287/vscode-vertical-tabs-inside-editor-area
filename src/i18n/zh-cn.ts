@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { zhCnWorksets } from './worksetStrings';
 
 const zhCn: LocaleStrings = {
+  ...zhCnWorksets,
   emptyState: '没有可显示的编辑器标签。',
   expand: '展开',
   collapse: '折叠',

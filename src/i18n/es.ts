@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { esWorksets } from './worksetStrings';
 
 const es: LocaleStrings = {
+  ...esWorksets,
   emptyState: 'No hay pestañas de editor mostrables.',
   expand: 'Expandir',
   collapse: 'Contraer',

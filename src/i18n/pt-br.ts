@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { ptBrWorksets } from './worksetStrings';
 
 const ptBr: LocaleStrings = {
+  ...ptBrWorksets,
   emptyState: 'Nenhuma aba de editor exibível.',
   expand: 'Expandir',
   collapse: 'Recolher',

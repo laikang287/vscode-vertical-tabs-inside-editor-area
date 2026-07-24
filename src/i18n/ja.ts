@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { jaWorksets } from './worksetStrings';
 
 const ja: LocaleStrings = {
+  ...jaWorksets,
   emptyState: '表示可能なエディタータブはありません。',
   expand: '展開',
   collapse: '折りたたむ',

@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { deWorksets } from './worksetStrings';
 
 const de: LocaleStrings = {
+  ...deWorksets,
   emptyState: 'Keine anzeigbaren Editor-Tabs.',
   expand: 'Erweitern',
   collapse: 'Zuklappen',

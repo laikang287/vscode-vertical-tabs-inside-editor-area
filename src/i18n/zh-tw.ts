@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { zhTwWorksets } from './worksetStrings';
 
 const zhTw: LocaleStrings = {
+  ...zhTwWorksets,
   emptyState: '沒有可顯示的編輯器標籤。',
   expand: '展開',
   collapse: '折疊',

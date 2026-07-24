@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { frWorksets } from './worksetStrings';
 
 const fr: LocaleStrings = {
+  ...frWorksets,
   emptyState: 'Aucun onglet éditeur affichable.',
   expand: 'Développer',
   collapse: 'Réduire',

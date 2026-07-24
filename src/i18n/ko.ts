@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { koWorksets } from './worksetStrings';
 
 const ko: LocaleStrings = {
+  ...koWorksets,
   emptyState: '표시 가능한 편집기 탭이 없습니다.',
   expand: '펼치기',
   collapse: '접기',
