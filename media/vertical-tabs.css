@@ -256,7 +256,8 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 }
 .group-toggle { color: inherit; flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
 .group-actions, .tab-actions { align-items: center; display: flex; justify-content: center; }
-.group-actions { flex: 0 0 23px; padding-right: 3px; }
+.group-actions { flex: 0 0 23px; opacity: 0; padding-right: 3px; pointer-events: none; }
+.group-header:hover .group-actions { opacity: 1; pointer-events: auto; }
 .tab-actions { flex: 0 0 auto; min-width: 0; padding-right: 0; }
 .group-action { color: inherit; }
 .group-header .tab-action { height: 20px; line-height: 20px; min-width: 20px; padding: 0; }
