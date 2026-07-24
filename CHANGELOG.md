@@ -1,208 +1,104 @@
----
-date created: 2026-07-23 03:05
-author: null
-tags: null
-source: null
----
+# Changelog
+
+## [1.0.0] - 2026-07-23
+
+<mark>This is a major update. Due to the large number of changes, consider reverting to version 0.2.1 if you encounter bugs.</mark>
+
+### Key Features
+
+- <mark>The context menu in the vertical tabs can display every action available in VS Code's horizontal tab context menu, including actions contributed by VS Code itself and third-party extensions.</mark>
+- Updated the interface styling to better match VS Code themes.
+- Added support for saving and loading worksets.
+- Added support for placing the vertical tabs on either the left or right.
+- Enhanced search.
+- Added the `verticalTabs.relativePathDisplay` setting, which controls when a tab displays a path—for example, showing the parent directory only for files with duplicate names.
+- Added multiple configurable shortcuts for switching and moving tabs.
+    - See the keyboard shortcut descriptions for details.
+    - No shortcuts are bound by default; bind them as needed.
+    - `verticalTabs.previousAcrossGroups` and `verticalTabs.nextAcrossGroups` switch to the previous and next tab across groups. <mark>These commands are used very frequently. Consider binding them to `Ctrl+Tab` and `Ctrl+Shift+Tab`, overriding VS Code's default shortcuts.</mark>
+- Added multiple settings; see the setting descriptions for details.
+
+### Native VS Code Context Menu Integration
+
+- Tab context menus can now display actions registered by VS Code itself and by other extensions for the native editor tab menu.
+- Added the `verticalTabs.showNativeContextMenuActions` setting, which controls whether native VS Code context menu actions are enabled. It is enabled by default.
+- Native submenus can be opened and operated with the keyboard.
+- Notes:
+
+### Tab Search and Navigation
+
+- Added real-time tab search with filtering by tab name.
+- Workspace-relative path search can be enabled, with matched paths displayed and highlighted in the results.
+- Added regular expression search. Invalid regular expressions display an error without disrupting the current list.
+- Displays the number of matching tabs and groups, and highlights matched text.
+- Groups containing results expand automatically during a search; clearing the search restores their previous collapsed state.
+
+### Path Display and Duplicate Filename Disambiguation
+
+The `verticalTabs.relativePathDisplay` setting now provides five modes:
+
+- Do not display paths.
+- Display the parent directory only for files with duplicate names.
+- Display the workspace-relative path only for files with duplicate names.
+- Always display the parent directory for every file.
+- Always display the workspace-relative path for every file.
+
+Paths appear below tab names. Files in the workspace root and files outside the workspace use recognizable parent-directory information as additional context.
+
+### Tab Navigation, Sorting, and Movement
+
+- Added a Most Recently Used sorting mode that globally sorts tabs by the time they were last activated successfully.
+- Newly opened and activated tabs become the most recently used items; tabs that have not been activated retain a stable order.
+- Added the Always Follow Active Tab setting. After switching editors, the corresponding group expands automatically and the active tab scrolls into view.
+- Added eight configurable commands:
+    - Switch to the previous or next tab within a group.
+    - Switch to the previous or next tab across groups.
+    - Move tabs up or down within the current group.
+    - Move tabs to the previous or next group.
+- Movement commands support multi-selection and preserve the relative order of selected tabs.
+- Manual sorting supports movement within a group. Directory grouping supports moving files across groups, while file-type grouping blocks cross-group moves that would violate the grouping rule.
+
+### Worksets and Session Restoration
+
+- Added workspace-scoped worksets that can save:
+    - Currently open tabs.
+    - Native editor groups and tab order.
+    - The active tab.
+    - Manual groups and manual sorting.
+    - Pinned states for tabs and tab groups.
+    - Collapsed states for groups.
+    - The current grouping and sorting modes.
+- Worksets can be created, loaded, overwritten, renamed, and deleted from the Command Palette or the vertical tab bar.
+- Before loading, the extension lists tabs that may be closed and any unsaved tabs. Unsaved and pinned tabs are protected by default.
+- If an original path is missing, the extension automatically associates it only when the workspace contains exactly one file with the same name, preventing incorrect restoration.
+
+### Tab Status Display
+
+- Note: This area has not been fully tested.
+- Added read-only resource states, including file-system read-only, permission-based read-only, and VS Code read-only rules.
+- Added states for missing resources, insufficient permissions, and unavailable file systems.
+- States refresh after files are deleted or restored, or when permissions or read-only settings change.
+- The right side of a tab consistently displays preview, pinned, read-only, unsaved, resource error, and unavailable navigation states.
+- The unsaved state is displayed next to the close button.
+- More width is available for tab text. The close button appears only on hover or when keyboard focus enters the tab.
+
+### Layout, Position, and Entry Points
+
+- Added `verticalTabs.position`, which places the vertical tab bar on the left or right side of the editor area and applies changes immediately.
+- Added `verticalTabs.toolbarPosition`, which pins the toolbar above or below the tab list.
+- Added a persistent show/hide button to the right side of the status bar. Its icon changes with the tab bar's position and visibility.
+- The final interface uses VS Code theme colors and Codicon action buttons.
+
+### Keyboard and Accessibility
+
+- When focus is on an empty area of the vertical tabs, the arrow keys, `Home`, `End`, and `Enter` can be used to navigate to and activate tabs.
+    - This has limited practical usefulness: after using the keyboard to move to or activate a tab, focus moves inside the tab, so subsequent navigation within the vertical tabs is unavailable.
+- Tab and group menus support the Menu key, `Shift+F10`, the arrow keys, `Enter`, Space, and `Esc`.
 
-# 更新日志
-## [0.22.10] - 2026-07-25
-
-- 修复 VS Code 编辑器组处于 220px 最小宽度时，显示或隐藏垂直标签栏会触发活动组自动展开并造成两次宽度跳变的问题；左右位置均在创建或关闭栏组前将相邻最小组稳定调整到 223px。
-- 隐藏标签栏时仅在当前用户布局仍匹配显示后的快照时使用原始宽度贡献记录；用户调整过宽度或布局后会丢弃旧记录，并把释放的标签栏宽度交给当前最宽组，避免返还到错误编辑器组。
-- 移除排查期间使用的高频布局快照和临时宽度调整，只保留关键布局决策日志。
-
-## [0.22.9] - 2026-07-25
-
-- 标签组名称改为居中显示，通过布局位置进一步区分标签组标题和普通标签。
-
-## [0.22.8] - 2026-07-25
-
-- 标签组标题不再使用容易受主题影响的自定义背景遮罩。
-- 标签组名称和展开箭头改用 VS Code 主题强调色，并增加强调色分隔线；高对比度主题使用原生对比边框。
-
-## [0.22.7] - 2026-07-25
-
-- 新增右侧状态栏常驻垂直标签栏切换按钮，并根据标签栏可见状态及左右位置切换图标。
-- 侧边栏启动器继续作为默认折叠的后备入口；移除仅在视图展开后可见的标题栏眼睛按钮。
-
-## [0.22.6] - 2026-07-25
-
-- 将侧边栏启动器默认折叠为紧凑标题栏操作，并根据垂直标签栏可见状态显示对应的眼睛图标。
-- 补齐启动器显示与隐藏操作的清单国际化，覆盖扩展支持的全部 10 种界面语言。
-
-## [0.22.5] - 2026-07-25
-
-- 修复大量标签下展开或折叠分组时列表滚动位置跳动的问题；标签树改为离屏构建后原子替换，并以交互分组标题恢复滚动锚点。
-- 折叠靠近列表底部的分组时按需保留最小尾部滚动空间，确保鼠标不动即可连续展开或折叠同一分组；滚回真实内容范围后自动清理。
-
-## [0.22.4] - 2026-07-25
-
-- 优化快捷键连续切换标签的性能：连发期间只更新垂直栏候选高亮，停止触发 160ms 后仅激活最终标签，避免重复加载中间编辑器。
-- 移除快捷键导航热路径中的逐次完整快照刷新，并将实际激活串行化；标签或编辑器组变化时会安全取消过期候选。
-
-## [0.22.3] - 2026-07-25
-
-- 增强标签组标题与普通标签之间的背景区分。
-- 深色主题改用浅色遮罩，避免在深色编辑器背景上继续加深而导致视觉差异不明显；高对比度主题保持原生颜色。
-
-## [0.22.2] - 2026-07-25
-
-- 隐藏垂直标签栏右侧的滚动条，同时保留鼠标滚轮、触控板和程序定位滚动能力。
-
-## [0.22.1] - 2026-07-25
-
-- 修复标签组关闭按钮在非悬停状态下始终显示的问题；操作列仅在悬停组头时显示并保留固定占位，避免布局跳动。
-
-## [0.22.0] - 2026-07-24
-
-- 新增工作区级工作集，可保存和恢复打开标签、编辑器组、手动分组、排序、固定及折叠状态。
-- 支持通过命令面板和垂直标签栏创建、加载、覆盖、重命名与删除工作集；覆盖和删除前均明确确认。
-- 加载前列出受影响的未保存标签并默认保护未保存及固定标签；恢复后分类报告缺失、移动、删除、无权限及 VS Code 无法重开的项目。
-- 原文件丢失时仅自动采用工作区内唯一的同名候选文件，避免错误关联。
-
-## [0.21.0] - 2026-07-24
-
-- 新增只读、资源不存在、无访问权限和文件系统不可用状态，并在文件删除、恢复、权限或只读配置变化时刷新标签。
-- 统一右侧状态顺序为预览、固定、只读、未保存、资源异常和无法跳转；状态说明及无障碍名称支持全部 10 种界面语言，不包含 Git 状态。
-- 移除标签前方的文件类型图标、固定槽位和预览文字后缀，使所有标签文字从统一且更靠左的位置开始。
-- 关闭按钮默认不占空间，仅在鼠标悬停标签或键盘焦点进入标签时显示，并保持 22×22 点击区域。
-
-## [0.20.1] - 2026-07-24
-
-- 修复标签切换与移动快捷键错误依赖 VS Code 横向编辑器组和原生标签顺序的问题，统一按照垂直标签栏的当前分组与文件顺序计算目标。
-- 手动排序时支持在垂直分组内调整顺序；自动排序会阻止上下移动并提示。目录分组支持跨组移动文件，文件类型分组会阻止无法成立的跨组移动。
-- 快捷键导航忽略搜索、折叠等临时视图状态，支持首尾循环，并保持固定与未固定标签的移动边界。
-
-## [0.20.0] - 2026-07-24
-
-- 标签右键菜单新增第二组 VS Code 操作，并使用分割线与插件自带操作区分；仅在实际标签上显示。
-- 复用 VS Code 与已安装扩展注册到横向标签右键菜单的命令和子菜单，同时过滤重复的关闭与固定操作。
-- 新增默认开启的 `verticalTabs.showNativeContextMenuActions` 窗口级开关，并为异步菜单、键盘子菜单导航和安全命令调用增加校验。
-
-## [0.19.1] - 2026-07-24
-
-- 可拖拽标签和分组标题保持普通点击指针，不再在悬停或拖拽时切换为抓取光标。
-
-## [0.19.0] - 2026-07-24
-
-- 将搜索区精简为单行输入框，移除未保存、固定、当前编辑器组和文件类型筛选控件。
-- 新增默认关闭的工作区相对路径搜索开关；开启后可匹配并高亮文件的工作区相对路径。
-- 加深标签组标题背景色，增强分组区域与标签内容之间的视觉区分。
-- 针对浅色和深色主题分别调整加深幅度；高对比度主题继续使用 VS Code 原生分组颜色。
-
-## [0.18.0] - 2026-07-24
-
-- 合并标签路径显示、活动标签跟随、内容宽度、无障碍键盘导航、标签切换与移动命令、最近使用排序及搜索过滤增强。
-- 合并窄编辑器组创建、隐藏和重新显示垂直标签栏时的布局稳定性修复。
-- 保留主分支的集成测试窗口自动避开当前激活显示器能力，并继续支持显式指定目标显示器。
-
-## [0.17.0] - 2026-07-24
-
-- 增强标签搜索：支持名称、路径与分组名称匹配、高亮和结果数量。
-- 新增正则搜索以及未保存、固定、当前编辑器组和文件类型组合过滤；无效正则不会改变列表。
-- 搜索期间自动展开匹配分组，并在清空后恢复搜索前的折叠状态。
-
-## [0.16.1] - 2026-07-24
-
-- 显示垂直标签栏前，先将目标边缘的 120px 窄编辑器组预扩宽 1px，确认生效后再创建垂直栏编辑器组，避免 VS Code 保留最小化状态并随后自动展开。
-- 左右位置均支持精确像素预扩宽；像素写入未生效时回退为极小比例增量，同时保持根级组总宽度、顺序及嵌套结构不变。
-
-## [0.16.0] - 2026-07-24
-
-- 新增“最近使用”排序模式，按标签最近一次成功激活时间进行全局 MRU 排序，不读取文件修改时间。
-- 前台新打开的标签立即成为最近使用项；后台打开或恢复后尚未激活的标签排在已有 MRU 记录之后，并保持原生顺序。
-- MRU 覆盖所有编辑器组与可展示的标签类型，固定标签仍保持组内优先。
-- 避免其它自动排序模式在同步 VS Code 原生标签顺序时污染 MRU 使用历史。
-
-## [0.15.0] - 2026-07-24
-
-- 新增组内及跨编辑器组切换标签、移动标签共 8 个可配置命令，默认不绑定快捷键。
-- 命令可使用活动标签或垂直标签栏多选状态，并在移动时保持所选标签的相对顺序。
-
-## [0.14.0] - 2026-07-24
-
-- 标签树改为单一 Tab 停靠点，支持方向键、Home、End 和 Enter 进行无障碍键盘导航。
-- 标签与分组右键菜单支持菜单键、Shift+F10、方向键、Enter、空格和 Esc，并在取消菜单后恢复原焦点。
-
-## [0.13.0] - 2026-07-24
-
-- 压缩标签行两侧与图标、固定槽位、未保存状态之间的非文本占位，为标签名称和路径提供更多可用宽度。
-- 保持关闭按钮 22×22 点击区域及标签行高度不变。
-
-## [0.12.0] - 2026-07-24
-
-- 新增“始终跟随活动标签”配置；切换当前聚焦的编辑器时会自动展开其所属分组，并将标签滚动到垂直标签栏的可见区域。
-- 关闭跟随配置后保留用户手动浏览标签列表时的分组折叠状态和滚动位置。
-
-## [0.11.3] - 2026-07-24
-
-- 修复隐藏后重新显示垂直标签栏时，120px 边缘编辑器组先恢复窄宽度、随后被 VS Code 自动展开为最大宽度的问题。
-- 左右位置均改为从最宽用户编辑器组创建新空组，再将空组移动到目标边缘，避免在宽度恢复前激活窄边缘组。
-
-## [0.11.2] - 2026-07-24
-
-- 修复多个编辑器组中隐藏垂直标签栏时，释放的栏宽会按比例重排用户编辑器组的问题。
-- 隐藏时按显示阶段的原始宽度贡献返还栏宽；布局结构变化时仅扩展最宽用户组，并保持活动标签焦点。
-
-## [0.11.1] - 2026-07-24
-
-- 修复多个编辑器组中边缘组处于最小宽度时重新显示垂直标签栏会按比例重排其它编辑器组的问题。
-- 左右位置均会保护 220px 最小宽度组，并优先从有余量的最宽编辑器组安全分配垂直栏宽度。
-
-## [0.11.0] - 2026-07-24
-
-- 将标签路径显示扩展为五档：不显示、仅同名文件显示目录名或相对仓库路径、始终显示目录名或相对仓库路径。
-- 保留原有相对路径配置值，并为仓库根文件和仓库外文件补充可辨识的父目录名。
-
-## [0.10.1] - 2026-07-24
-
-- 修复标签组名称被强制显示为全大写的问题，保留名称原本的大小写。
-
-## [0.10.0] - 2026-07-24
-
-- 新增 `verticalTabs.position` 配置，支持将垂直标签栏放在编辑器区域最左侧或最右侧，并即时应用位置变更。
-- 左右位置共用宽度记忆；创建、空状态恢复和换边时保留用户编辑器组与活动标签。
-
-## [0.9.0] - 2026-07-24
-
-- 垂直标签页采用 VS Code“打开的编辑器”风格，增加官方 Seti 文件类型图标与 Codicon 操作按钮。
-- 优化分组、活动标签、多选标签和高对比度主题下的颜色与焦点反馈。
-
-## [0.8.0] - 2026-07-24
-
-- 支持通过 VS Code 设置将垂直标签栏工具区固定在标签列表上方或下方；底部布局会反转工具区内部的纵向顺序。
-
-## [0.7.0] - 2026-07-24
-
-- 将未保存状态从文件名前缀移至关闭按钮旁，并增加无障碍状态说明。
-
-## [0.6.2] - 2026-07-24
-
-- 修复多选关闭时固定标签也会被关闭的问题；单选关闭仍可关闭固定标签。
-
-## [0.6.1] - 2026-07-24
-
-- 将标签固定图标移至文字左侧，并通过等宽图标槽保持同级标签的文字起点对齐。
-
-## [0.6.0] - 2026-07-24
-
-- 新增 `verticalTabs.relativePathDisplay` 配置，可选择不显示、仅同名标签显示或始终显示工作区相对路径。
-- 相对路径显示在标签名下方，并使用更小、更弱化的文字样式。
-
-## [0.5.1] - 2026-07-24
-
-- 修复创建垂直标签栏时原有编辑器组宽度被整体重排的问题。
-- 缩短打开垂直标签栏时的布局恢复等待，减少界面闪烁。
-- 在显示垂直标签栏前恢复目标宽度，进一步减少布局闪烁。
-## [0.3.1] - 2026-07-23
-支持搜索功能
-
-将新版README打包到版本中
 ## [0.2.1] - 2026-07-23
 
-将新版README打包到版本中
+Bundled the updated README with the release.
 
 ## [0.2.0] - 2026-07-23
 
-完成初版
+Completed the initial release.
