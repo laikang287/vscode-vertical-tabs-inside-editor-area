@@ -1,4 +1,4 @@
-import type { ExtensionMessage, GroupMode, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import type { ExtensionMessage, GroupMode, ProductIconName, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { TabSelection } from './TabSelection';
  import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
  import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -73,6 +73,9 @@ const i18n = new Proxy(resolveI18n(), {
   }
 }) as Record<string, string>;
 
+setAccessibleButtonLabel(expandAllButton, i18n.expand);
+setAccessibleButtonLabel(collapseAllButton, i18n.collapse);
+setAccessibleButtonLabel(searchGroupToggle, i18n.searchGroup);
 
 let refreshAttempts = 0;
 let activateRequestSequence = 0;
@@ -203,6 +206,7 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     group.showHeader ? 'with-header' : 'without-header',
     isEmptyManualRootGroup(group) ? 'empty-manual-root' : '',
     group.isPinned ? 'is-pinned-group' : '',
+    group.tabs.some((tab) => tab.isFocused) ? 'has-focused-tab' : '',
     collapsed ? 'is-collapsed' : '',
   ].filter(Boolean).join(' ');
   section.dataset.groupId = group.id;
@@ -236,7 +240,7 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     }
     const main = document.createElement('div');
     main.className = 'group-main';
-    const toggle = button(collapsed ? '▶' : '▼', collapsed ? i18n.expandGroup : i18n.collapseGroup);
+    const toggle = iconButton(collapsed ? 'chevron-right' : 'chevron-down', collapsed ? i18n.expandGroup : i18n.collapseGroup);
     toggle.className = 'group-toggle';
     toggle.tabIndex = -1;
     toggle.addEventListener('click', (event) => {
@@ -250,10 +254,9 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     main.append(name);
     if (group.isPinned) {
       const pin = document.createElement('span');
-      pin.className = 'group-pin-indicator';
-      pin.textContent = '📌';
+      pin.className = 'group-pin-indicator codicon codicon-pinned';
       pin.title = i18n.pinnedGroup;
-      pin.setAttribute('aria-label', i18n.pinnedGroup);
+      pin.setAttribute('aria-hidden', 'true');
       main.append(pin);
     }
     if (group.description) {
@@ -265,7 +268,7 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     header.append(main);
     const actions = document.createElement('div');
     actions.className = 'group-actions';
-    const remove = button('×', i18n.closeGroupAndDelete);
+    const remove = iconButton('close', i18n.closeGroupAndDelete);
     remove.className = 'group-action tab-action';
     remove.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -287,7 +290,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   const row = document.createElement('article');
   const selected = isSelected(tab);
   const multiSelected = selected && selection.keys().length > 1;
-  row.className = ['tab-row', `tree-level-${level}`, selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isFocused ? 'is-focused' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
+  row.className = ['tab-row', `tree-level-${level}`, tab.description ? 'has-description' : '', selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isFocused ? 'is-focused' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isPreview ? 'is-preview' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
   row.draggable = currentDragCapability() !== 'disabled';
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
@@ -354,7 +357,8 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   activate.className = 'tab-main';
   activate.type = 'button';
   activate.disabled = !tab.isActivatable;
- activate.title = activationTitle(tab);
+  activate.title = activationTitle(tab);
+  activate.setAttribute('aria-label', tabAccessibleLabel(tab));
   const requestActivation = (targetOverride?: TabTarget) => {
     const target = targetOverride ?? tab.target;
     const requestId = nextActivateRequestId();
@@ -423,9 +427,26 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       collapsePreservedMultiSelection();
     }
   });
+  const icon = createTabIcon(tab);
+  const text = document.createElement('span');
+  text.className = 'tab-text';
+  const primary = document.createElement('span');
+  primary.className = 'tab-primary';
   const label = document.createElement('span');
   label.className = 'tab-label';
-  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPinned ? ' 📌' : ''}${tab.isPreview ? i18n.previewSuffix : ''}`;
+  label.textContent = tab.label;
+  primary.append(label);
+  if (tab.isDirty) {
+    const dirty = codicon('circle-filled');
+    dirty.classList.add('tab-status', 'tab-dirty-indicator');
+    primary.append(dirty);
+  }
+  if (tab.isPinned) {
+    const pinned = codicon('pinned');
+    pinned.classList.add('tab-status', 'tab-pin-indicator');
+    primary.append(pinned);
+  }
+  text.append(primary);
   activate.addEventListener("lostpointercapture", () => {
     logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture", JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown }));
     if (preserveMultiSelectionOnPointerDown) {
@@ -443,13 +464,13 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       }
     }
   });
-  activate.append(label);
   if (tab.description) {
     const detail = document.createElement('span');
     detail.className = 'tab-description';
     detail.textContent = tab.description;
-    activate.append(detail);
+    text.append(detail);
   }
+  activate.append(icon, text);
   row.addEventListener('contextmenu', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -740,6 +761,49 @@ function button(label: string, title: string): HTMLButtonElement {
   return result;
 }
 
+function iconButton(icon: string, title: string): HTMLButtonElement {
+  const result = document.createElement('button');
+  result.type = 'button';
+  result.title = title;
+  result.setAttribute('aria-label', title);
+  result.append(codicon(icon));
+  return result;
+}
+
+function codicon(name: string): HTMLSpanElement {
+  const icon = document.createElement('span');
+  icon.className = `codicon codicon-${name}`;
+  icon.setAttribute('aria-hidden', 'true');
+  return icon;
+}
+
+function createTabIcon(tab: VerticalTabItem): HTMLSpanElement {
+  if (tab.icon.kind === 'codicon') {
+    const icon = codicon(tab.icon.name satisfies ProductIconName);
+    icon.classList.add('tab-icon', 'tab-product-icon');
+    return icon;
+  }
+  const icon = document.createElement('span');
+  icon.className = 'tab-icon tab-seti-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = tab.icon.fontCharacter;
+  if (tab.icon.fontColor) icon.style.color = tab.icon.fontColor;
+  if (tab.icon.fontSize) icon.style.fontSize = tab.icon.fontSize;
+  return icon;
+}
+
+function setAccessibleButtonLabel(target: HTMLButtonElement | null, label: string): void {
+  if (!target) return;
+  target.title = label;
+  target.setAttribute('aria-label', label);
+}
+
+function tabAccessibleLabel(tab: VerticalTabItem): string {
+  return [tab.label, tab.description]
+    .filter((part): part is string => Boolean(part))
+    .join(', ');
+}
+
 function actionButton(label: string, title: string, type: 'closeTab' | 'closeOthers' | 'closeBelow', target: TabTarget, dismissAfterClick = false): HTMLButtonElement {
   const result = button(label, title);
   result.className = 'tab-action';
@@ -748,7 +812,7 @@ function actionButton(label: string, title: string, type: 'closeTab' | 'closeOth
 }
 
 function closeSelectionButton(tab: VerticalTabItem): HTMLButtonElement {
-  const result = button('×', i18n.closeTab);
+  const result = iconButton('close', i18n.closeTab);
   result.className = 'tab-action';
   result.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
@@ -998,7 +1062,7 @@ type _GroupModeCheck = GroupMode;
 
 function setSearchContainerVisible(visible: boolean): void {
   if (searchContainer) { searchContainer.hidden = !visible; }
-  if (toggleSearchButton) { toggleSearchButton.title = visible ? i18n.hideSearch : i18n.showSearch; }
+  setAccessibleButtonLabel(toggleSearchButton, visible ? i18n.hideSearch : i18n.showSearch);
 }
 
 function applyCurrentFilter(): void {

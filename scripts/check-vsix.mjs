@@ -14,7 +14,14 @@ if (forbidden.length > 0) {
   throw new Error(`VSIX 包含不应发布的文件：${forbidden.join(', ')}`);
 }
 
-for (const required of ['extension/package.json', 'extension/out/extension.js', 'extension/out/webview.js']) {
+for (const required of [
+  'extension/package.json',
+  'extension/out/extension.js',
+  'extension/out/webview.js',
+  'extension/out/codicon.css',
+  'extension/out/codicon.ttf',
+  'extension/THIRD_PARTY_NOTICES.md',
+]) {
   if (!entries.includes(required)) {
     throw new Error(`VSIX 缺少必需文件：${required}`);
   }

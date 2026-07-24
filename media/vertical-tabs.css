@@ -11,12 +11,13 @@ body { margin: 0; }
   box-sizing: border-box;
   min-width: 180px;
   min-height: 100vh;
-  padding: 6px;
+  padding: 0;
 }
 
 .toolbar {
+  border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder, transparent);
   display: block;
-  padding: 4px 2px 8px;
+  padding: 6px 8px 8px;
 }
 
 .toolbar-actions {
@@ -65,8 +66,7 @@ body { margin: 0; }
   color: var(--vscode-input-foreground);
   cursor: pointer;
   font: inherit;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 14px;
   line-height: 1;
   margin-left: -26px;
   min-width: 20px;
@@ -124,28 +124,37 @@ button {
   cursor: pointer;
 }
 
-.toolbar button { color: var(--vscode-textLink-foreground); font-size: 11px; padding: 3px 5px; }
-.toolbar .toolbar-icon { font-size: 15px; line-height: 18px; min-width: 24px; padding: 1px 4px; }
+.toolbar button { color: var(--vscode-icon-foreground, var(--vscode-foreground)); font-size: 11px; padding: 3px 5px; }
+.toolbar .toolbar-icon { font-size: 16px; height: 22px; line-height: 20px; min-width: 24px; padding: 1px 4px; }
 .toolbar button:disabled { color: var(--vscode-disabledForeground); cursor: default; }
 button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
 button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 
-#description { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.5; margin: 4px 6px; }
+#description { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.5; margin: 6px 8px; }
 
-.tab-group { margin-top: 1px; }
+.tab-group { margin-top: 0; }
 .tab-group.without-header { margin-top: 0; }
-.tab-group.empty-manual-root { min-height: 28px; }
+.tab-group.empty-manual-root { min-height: 22px; }
 .group-header {
   align-items: center;
-  border-radius: 3px;
+  background: var(--vscode-sideBarSectionHeader-background, transparent);
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, transparent);
+  color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-foreground));
   cursor: pointer;
   display: flex;
-  min-height: 24px;
-  padding: 2px 0;
+  height: 22px;
+  padding: 0 0 0 8px;
 }
 .group-header[draggable="true"] { cursor: grab; }
 .group-header[draggable="true"]:active { cursor: grabbing; }
-.group-header:hover { background: var(--vscode-list-hoverBackground); }
+.group-header:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground, inherit);
+}
+.tab-group.has-focused-tab > .group-header {
+  border-left: 2px solid var(--vscode-focusBorder);
+  padding-left: 6px;
+}
 .tab-group.is-drop-target > .group-header {
   background: var(--vscode-list-dropBackground, var(--vscode-list-hoverBackground));
   outline: 1px solid var(--vscode-focusBorder, #007fd4);
@@ -157,7 +166,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   outline-offset: -1px;
 }
 .is-pinned-group > .group-header { font-weight: 600; }
-.group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 11px; padding: 2px 4px; }
+.group-header button { background: transparent; border-radius: 3px; cursor: pointer; font-size: 16px; padding: 0; }
 .group-main {
   align-items: center;
   display: flex;
@@ -165,15 +174,37 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   gap: 4px;
   min-width: 0;
 }
-.group-toggle { color: var(--vscode-descriptionForeground); flex: 0 0 18px; line-height: 18px; min-width: 18px; }
+.group-toggle { color: inherit; flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
 .group-actions, .tab-actions { align-items: center; display: flex; flex: 0 0 23px; justify-content: center; padding-right: 3px; }
 .group-action { color: inherit; }
-.group-header .tab-action { line-height: 20px; min-width: 20px; padding: 0; }
-.group-name { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.group-pin-indicator { flex: 0 0 auto; font-size: 11px; line-height: 18px; }
+.group-header .tab-action { height: 20px; line-height: 20px; min-width: 20px; padding: 0; }
+.group-name {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+:lang(zh-CN) .group-name,
+:lang(zh-TW) .group-name,
+:lang(ja) .group-name,
+:lang(ko) .group-name {
+  font-weight: 400;
+}
+.group-pin-indicator { flex: 0 0 auto; font-size: 14px; line-height: 18px; }
 .group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.tab-row { display: flex; align-items: stretch; min-width: 0; position: relative; }
+.tab-row {
+  align-items: stretch;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  display: flex;
+  min-height: 24px;
+  min-width: 0;
+  position: relative;
+}
 .tab-row[draggable="true"] { cursor: grab; }
 .tab-row[draggable="true"]:active { cursor: grabbing; }
 .tab-drop-indicator {
@@ -186,13 +217,20 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   z-index: 20;
 }
 .tab-drop-indicator[hidden] { display: none; }
-.tab-row.tree-level-1 { padding-left: 18px; }
-.tab-row:hover { background: var(--vscode-list-hoverBackground); }
+.tab-row.tree-level-1 { padding-left: 16px; }
+.tab-row:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground, inherit);
+}
 .tab-row.is-selected {
-  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 35%, var(--vscode-editor-background));
-  color: var(--vscode-list-inactiveSelectionForeground);
+  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-list-inactiveSelectionForeground, inherit);
 }
 .tab-row.is-active {
+  background: var(--vscode-tab-unfocusedActiveBackground, var(--vscode-list-inactiveSelectionBackground));
+  color: var(--vscode-tab-unfocusedActiveForeground, var(--vscode-list-inactiveSelectionForeground));
+}
+.tab-row.is-focused {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
@@ -209,24 +247,68 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-row.is-unavailable { opacity: .65; }
 
 .tab-main {
+  align-items: flex-start;
   background: transparent;
   cursor: pointer;
   display: flex;
   flex: 1;
   min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-  padding: 5px 4px 5px 6px;
+  padding: 2px 2px 2px 8px;
   text-align: left;
 }
+.tab-row.has-description .tab-main { padding-bottom: 3px; padding-top: 3px; }
 .tab-main:disabled { cursor: not-allowed; }
 .tab-row:hover .tab-main { background: transparent; }
+.tab-icon {
+  flex: 0 0 16px;
+  height: 18px;
+  line-height: 18px;
+  margin-right: 6px;
+  text-align: center;
+  width: 16px;
+}
+.tab-seti-icon { font-family: "seti"; font-size: 150%; }
+.tab-product-icon { color: var(--vscode-icon-foreground, inherit); font-size: 16px; }
+.tab-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.tab-primary {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+  line-height: 18px;
+  min-width: 0;
+}
 .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.is-active .tab-description { color: inherit; opacity: .8; }
+.tab-row.is-preview .tab-label { font-style: italic; }
+.tab-status { flex: 0 0 auto; font-size: 12px; opacity: .9; }
+.tab-dirty-indicator { color: var(--vscode-tab-activeModifiedBorder, var(--vscode-icon-foreground)); }
+.tab-description {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.is-active .tab-description,
+.is-focused .tab-description { color: inherit; opacity: .8; }
+.tab-row.is-focused .tab-product-icon {
+  color: var(--vscode-list-activeSelectionIconForeground, inherit);
+}
 
 .tab-actions { opacity: 1; }
-.tab-action { font-size: 11px; line-height: 20px; min-width: 20px; padding: 0; }
+.tab-action { font-size: 16px; height: 22px; line-height: 22px; min-width: 22px; padding: 0; }
+
+body.vscode-high-contrast .tab-row.is-focused,
+body.vscode-high-contrast-light .tab-row.is-focused,
+body.vscode-high-contrast .group-header:focus-visible,
+body.vscode-high-contrast-light .group-header:focus-visible {
+  border-color: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));
+}
 
 .tab-context-menu {
   background: var(--vscode-menu-background);

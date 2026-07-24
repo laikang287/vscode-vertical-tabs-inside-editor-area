@@ -6,12 +6,12 @@ import type {
   SortMode,
   TabTargetIdentity,
   TabActivationKind,
+  TabInputKind,
+  TabVisualIcon,
   VerticalTabDisplayGroup,
   VerticalTabItem,
   VerticalTabsSnapshot,
 } from '../webview/messages';
-
-export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
 
 export interface SnapshotSourceTab {
   readonly label: string;
@@ -21,6 +21,8 @@ export interface SnapshotSourceTab {
   readonly isPinned: boolean;
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
+  readonly languageId?: string;
+  readonly icon?: TabVisualIcon;
   readonly path?: string;
   readonly tooltipPath?: string;
   readonly uri?: string;
@@ -76,6 +78,9 @@ export function buildSnapshot(
       manualGroupId: tab.manualGroupId,
       groupId: tab.manualGroupId,
       isFile: isFileTab(tab),
+      inputKind: tab.inputKind,
+      languageId: tab.languageId,
+      icon: tab.icon ?? fallbackIcon(tab.inputKind),
       resourcePath: tab.path,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
@@ -423,6 +428,15 @@ function activationKind(tab: SnapshotSourceTab): TabActivationKind {
     return 'bestEffort';
   }
   return 'unsupported';
+}
+
+function fallbackIcon(inputKind: TabInputKind): TabVisualIcon {
+  if (inputKind === 'diff') return { kind: 'codicon', name: 'diff' };
+  if (inputKind === 'notebook' || inputKind === 'notebookDiff') return { kind: 'codicon', name: 'notebook' };
+  if (inputKind === 'terminal') return { kind: 'codicon', name: 'terminal' };
+  if (inputKind === 'webview') return { kind: 'codicon', name: 'preview' };
+  if (inputKind === 'unknown') return { kind: 'codicon', name: 'symbol-misc' };
+  return { kind: 'codicon', name: 'file' };
 }
 
 function isFileTab(tab: SnapshotSourceTab): boolean {

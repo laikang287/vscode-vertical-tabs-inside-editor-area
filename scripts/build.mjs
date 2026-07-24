@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { globSync } from 'glob';
 
 const shared = {
@@ -10,6 +11,8 @@ const shared = {
   sourcemap: true,
   target: 'node20',
 };
+
+await rm('out/test', { force: true, recursive: true });
 
 await Promise.all([
   build({ ...shared, entryPoints: ['src/extension.ts'], outfile: 'out/extension.js' }),
@@ -26,4 +29,10 @@ await Promise.all([
     outbase: 'test/unit',
     outdir: 'out/test/unit',
   }),
+]);
+
+await mkdir('out', { recursive: true });
+await Promise.all([
+  copyFile('node_modules/@vscode/codicons/dist/codicon.css', 'out/codicon.css'),
+  copyFile('node_modules/@vscode/codicons/dist/codicon.ttf', 'out/codicon.ttf'),
 ]);
