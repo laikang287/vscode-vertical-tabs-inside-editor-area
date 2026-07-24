@@ -147,6 +147,7 @@ test('selects close targets within the same manual display bucket and preserves 
   const work = snapshot.tabs[0].target;
   const topLevel = snapshot.tabs[1].target;
   assert.deepEqual(selectCloseTargets(snapshot, 'close', work), [work]);
+  assert.deepEqual(selectCloseTargets(snapshot, 'close', topLevel), [topLevel]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeOthers', work), []);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeBelow', topLevel), [snapshot.tabs[2].target, snapshot.tabs[3].target]);
   assert.deepEqual(selectCloseTargets(snapshot, 'closeSaved'), []);
@@ -190,9 +191,10 @@ test('scopes closeAll and closeSaved to the focused display group and falls back
     { label: 'f.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///f.ts' } },
   ] }];
   const snapshot = buildSnapshot(groups, 20, [], { groupMode: 'vscode' });
-  const selected = [snapshot.tabs[1]!.target, snapshot.tabs[3]!.target, snapshot.tabs[4]!.target];
+  const selected = [snapshot.tabs[1]!.target, snapshot.tabs[3]!.target, snapshot.tabs[4]!.target, snapshot.tabs[5]!.target];
 
-  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', selected), selected);
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', selected), selected.slice(0, -1));
+  assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'close', [snapshot.tabs[5]!.target]), []);
   assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeOthers', selected), [snapshot.tabs[0]!.target, snapshot.tabs[2]!.target]);
   assert.deepEqual(selectCloseTargetsForTabs(snapshot, 'closeBelow', selected), [snapshot.tabs[2]!.target]);
 });
