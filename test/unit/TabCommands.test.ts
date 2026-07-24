@@ -150,6 +150,5 @@ function displayedTab(
     isActivatable: options.isActivatable ?? true,
     isFile: true,
     inputKind: 'text',
-    icon: { kind: 'codicon', name: 'file' },
   };
 }

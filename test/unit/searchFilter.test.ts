@@ -137,7 +137,6 @@ function tab(
     activationKind: 'reliable',
     isFile: true,
     inputKind: 'text',
-    icon: { kind: 'codicon', name: 'file' },
     ...overrides,
   };
 }

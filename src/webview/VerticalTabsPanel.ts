@@ -29,7 +29,6 @@ import {
 } from '../layout/RailLayout';
 import { getStrings, resolveLocale } from '../i18n';
 import type { LocaleStrings } from '../i18n/locale';
-import { fallbackTabVisualIcon, SetiIconResolver, type SetiThemeVariant } from '../icons/SetiIconResolver';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import {
   adjacentDisplayedGroup,
@@ -40,9 +39,15 @@ import {
   type TabCommandDirection,
 } from '../tabs/TabCommands';
 import { TabMruTracker } from '../tabs/TabMruTracker';
+import {
+  classifyTabResourceStatus,
+  matchReadonlyPatterns,
+  resolveCachedResourceMetadata,
+  type ReadonlyPatternMatch,
+} from '../tabs/TabResourceStatus';
 import { buildSnapshot, displayOrderKey, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabResourceStatus, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { NativeTabMenuProvider } from './NativeTabMenuProvider';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
@@ -63,7 +68,7 @@ const MAIN_THREAD_WEBVIEW_PREFIX = 'mainThreadWebview-';
 const POSITION_FOCUS_RESTORE_DELAY_MS = 150;
 const GROUP_PUBLISH_WAIT_ATTEMPTS = 50;
 const GROUP_WAIT_INTERVAL_MS = 10;
-const INPUT_MTIME_TIMEOUT_MS = 250;
+const INPUT_METADATA_TIMEOUT_MS = 250;
 const INITIAL_HOST_REFRESH_DELAY_MS = 800;
 const MAX_EMPTY_RAIL_RESTORE_RATIO = 0.3;
 const MAX_AUTO_APPLIED_RAIL_RATIO = 0.3;
@@ -72,8 +77,6 @@ const WEBVIEW_POST_RETRY_DELAY_MS = 250;
 const WEBVIEW_POST_MAX_ATTEMPTS = 8;
 const RENDER_ACK_TIMEOUT_MS = 1200;
 const RENDER_ACK_MAX_ATTEMPTS = 6;
-const SETI_THEME_FILE = 'vs-seti-icon-theme.json';
-const SETI_FONT_FILE = 'seti.woff';
 
 interface PreparedRailGroup {
   readonly ratio: number;
@@ -93,6 +96,16 @@ interface CloseLayoutRestore {
   readonly position: RailPosition;
   readonly editorGroupCount: number;
   readonly contributions: readonly RailWidthContribution[];
+}
+
+interface TabResourceMetadata {
+  readonly mtime?: number;
+  readonly status?: TabResourceStatus;
+}
+
+interface ResourceDirectoryWatcher {
+  readonly resources: Set<string>;
+  readonly disposables: vscode.Disposable[];
 }
 
 export class VerticalTabsPanel {
@@ -136,9 +149,9 @@ export class VerticalTabsPanel {
   private readonly pinnedGroupIds: Set<string>;
   private readonly mruTracker = new TabMruTracker<vscode.Tab>();
   private readonly nativeTabMenuProvider = new NativeTabMenuProvider();
+  private readonly resourceDirectoryWatchers = new Map<string, ResourceDirectoryWatcher>();
   private localeStrings: LocaleStrings;
   private rememberStateEnabled: boolean;
-  private setiIconResolver: SetiIconResolver;
   private railPosition: RailPosition;
   private lastFocusedUserGroup: vscode.TabGroup | undefined;
 
@@ -159,7 +172,6 @@ export class VerticalTabsPanel {
     this.displayOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, DISPLAY_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
     this.pinnedGroupIds = this.rememberStateEnabled ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
     this.localeStrings = this.resolveUiLocale();
-    this.setiIconResolver = loadSetiIconResolver(vscode.window.activeColorTheme.kind);
     this.railPosition = readRailPosition();
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn, position: this.railPosition });
     this.disposables.push(
@@ -179,11 +191,9 @@ export class VerticalTabsPanel {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('verticalTabs')) {
           void this.handleConfigurationChange(event).catch((error) => logError('应用垂直标签配置变更失败', error));
+        } else if (affectsReadonlyConfiguration(event)) {
+          this.scheduleRefresh();
         }
-      }),
-      vscode.window.onDidChangeActiveColorTheme((theme) => {
-        this.setiIconResolver = loadSetiIconResolver(theme.kind);
-        this.scheduleRefresh();
       }),
     );
     this.configureWebview();
@@ -664,6 +674,7 @@ export class VerticalTabsPanel {
     if (this.minWidthCorrectionTimer) {
       clearTimeout(this.minWidthCorrectionTimer);
     }
+    this.disposeResourceDirectoryWatchers();
     queueMicrotask(() => VerticalTabsPanel.syncVisibilityContext());
     while (this.disposables.length > 0) {
       this.disposables.pop()?.dispose();
@@ -929,11 +940,13 @@ export class VerticalTabsPanel {
       revision,
       sourceGroups: vscode.window.tabGroups.all.map((group, index) => ({ index, viewColumn: group.viewColumn, tabCount: group.tabs.length })),
     });
+    const resourceMetadataCache = new Map<string, Promise<TabResourceMetadata>>();
     const groups: SnapshotSourceGroup[] = await Promise.all(vscode.window.tabGroups.all.map(async (group, index) => ({
       label: `编辑器组 ${index + 1}`,
       viewColumn: group.viewColumn,
-      tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTabSafe(tab))),
+      tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTabSafe(tab, resourceMetadataCache))),
     })));
+    this.reconcileResourceDirectoryWatchers();
     const snapshot = buildSnapshot(groups, revision, this.manualGroups, {
       localeStrings: this.localeStrings,
       groupMode: this.groupMode,
@@ -997,9 +1010,12 @@ export class VerticalTabsPanel {
     return changed;
   }
 
-  private async toSnapshotTabSafe(tab: vscode.Tab): Promise<SnapshotSourceTab> {
+  private async toSnapshotTabSafe(
+    tab: vscode.Tab,
+    resourceMetadataCache: Map<string, Promise<TabResourceMetadata>>,
+  ): Promise<SnapshotSourceTab> {
     try {
-      return await this.toSnapshotTab(tab);
+      return await this.toSnapshotTab(tab, resourceMetadataCache);
     } catch (error) {
       logError('转换单个标签快照失败，将以不可跳转标签继续渲染', { label: tab.label, error });
       return {
@@ -1010,7 +1026,6 @@ export class VerticalTabsPanel {
         isPinned: tab.isPinned,
         isPreview: tab.isPreview,
         inputKind: 'unknown',
-        icon: fallbackTabVisualIcon('unknown', tab.label),
         targetIdentity: { kind: 'unknown', label: tab.label || 'Unknown' },
         isActivatable: false,
         isVerticalTabsPanel: isVerticalTabsPanel(tab),
@@ -1019,10 +1034,13 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async toSnapshotTab(tab: vscode.Tab): Promise<SnapshotSourceTab> {
+  private async toSnapshotTab(
+    tab: vscode.Tab,
+    resourceMetadataCache: Map<string, Promise<TabResourceMetadata>>,
+  ): Promise<SnapshotSourceTab> {
     const path = inputPath(tab.input);
     const kind = inputKind(tab.input);
-    const languageId = inputLanguageId(tab.input);
+    const metadata = await this.inputResourceMetadata(tab.input, resourceMetadataCache);
     return {
       label: tab.label,
       isActive: tab.isActive,
@@ -1031,25 +1049,114 @@ export class VerticalTabsPanel {
       isPinned: tab.isPinned,
       isPreview: tab.isPreview,
       inputKind: kind,
-      languageId,
-      icon: this.setiIconResolver.resolve({
-        label: tab.label,
-        resourcePath: path,
-        languageId,
-        inputKind: kind,
-      }),
+      resourceStatus: metadata.status,
       path,
       directoryName: inputDirectoryName(tab.input),
       relativePath: inputWorkspaceRelativePath(tab.input),
       tooltipPath: inputTooltipPath(tab.input),
       uri: inputUri(tab.input)?.toString(),
-      mtime: await inputMtime(tab.input),
+      mtime: metadata.mtime,
       lastActivatedAt: this.mruTracker.lastActivatedAt(tab),
       targetIdentity: targetIdentity(tab),
       isActivatable: isActivatableTab(tab),
       isVerticalTabsPanel: isVerticalTabsPanel(tab),
       manualGroupId: this.manualGroupByIdentity.get(identityKey(targetIdentity(tab))),
     };
+  }
+
+  private inputResourceMetadata(
+    input: vscode.Tab['input'],
+    cache: Map<string, Promise<TabResourceMetadata>>,
+  ): Promise<TabResourceMetadata> {
+    const uri = inputUri(input);
+    if (!uri) return Promise.resolve({});
+    const key = uri.toString();
+    return resolveCachedResourceMetadata(cache, key, () => this.readResourceMetadata(uri));
+  }
+
+  private async readResourceMetadata(uri: vscode.Uri): Promise<TabResourceMetadata> {
+    const schemeWritable = vscode.workspace.fs.isWritableFileSystem(uri.scheme);
+    const readonlyPatterns = readonlyPatternMatch(uri);
+    const readonlyFromPermissions = uri.scheme === 'file'
+      ? vscode.workspace.getConfiguration('files', uri).get<boolean>('readonlyFromPermissions', false)
+      : true;
+
+    let stat: vscode.FileStat | undefined;
+    let errorCode: string | undefined;
+    try {
+      stat = await withTimeout(vscode.workspace.fs.stat(uri), INPUT_METADATA_TIMEOUT_MS);
+    } catch (error) {
+      errorCode = fileSystemErrorCode(error);
+    }
+
+    return {
+      mtime: stat?.mtime,
+      status: classifyTabResourceStatus({
+        schemeWritable,
+        errorCode,
+        readonlyFromPermissions,
+        readonlyPermission: stat?.permissions !== undefined
+          && (stat.permissions & vscode.FilePermission.Readonly) !== 0,
+        readonlyIncluded: readonlyPatterns.included,
+        readonlyExcluded: readonlyPatterns.excluded,
+      }),
+    };
+  }
+
+  private reconcileResourceDirectoryWatchers(): void {
+    const desired = new Map<string, { readonly parent: vscode.Uri; readonly resources: Set<string> }>();
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (isVerticalTabsPanel(tab)) continue;
+        const uri = inputUri(tab.input);
+        if (!uri || vscode.workspace.fs.isWritableFileSystem(uri.scheme) === undefined) continue;
+        const parent = resourceParentUri(uri);
+        const parentKey = parent.toString();
+        const entry = desired.get(parentKey) ?? { parent, resources: new Set<string>() };
+        entry.resources.add(resourceWatchKey(uri));
+        desired.set(parentKey, entry);
+      }
+    }
+
+    for (const [key, entry] of this.resourceDirectoryWatchers) {
+      if (desired.has(key)) continue;
+      disposeAll(entry.disposables);
+      this.resourceDirectoryWatchers.delete(key);
+    }
+
+    for (const [key, wanted] of desired) {
+      const existing = this.resourceDirectoryWatchers.get(key);
+      if (existing) {
+        existing.resources.clear();
+        for (const resource of wanted.resources) existing.resources.add(resource);
+        continue;
+      }
+
+      try {
+        const resources = new Set(wanted.resources);
+        const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(wanted.parent, '*'));
+        const shouldRefresh = (changed: vscode.Uri) => {
+          if (resources.has(resourceWatchKey(changed))) this.scheduleRefresh();
+        };
+        const disposables = [
+          watcher,
+          watcher.onDidCreate(shouldRefresh),
+          watcher.onDidChange(shouldRefresh),
+          watcher.onDidDelete(shouldRefresh),
+        ];
+        this.resourceDirectoryWatchers.set(key, { resources, disposables });
+      } catch (error) {
+        logDebug('无法为标签资源目录创建文件监听器，将依赖现有标签事件刷新', {
+          parent: wanted.parent.toString(),
+          error,
+        });
+      }
+    }
+  }
+
+  private disposeResourceDirectoryWatchers(): void {
+    for (const entry of this.resourceDirectoryWatchers.values()) disposeAll(entry.disposables);
+    this.resourceDirectoryWatchers.clear();
   }
 
   private async handleMessage(value: unknown): Promise<void> {
@@ -2769,12 +2876,8 @@ export class VerticalTabsPanel {
       const codiconFontUri = this.panel.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'out', 'codicon.ttf')).toString();
       const codiconSource = fs.readFileSync(codiconStylePath, 'utf8')
         .replace(/url\((["']?)\.\/codicon\.ttf[^)]*\)/, `url($1${codiconFontUri}$1)`);
-      const setiFontPath = vscode.Uri.joinPath(setiIconsRoot(), SETI_FONT_FILE);
-      const setiFontFace = fs.existsSync(setiFontPath.fsPath)
-        ? `@font-face { font-family: "seti"; font-display: block; font-style: normal; font-weight: normal; src: url("${this.panel.webview.asWebviewUri(setiFontPath)}") format("woff"); }`
-        : '';
-      const combined = [codiconSource, setiFontFace, source].join('\n').replace(/<\/style/gi, '<\\/style');
-      logDebug('已内联读取 Webview 样式与图标字体', { stylePath, codiconStylePath, bytes: combined.length, setiFontAvailable: Boolean(setiFontFace) });
+      const combined = [codiconSource, source].join('\n').replace(/<\/style/gi, '<\\/style');
+      logDebug('已内联读取 Webview 样式与 Codicon 字体', { stylePath, codiconStylePath, bytes: combined.length });
       return combined;
     } catch (error) {
       logError('读取 Webview 样式失败，将使用最小降级样式', { stylePath, error });
@@ -2955,6 +3058,10 @@ function withTimeout<T>(promise: Thenable<T>, timeoutMs: number): Promise<T> {
       reject(error);
     });
   });
+}
+
+function disposeAll(disposables: readonly vscode.Disposable[]): void {
+  for (const disposable of disposables) disposable.dispose();
 }
 
 function findVerticalTabsTab(): vscode.Tab | undefined {
@@ -3618,13 +3725,6 @@ function inputKind(input: vscode.Tab['input']): TabInputKind {
   return 'unknown';
 }
 
-function inputLanguageId(input: vscode.Tab['input']): string | undefined {
-  const uri = inputUri(input);
-  if (!uri) return undefined;
-  const key = uri.toString();
-  return vscode.workspace.textDocuments.find((document) => document.uri.toString() === key)?.languageId;
-}
-
 function targetIdentity(tab: vscode.Tab): TabTargetIdentity {
   const input = tab.input;
   if (input instanceof vscode.TabInputText) return { kind: 'text', uri: input.uri.toString() };
@@ -3707,22 +3807,13 @@ function inputDirectoryName(input: vscode.Tab['input']): string | undefined {
   return directoryName && directoryName !== '.' ? directoryName : undefined;
 }
 
-function setiIconsRoot(): vscode.Uri {
-  return vscode.Uri.joinPath(vscode.Uri.file(vscode.env.appRoot), 'extensions', 'theme-seti', 'icons');
-}
-
 function createWebviewOptions(context: vscode.ExtensionContext): vscode.WebviewOptions {
-  const localResourceRoots = [
-    vscode.Uri.joinPath(context.extensionUri, 'out'),
-    vscode.Uri.joinPath(context.extensionUri, 'media'),
-  ];
-  const setiRoot = setiIconsRoot();
-  if (fs.existsSync(setiRoot.fsPath)) {
-    localResourceRoots.push(setiRoot);
-  }
   return {
     enableScripts: true,
-    localResourceRoots,
+    localResourceRoots: [
+      vscode.Uri.joinPath(context.extensionUri, 'out'),
+      vscode.Uri.joinPath(context.extensionUri, 'media'),
+    ],
   };
 }
 
@@ -3731,26 +3822,6 @@ function createWebviewPanelOptions(context: vscode.ExtensionContext): vscode.Web
     ...createWebviewOptions(context),
     retainContextWhenHidden: true,
   };
-}
-
-function loadSetiIconResolver(kind: vscode.ColorThemeKind): SetiIconResolver {
-  const variant = setiThemeVariant(kind);
-  const themePath = vscode.Uri.joinPath(setiIconsRoot(), SETI_THEME_FILE).fsPath;
-  try {
-    const source = fs.readFileSync(themePath, 'utf8');
-    const resolver = new SetiIconResolver(JSON.parse(source) as unknown, variant);
-    logDebug('已加载 VS Code Seti 文件图标主题', { themePath, variant, bytes: source.length });
-    return resolver;
-  } catch (error) {
-    logWarn('加载 VS Code Seti 文件图标主题失败，将回退到通用 Codicon', { themePath, variant, error });
-    return new SetiIconResolver(undefined, variant);
-  }
-}
-
-function setiThemeVariant(kind: vscode.ColorThemeKind): SetiThemeVariant {
-  if (kind === vscode.ColorThemeKind.Light) return 'light';
-  if (kind === vscode.ColorThemeKind.HighContrast || kind === vscode.ColorThemeKind.HighContrastLight) return 'highContrast';
-  return 'dark';
 }
 
 function inputTooltipPath(input: vscode.Tab['input']): string | undefined {
@@ -3771,6 +3842,43 @@ function inputUri(input: vscode.Tab['input']): vscode.Uri | undefined {
       : undefined;
 }
 
+function readonlyPatternMatch(uri: vscode.Uri): ReadonlyPatternMatch {
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+  if (!workspaceFolder) return { included: false, excluded: false };
+  const relativePath = vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
+  const configuration = vscode.workspace.getConfiguration('files', uri);
+  return matchReadonlyPatterns(
+    relativePath,
+    configuration.get<Record<string, unknown>>('readonlyInclude'),
+    configuration.get<Record<string, unknown>>('readonlyExclude'),
+    uri.scheme === 'file' && process.platform === 'win32',
+  );
+}
+
+function affectsReadonlyConfiguration(event: vscode.ConfigurationChangeEvent): boolean {
+  return event.affectsConfiguration('files.readonlyInclude')
+    || event.affectsConfiguration('files.readonlyExclude')
+    || event.affectsConfiguration('files.readonlyFromPermissions');
+}
+
+function fileSystemErrorCode(error: unknown): string | undefined {
+  if (error instanceof vscode.FileSystemError) return error.code;
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' ? error.code : undefined;
+}
+
+function resourceParentUri(uri: vscode.Uri): vscode.Uri {
+  return uri.with({
+    path: path.posix.dirname(uri.path),
+    query: '',
+    fragment: '',
+  });
+}
+
+function resourceWatchKey(uri: vscode.Uri): string {
+  return uri.with({ query: '', fragment: '' }).toString();
+}
+
 function findTabsByResourceUri(uri: vscode.Uri): vscode.Tab[] {
   const key = uri.toString();
   return vscode.window.tabGroups.all
@@ -3785,19 +3893,6 @@ async function resourceExists(uri: vscode.Uri): Promise<boolean> {
   } catch (error) {
     if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') return false;
     throw error;
-  }
-}
-
-async function inputMtime(input: vscode.Tab['input']): Promise<number | undefined> {
-  const uri = inputUri(input);
-  if (!uri) {
-    return undefined;
-  }
-  try {
-    const stat = await withTimeout(vscode.workspace.fs.stat(uri), INPUT_MTIME_TIMEOUT_MS);
-    return stat?.mtime;
-  } catch {
-    return undefined;
   }
 }
 
