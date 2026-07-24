@@ -23,7 +23,7 @@ import type { LocaleStrings } from '../i18n/locale';
 import { logDebug, logError, logInfo, logTrace, logWarn } from '../logging/extensionLogger';
 import { buildSnapshot, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab, type TabInputKind } from '../tabs/TabSnapshot';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type SortMode, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabTarget, type TabTargetIdentity, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
@@ -679,6 +679,7 @@ export class VerticalTabsPanel {
       toolbarControlsVisible: this.toolbarControlsVisible,
       searchVisible: this.searchVisible,
       searchGroups: this.searchGroups,
+      relativePathDisplay: readRelativePathDisplay(),
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
     });
@@ -757,6 +758,7 @@ export class VerticalTabsPanel {
       isPreview: tab.isPreview,
       inputKind: inputKind(tab.input),
       path,
+      relativePath: inputWorkspaceRelativePath(tab.input),
       tooltipPath: inputTooltipPath(tab.input),
       uri: inputUri(tab.input)?.toString(),
       mtime: await inputMtime(tab.input),
@@ -2593,6 +2595,14 @@ function inputPath(input: vscode.Tab['input']): string | undefined {
   return relative === uri.fsPath ? uri.path : relative;
 }
 
+function inputWorkspaceRelativePath(input: vscode.Tab['input']): string | undefined {
+  const uri = inputUri(input);
+  if (!uri || !vscode.workspace.getWorkspaceFolder(uri)) {
+    return undefined;
+  }
+  return vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
+}
+
 function inputTooltipPath(input: vscode.Tab['input']): string | undefined {
   const uri = inputUri(input);
   if (!uri) {
@@ -2740,8 +2750,17 @@ function readDefaultToolbarControlsVisible(): boolean {
   return typeof value === 'boolean' ? value : true;
 }
 
+function readRelativePathDisplay(): RelativePathDisplay {
+  const value = vscode.workspace.getConfiguration('verticalTabs').get<RelativePathDisplay>('relativePathDisplay', 'off');
+  return isRelativePathDisplay(value) ? value : 'off';
+}
+
 function isGroupMode(value: unknown): value is GroupMode {
   return value === 'manual' || value === 'parentDir' || value === 'fileType' || value === 'vscode';
+}
+
+function isRelativePathDisplay(value: unknown): value is RelativePathDisplay {
+  return value === 'off' || value === 'duplicates' || value === 'always';
 }
 
 function isSortMode(value: unknown): value is SortMode {

@@ -3,6 +3,7 @@ import { format, type LocaleStrings } from '../i18n';
 import type {
   GroupMode,
   ManualTabGroup,
+  RelativePathDisplay,
   SortMode,
   TabTargetIdentity,
   TabActivationKind,
@@ -22,6 +23,7 @@ export interface SnapshotSourceTab {
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
   readonly path?: string;
+  readonly relativePath?: string;
   readonly tooltipPath?: string;
   readonly uri?: string;
   readonly mtime?: number;
@@ -44,6 +46,7 @@ export interface SnapshotBuildOptions {
   readonly toolbarControlsVisible?: boolean;
   readonly searchVisible?: boolean;
   readonly searchGroups?: boolean;
+  readonly relativePathDisplay?: RelativePathDisplay;
   readonly manualOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
   readonly localeStrings?: LocaleStrings;
@@ -60,12 +63,15 @@ export function buildSnapshot(
 ): VerticalTabsSnapshot {
   const groupMode = options.groupMode ?? 'vscode';
   const sortMode = options.sortMode ?? 'none';
+  const relativePathDisplay = options.relativePathDisplay ?? 'off';
+  const labelOccurrences = countVisibleTabLabels(groups);
 
   const tabs: VerticalTabItem[] = groups.flatMap((group, groupIndex) => group.tabs.flatMap((tab, tabIndex) => {
     if (tab.isVerticalTabsPanel) return [];
     return [{
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
+      description: shouldShowRelativePath(tab, relativePathDisplay, labelOccurrences) ? tab.relativePath : undefined,
       isActive: tab.isActive,
       isFocused: Boolean(tab.isFocused),
       isDirty: tab.isDirty,
@@ -84,6 +90,29 @@ export function buildSnapshot(
 
   const displayGroups = buildDisplayGroups(groups, tabs, manualGroups, groupMode, sortMode, options.manualOrderByGroup, options.pinnedGroupIds, options.localeStrings);
   return { revision, groupMode, sortMode, rememberState: options.rememberState ?? true, toolbarControlsVisible: options.toolbarControlsVisible ?? true, searchVisible: options.searchVisible ?? true, searchGroups: options.searchGroups ?? false, tabs, manualGroups, displayGroups };
+}
+
+function countVisibleTabLabels(groups: readonly SnapshotSourceGroup[]): ReadonlyMap<string, number> {
+  const occurrences = new Map<string, number>();
+  for (const tab of groups.flatMap((group) => group.tabs)) {
+    if (tab.isVerticalTabsPanel) continue;
+    const key = normalizeTabLabel(tab.label);
+    occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+  }
+  return occurrences;
+}
+
+function shouldShowRelativePath(
+  tab: SnapshotSourceTab,
+  mode: RelativePathDisplay,
+  labelOccurrences: ReadonlyMap<string, number>,
+): boolean {
+  if (!tab.relativePath || mode === 'off') return false;
+  return mode === 'always' || (labelOccurrences.get(normalizeTabLabel(tab.label)) ?? 0) > 1;
+}
+
+function normalizeTabLabel(label: string): string {
+  return label.toLocaleLowerCase();
 }
 
 export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: CloseAction, target?: VerticalTabItem['target']): VerticalTabItem['target'][] {

@@ -222,8 +222,8 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-main:disabled { cursor: not-allowed; }
 .tab-row:hover .tab-main { background: transparent; }
 .tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tab-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.is-active .tab-description { color: inherit; opacity: .8; }
+.tab-description { color: var(--vscode-descriptionForeground); font-size: 10px; line-height: 1.25; opacity: .82; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.is-active .tab-description { color: inherit; opacity: .68; }
 
 .tab-actions { opacity: 1; }
 .tab-action { font-size: 11px; line-height: 20px; min-width: 20px; padding: 0; }

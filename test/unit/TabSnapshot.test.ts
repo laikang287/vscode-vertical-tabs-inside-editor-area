@@ -4,11 +4,11 @@ import { buildSnapshot, moveItemsBefore, sameIdentity, selectCloseTargets, selec
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
-  { label: 'index.ts', path: 'src/index.ts', isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
-  { label: 'index.ts', path: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
+  { label: 'index.ts', path: 'src/index.ts', relativePath: 'src/index.ts', isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
+  { label: 'index.ts', path: 'test/index.ts', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
 ] }, { tabs: [
   { label: 'Terminal', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
-  { label: 'README.md', path: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
+  { label: 'README.md', path: 'README.md', relativePath: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
 ] }];
 
 test('moves single and non-contiguous selected keys to the exact before-target position', () => {
@@ -55,6 +55,37 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.tabs[2].activationKind, 'bestEffort');
   assert.equal(snapshot.tabs[2].isActivatable, true);
   assert.equal(snapshot.manualGroups[0].name, '工作');
+});
+
+test('shows workspace-relative paths according to the configured display mode', () => {
+  const duplicatePaths = buildSnapshot(source, 8, [], { relativePathDisplay: 'duplicates' });
+  assert.deepEqual(duplicatePaths.tabs.map((tab) => tab.description), [
+    'src/index.ts',
+    'test/index.ts',
+    undefined,
+    undefined,
+  ]);
+
+  const allPaths = buildSnapshot(source, 9, [], { relativePathDisplay: 'always' });
+  assert.deepEqual(allPaths.tabs.map((tab) => tab.description), [
+    'src/index.ts',
+    'test/index.ts',
+    undefined,
+    'README.md',
+  ]);
+
+  const hiddenPaths = buildSnapshot(source, 10, [], { relativePathDisplay: 'off' });
+  assert.ok(hiddenPaths.tabs.every((tab) => tab.description === undefined));
+});
+
+test('detects duplicate tab names without case differences', () => {
+  const caseVariantSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'Index.ts', relativePath: 'src/Index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/Index.ts' } },
+    { label: 'index.ts', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
+  ] }];
+
+  const snapshot = buildSnapshot(caseVariantSource, 11, [], { relativePathDisplay: 'duplicates' });
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.description), ['src/Index.ts', 'test/index.ts']);
 });
 
 test('distinguishes tabs shown in editor groups from the focused active tab', () => {
