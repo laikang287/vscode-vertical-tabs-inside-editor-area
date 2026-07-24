@@ -11,9 +11,11 @@ import {
   MAX_PERSISTED_RAIL_RATIO,
   MIN_RAIL_WIDTH,
   normalizeRailWidth,
+  normalizeMinimizedEdgeEditorGroupWidth,
   nudgeNarrowEdgeEditorGroupWidth,
   prependRailToLayout,
   prependRailPreservingEditorWidths,
+  removeRailPreservingCurrentEditorWidths,
   removeRailRestoringEditorWidths,
   resolveRailRatio,
   selectWidestEditorGroupViewColumn,
@@ -21,6 +23,7 @@ import {
   setLeadingRailWidth,
   shouldPersistObservedRailWidth,
   shouldPersistRailGroupRatio,
+  widenMinimizedEditorBesideRailBeforeHide,
 } from '../../src/layout/RailLayout';
 
 test('prepends a full-height rail to a horizontal editor layout', () => {
@@ -142,22 +145,22 @@ test('preserves a minimized edge group and takes left or right rail width from t
   assert.deepEqual(rightLayout.groups.map((group) => group.size), [955, 220], 'The right source layout must remain immutable.');
 });
 
-test('preserves a 120px edge group while creating a rail on either side', () => {
+test('preserves an exact 220px minimum edge group while creating a rail on either side', () => {
   assert.deepEqual(
     insertRailPreservingEditorWidths(
-      { orientation: 0, groups: [{ size: 120 }, { size: 1280 }] },
+      { orientation: 0, groups: [{ size: 220 }, { size: 1280 }] },
       320,
       'left',
     ),
-    { orientation: 0, groups: [{ size: 320 }, { size: 120 }, { size: 960 }] },
+    { orientation: 0, groups: [{ size: 320 }, { size: 220 }, { size: 960 }] },
   );
   assert.deepEqual(
     insertRailPreservingEditorWidths(
-      { orientation: 0, groups: [{ size: 1280 }, { size: 120 }] },
+      { orientation: 0, groups: [{ size: 1280 }, { size: 220 }] },
       320,
       'right',
     ),
-    { orientation: 0, groups: [{ size: 960 }, { size: 120 }, { size: 320 }] },
+    { orientation: 0, groups: [{ size: 960 }, { size: 220 }, { size: 320 }] },
   );
 });
 
@@ -239,6 +242,28 @@ test('returns a removed rail width only to the widest editor when contribution h
   );
 });
 
+test('removes a rail snapshot without redistributing user editor widths', () => {
+  const leftLayout = {
+    orientation: 0,
+    groups: [{ size: 222 }, { size: 220 }, { size: 845, groups: [{ size: 400 }, { size: 445 }] }],
+  } as const;
+  const rightLayout = {
+    orientation: 0,
+    groups: [{ size: 845, groups: [{ size: 400 }, { size: 445 }] }, { size: 220 }, { size: 222 }],
+  } as const;
+
+  assert.deepEqual(removeRailPreservingCurrentEditorWidths(leftLayout, 'left'), {
+    orientation: 0,
+    groups: [{ size: 220 }, { size: 845, groups: [{ size: 400 }, { size: 445 }] }],
+  });
+  assert.deepEqual(removeRailPreservingCurrentEditorWidths(rightLayout, 'right'), {
+    orientation: 0,
+    groups: [{ size: 845, groups: [{ size: 400 }, { size: 445 }] }, { size: 220 }],
+  });
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [222, 220, 845]);
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [845, 220, 222]);
+});
+
 test('updates only the leading rail leaf and validates persisted widths', () => {
   const layout = { orientation: 0, groups: [{ groups: [{ size: 200 }, { size: 100 }] }, { size: 500 }] } as const;
   const result = setLeadingRailWidth(layout, 333.8);
@@ -280,9 +305,9 @@ test('maps view columns to layout leaves in grid appearance order', () => {
   assert.equal(getEditorGroupWidth(layout, 5), undefined);
 });
 
-test('selects the widest group as the rail creation anchor without activating a 120px edge group', () => {
-  const leftMinimized = { orientation: 0, groups: [{ size: 120 }, { size: 1280 }] } as const;
-  const rightMinimized = { orientation: 0, groups: [{ size: 1280 }, { size: 120 }] } as const;
+test('selects the widest group as the rail creation anchor without activating a 220px edge group', () => {
+  const leftMinimized = { orientation: 0, groups: [{ size: 220 }, { size: 1280 }] } as const;
+  const rightMinimized = { orientation: 0, groups: [{ size: 1280 }, { size: 220 }] } as const;
 
   assert.equal(selectWidestEditorGroupViewColumn(leftMinimized, [1, 2], 2), 2);
   assert.equal(selectWidestEditorGroupViewColumn(leftMinimized, [1, 2], 1), 2);
@@ -290,30 +315,127 @@ test('selects the widest group as the rail creation anchor without activating a 
   assert.equal(selectWidestEditorGroupViewColumn(rightMinimized, [1, 2], 2), 1);
 });
 
-test('nudges a 120px edge group before rail creation on either side', () => {
+test('nudges a 220px edge group to 223px before rail creation on either side', () => {
   const leftLayout = {
     orientation: 0,
-    groups: [{ size: 120 }, { size: 1280, groups: [{ size: 500 }, { size: 780 }] }],
+    groups: [{ size: 220 }, { size: 1280, groups: [{ size: 500 }, { size: 780 }] }],
   } as const;
   const rightLayout = {
     orientation: 0,
-    groups: [{ size: 1280, groups: [{ size: 500 }, { size: 780 }] }, { size: 120 }],
+    groups: [{ size: 1280, groups: [{ size: 500 }, { size: 780 }] }, { size: 220 }],
   } as const;
 
-  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(leftLayout, 'left'), {
+  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(leftLayout, 'left', 3), {
     orientation: 0,
-    groups: [{ size: 121 }, { size: 1279, groups: [{ size: 500 }, { size: 780 }] }],
+    groups: [{ size: 223 }, { size: 1277, groups: [{ size: 500 }, { size: 780 }] }],
   });
-  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(rightLayout, 'right'), {
+  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(rightLayout, 'right', 3), {
     orientation: 0,
-    groups: [{ size: 1279, groups: [{ size: 500 }, { size: 780 }] }, { size: 121 }],
+    groups: [{ size: 1277, groups: [{ size: 500 }, { size: 780 }] }, { size: 223 }],
   });
-  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(leftLayout, 'left', 2), {
+  assert.deepEqual(nudgeNarrowEdgeEditorGroupWidth(leftLayout, 'left', 4), {
     orientation: 0,
-    groups: [{ size: 122 }, { size: 1278, groups: [{ size: 500 }, { size: 780 }] }],
+    groups: [{ size: 224 }, { size: 1276, groups: [{ size: 500 }, { size: 780 }] }],
   });
-  assert.deepEqual(leftLayout.groups.map((group) => group.size), [120, 1280]);
-  assert.deepEqual(rightLayout.groups.map((group) => group.size), [1280, 120]);
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [220, 1280]);
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [1280, 220]);
+});
+
+test('normalizes a minimized final edge group to 223px on either side', () => {
+  const leftLayout = {
+    orientation: 0,
+    groups: [{ size: 220 }, { size: 640 }, { size: 640, groups: [{ size: 300 }, { size: 340 }] }],
+  } as const;
+  const rightLayout = {
+    orientation: 0,
+    groups: [{ size: 640, groups: [{ size: 300 }, { size: 340 }] }, { size: 640 }, { size: 220 }],
+  } as const;
+
+  assert.deepEqual(normalizeMinimizedEdgeEditorGroupWidth(leftLayout, 'left'), {
+    orientation: 0,
+    groups: [{ size: 223 }, { size: 637 }, { size: 640, groups: [{ size: 300 }, { size: 340 }] }],
+  });
+  assert.deepEqual(normalizeMinimizedEdgeEditorGroupWidth(rightLayout, 'right'), {
+    orientation: 0,
+    groups: [{ size: 640, groups: [{ size: 300 }, { size: 340 }] }, { size: 637 }, { size: 223 }],
+  });
+  assert.equal(
+    leftLayout.groups.reduce((total, group) => total + group.size, 0),
+    normalizeMinimizedEdgeEditorGroupWidth(leftLayout, 'left')?.groups
+      .reduce((total, group) => total + (group.size ?? 0), 0),
+  );
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [220, 640, 640]);
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [640, 640, 220]);
+});
+
+test('refuses final minimized-edge normalization without a safe donor', () => {
+  assert.equal(
+    normalizeMinimizedEdgeEditorGroupWidth(
+      { orientation: 0, groups: [{ size: 220 }, { size: 224 }] },
+      'left',
+    ),
+    undefined,
+  );
+  assert.equal(
+    normalizeMinimizedEdgeEditorGroupWidth(
+      { orientation: 0, groups: [{ size: 224 }, { size: 220 }] },
+      'right',
+    ),
+    undefined,
+  );
+  assert.equal(
+    normalizeMinimizedEdgeEditorGroupWidth(
+      { orientation: 1, groups: [{ size: 220 }, { size: 1280 }] },
+      'left',
+    ),
+    undefined,
+  );
+});
+
+test('widens the 220px editor beside either rail to 223px before hiding', () => {
+  const leftLayout = {
+    orientation: 0,
+    groups: [{ size: 222 }, { size: 220 }, { size: 1000, groups: [{ size: 400 }, { size: 600 }] }],
+  } as const;
+  const rightLayout = {
+    orientation: 0,
+    groups: [{ size: 1000, groups: [{ size: 400 }, { size: 600 }] }, { size: 220 }, { size: 222 }],
+  } as const;
+
+  assert.deepEqual(widenMinimizedEditorBesideRailBeforeHide(leftLayout, 'left'), {
+    orientation: 0,
+    groups: [{ size: 222 }, { size: 223 }, { size: 997, groups: [{ size: 400 }, { size: 600 }] }],
+  });
+  assert.deepEqual(widenMinimizedEditorBesideRailBeforeHide(rightLayout, 'right'), {
+    orientation: 0,
+    groups: [{ size: 997, groups: [{ size: 400 }, { size: 600 }] }, { size: 223 }, { size: 222 }],
+  });
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [222, 220, 1000]);
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [1000, 220, 222]);
+});
+
+test('combines safe donors for the 223px pre-hide width without minimizing any group', () => {
+  assert.deepEqual(
+    widenMinimizedEditorBesideRailBeforeHide(
+      { orientation: 0, groups: [{ size: 223 }, { size: 220 }, { size: 224 }] },
+      'left',
+    ),
+    { orientation: 0, groups: [{ size: 222 }, { size: 223 }, { size: 222 }] },
+  );
+  assert.equal(
+    widenMinimizedEditorBesideRailBeforeHide(
+      { orientation: 0, groups: [{ size: 222 }, { size: 220 }, { size: 224 }] },
+      'left',
+    ),
+    undefined,
+  );
+  assert.equal(
+    widenMinimizedEditorBesideRailBeforeHide(
+      { orientation: 0, groups: [{ size: 500 }, { size: 221 }, { size: 222 }] },
+      'right',
+    ),
+    undefined,
+  );
 });
 
 test('skips the pre-creation edge nudge when the layout or donor is unsafe', () => {
@@ -322,17 +444,17 @@ test('skips the pre-creation edge nudge when the layout or donor is unsafe', () 
     undefined,
   );
   assert.equal(
-    nudgeNarrowEdgeEditorGroupWidth({ orientation: 0, groups: [{ size: 120 }, { size: 120 }] }, 'right'),
+    nudgeNarrowEdgeEditorGroupWidth({ orientation: 0, groups: [{ size: 220 }, { size: 224 }] }, 'right', 3),
     undefined,
   );
   assert.equal(
-    nudgeNarrowEdgeEditorGroupWidth({ orientation: 1, groups: [{ size: 120 }, { size: 1280 }] }, 'left'),
+    nudgeNarrowEdgeEditorGroupWidth({ orientation: 1, groups: [{ size: 220 }, { size: 1280 }] }, 'left'),
     undefined,
   );
 });
 
 test('prefers the active group only when rail creation anchor widths tie', () => {
-  const layout = { orientation: 0, groups: [{ size: 600 }, { size: 600 }, { size: 120 }] } as const;
+  const layout = { orientation: 0, groups: [{ size: 600 }, { size: 600 }, { size: 220 }] } as const;
 
   assert.equal(selectWidestEditorGroupViewColumn(layout, [1, 2, 3], 2), 2);
   assert.equal(selectWidestEditorGroupViewColumn(layout, [1, 2, 3], 3), 1);
@@ -374,11 +496,40 @@ test('corrects the horizontal width carrier for a nested target leaf', () => {
   });
 });
 
+test('never creates a new minimized sibling while correcting the rail width', () => {
+  const protectedAdjacent = {
+    orientation: 0,
+    groups: [{ size: 220 }, { size: 222 }, { size: 700 }],
+  } as const;
+  assert.deepEqual(correctMinimizedEditorGroupWidth(protectedAdjacent, 1), {
+    orientation: 0,
+    groups: [{ size: 222 }, { size: 222 }, { size: 698 }],
+  });
+  assert.deepEqual(
+    correctMinimizedEditorGroupWidth(
+      { orientation: 0, groups: [{ size: 700 }, { size: 222 }, { size: 220 }] },
+      3,
+    ),
+    { orientation: 0, groups: [{ size: 698 }, { size: 222 }, { size: 222 }] },
+  );
+
+  const sharedDonation = {
+    orientation: 0,
+    groups: [{ size: 220 }, { size: 223 }, { size: 223 }],
+  } as const;
+  assert.deepEqual(correctMinimizedEditorGroupWidth(sharedDonation, 1), {
+    orientation: 0,
+    groups: [{ size: 222 }, { size: 222 }, { size: 222 }],
+  });
+  assert.deepEqual(sharedDonation.groups.map((group) => group.size), [220, 223, 223]);
+});
+
 test('skips minimum-width correction when the target or layout is unsafe', () => {
   assert.equal(correctMinimizedEditorGroupWidth({ orientation: 0, groups: [{ size: 221 }, { size: 955 }] }, 1), undefined);
   assert.equal(correctMinimizedEditorGroupWidth({ orientation: 0, groups: [{ size: 222 }, { size: 955 }] }, 1), undefined);
   assert.equal(correctMinimizedEditorGroupWidth({ orientation: 0, groups: [{ size: 320 }, { size: 220 }] }, 1), undefined);
   assert.equal(correctMinimizedEditorGroupWidth({ orientation: 0, groups: [{ size: 220 }, { size: 220 }] }, 1), undefined);
+  assert.equal(correctMinimizedEditorGroupWidth({ orientation: 0, groups: [{ size: 220 }, { size: 222 }] }, 1), undefined);
   assert.equal(correctMinimizedEditorGroupWidth({ orientation: 1, groups: [{ size: 220 }, { size: 955 }] }, 1), undefined);
   assert.equal(correctMinimizedEditorGroupWidth({ orientation: 0, groups: [{ size: 220 }, { size: 955 }] }, 3), undefined);
 });

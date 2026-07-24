@@ -7,6 +7,7 @@ export const FULL_WIDTH_RAIL_RATIO = 0.9;
 export const MAX_PERSISTED_RAIL_RATIO = 0.3;
 export const VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH = 220;
 export const SAFE_RAIL_WIDTH = 222;
+export const SAFE_MINIMIZED_EDITOR_GROUP_WIDTH = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH + 3;
 
 export type RailPosition = 'left' | 'right';
 
@@ -211,6 +212,33 @@ export function removeRailRestoringEditorWidths(
   return { orientation: 0, groups: editorGroups };
 }
 
+/**
+ * Removes the root rail without redistributing its width. This is used to
+ * compare the current user-editor layout with the post-Show snapshot before
+ * deciding whether saved width-contribution history is still valid.
+ */
+export function removeRailPreservingCurrentEditorWidths(
+  layout: EditorLayout,
+  position: RailPosition,
+): EditorLayout | undefined {
+  if ((layout.orientation ?? 0) !== 0 || layout.groups.length < 2) {
+    return undefined;
+  }
+
+  const railIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const railWidth = layout.groups[railIndex]?.size;
+  if (typeof railWidth !== 'number' || !Number.isFinite(railWidth) || railWidth <= 0) {
+    return undefined;
+  }
+
+  return {
+    orientation: 0,
+    groups: layout.groups
+      .filter((_, index) => index !== railIndex)
+      .map(copyGroup),
+  };
+}
+
 /** Updates the first leaf, which is the rail after it has been moved left. */
 export function setLeadingRailWidth(layout: EditorLayout, width: number): EditorLayout {
   let updated = false;
@@ -301,6 +329,7 @@ export function nudgeNarrowEdgeEditorGroupWidth(
   position: RailPosition,
   delta = 1,
   maximumNarrowWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+  minimumDonorWidth = SAFE_RAIL_WIDTH,
 ): EditorLayout | undefined {
   if (
     (layout.orientation ?? 0) !== 0
@@ -328,7 +357,7 @@ export function nudgeNarrowEdgeEditorGroupWidth(
       return index !== edgeIndex
         && typeof width === 'number'
         && Number.isFinite(width)
-        && width - delta >= edgeWidth
+        && width - delta >= Math.max(edgeWidth, minimumDonorWidth)
         ? [{ index, width }]
         : [];
     })
@@ -348,9 +377,140 @@ export function nudgeNarrowEdgeEditorGroupWidth(
 }
 
 /**
+ * Normalizes a user editor at VS Code's minimized 220px edge to 223px in the
+ * final layout after the rail has been removed. The pixel comes from the
+ * widest safe root group, preferring the donor nearest the configured edge
+ * when widths tie. Root width, order, and nested content remain unchanged.
+ */
+export function normalizeMinimizedEdgeEditorGroupWidth(
+  layout: EditorLayout,
+  position: RailPosition,
+  minimizedWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+  safeWidth = SAFE_MINIMIZED_EDITOR_GROUP_WIDTH,
+): EditorLayout | undefined {
+  if (
+    (layout.orientation ?? 0) !== 0
+    || layout.groups.length < 2
+    || !Number.isFinite(minimizedWidth)
+    || !Number.isFinite(safeWidth)
+    || minimizedWidth <= 0
+    || safeWidth <= minimizedWidth
+  ) {
+    return undefined;
+  }
+
+  const edgeIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  if (layout.groups[edgeIndex]?.size !== minimizedWidth) {
+    return undefined;
+  }
+
+  const delta = safeWidth - minimizedWidth;
+  const donor = layout.groups
+    .flatMap((group, index) => {
+      const width = group.size;
+      return index !== edgeIndex
+        && typeof width === 'number'
+        && Number.isFinite(width)
+        && width - delta >= SAFE_RAIL_WIDTH
+        ? [{ index, width }]
+        : [];
+    })
+    .sort((left, right) => {
+      if (right.width !== left.width) return right.width - left.width;
+      const leftDistance = position === 'left' ? left.index : layout.groups.length - 1 - left.index;
+      const rightDistance = position === 'left' ? right.index : layout.groups.length - 1 - right.index;
+      return leftDistance - rightDistance;
+    })[0];
+  if (!donor) {
+    return undefined;
+  }
+
+  return {
+    ...layout,
+    groups: layout.groups.map((group, index) => {
+      if (index === edgeIndex) return { ...copyGroup(group), size: safeWidth };
+      if (index === donor.index) return { ...copyGroup(group), size: donor.width - delta };
+      return copyGroup(group);
+    }),
+  };
+}
+
+/**
+ * Temporarily widens the user editor directly beside an existing rail from
+ * VS Code's minimized 220px width before the rail is hidden. Width comes from
+ * safe root-level siblings,
+ * preferring user editors and using the rail only as a last resort. No donor
+ * is allowed to fall below the safe width.
+ */
+export function widenMinimizedEditorBesideRailBeforeHide(
+  layout: EditorLayout,
+  position: RailPosition,
+  targetWidth = SAFE_MINIMIZED_EDITOR_GROUP_WIDTH,
+  minimizedWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+  minimumDonorWidth = SAFE_RAIL_WIDTH,
+): EditorLayout | undefined {
+  if (
+    (layout.orientation ?? 0) !== 0
+    || layout.groups.length < 2
+    || !Number.isFinite(targetWidth)
+    || !Number.isFinite(minimizedWidth)
+    || targetWidth <= minimizedWidth
+  ) {
+    return undefined;
+  }
+
+  const railIndex = position === 'left' ? 0 : layout.groups.length - 1;
+  const adjacentIndex = position === 'left' ? 1 : layout.groups.length - 2;
+  if (layout.groups[adjacentIndex]?.size !== minimizedWidth) {
+    return undefined;
+  }
+
+  const requiredWidth = targetWidth - minimizedWidth;
+  const donors = layout.groups
+    .flatMap((group, index) => {
+      const size = group.size;
+      if (index === adjacentIndex || typeof size !== 'number' || !Number.isFinite(size)) {
+        return [];
+      }
+      const availableWidth = Math.max(0, Math.floor(size - minimumDonorWidth));
+      return availableWidth > 0 ? [{ index, size, availableWidth, isRail: index === railIndex }] : [];
+    })
+    .sort((left, right) => (
+      Number(left.isRail) - Number(right.isRail)
+      || right.availableWidth - left.availableWidth
+      || right.size - left.size
+    ));
+  if (donors.reduce((total, donor) => total + donor.availableWidth, 0) < requiredWidth) {
+    return undefined;
+  }
+
+  let remainingWidth = requiredWidth;
+  const contributionByIndex = new Map<number, number>();
+  for (const donor of donors) {
+    if (remainingWidth <= 0) break;
+    const contribution = Math.min(remainingWidth, donor.availableWidth);
+    contributionByIndex.set(donor.index, contribution);
+    remainingWidth -= contribution;
+  }
+
+  return {
+    ...layout,
+    groups: layout.groups.map((group, index) => {
+      if (index === adjacentIndex) return { ...copyGroup(group), size: targetWidth };
+      const contribution = contributionByIndex.get(index);
+      if (contribution !== undefined && typeof group.size === 'number') {
+        return { ...copyGroup(group), size: group.size - contribution };
+      }
+      return copyGroup(group);
+    }),
+  };
+}
+
+/**
  * Nudges only the editor group identified by `viewColumn` above VS Code's
  * native minimized width. The size is taken from the deepest horizontal split
- * that controls the target leaf's width, so nested layouts remain intact.
+ * that controls the target leaf's width. One or more widest siblings may
+ * contribute, but no donor is allowed to become a new minimized group.
  */
 export function correctMinimizedEditorGroupWidth(
   layout: EditorLayout,
@@ -368,25 +528,41 @@ export function correctMinimizedEditorGroupWidth(
   }
 
   const delta = safeWidth - minimizedWidth;
-  let donorIndex: number | undefined;
-  let donorSize = Number.NEGATIVE_INFINITY;
-  horizontalGroups.forEach((group, index) => {
-    if (index === horizontalTargetIndex || typeof group.size !== 'number' || !Number.isFinite(group.size)) return;
-    if (group.size - delta < minimizedWidth) return;
-    if (group.size > donorSize) {
-      donorIndex = index;
-      donorSize = group.size;
-    }
-  });
-  if (donorIndex === undefined) {
+  const donors = horizontalGroups
+    .flatMap((group, index) => {
+      const size = group.size;
+      if (index === horizontalTargetIndex || typeof size !== 'number' || !Number.isFinite(size)) {
+        return [];
+      }
+      const availableWidth = Math.max(0, Math.floor(size - safeWidth));
+      return availableWidth > 0 ? [{ index, size, availableWidth }] : [];
+    })
+    .sort((left, right) => (
+      right.availableWidth - left.availableWidth
+      || right.size - left.size
+      || Math.abs(right.index - horizontalTargetIndex) - Math.abs(left.index - horizontalTargetIndex)
+    ));
+  if (donors.reduce((total, donor) => total + donor.availableWidth, 0) < delta) {
     return undefined;
+  }
+
+  let remainingWidth = delta;
+  const contributionByIndex = new Map<number, number>();
+  for (const donor of donors) {
+    if (remainingWidth <= 0) break;
+    const contribution = Math.min(remainingWidth, donor.availableWidth);
+    contributionByIndex.set(donor.index, contribution);
+    remainingWidth -= contribution;
   }
 
   return {
     ...layout,
     groups: updateGroupsAtPath(layout.groups, horizontalParentPath, (siblings) => siblings.map((group, index) => {
       if (index === horizontalTargetIndex) return { ...group, size: safeWidth };
-      if (index === donorIndex) return { ...group, size: donorSize - delta };
+      const contribution = contributionByIndex.get(index);
+      if (contribution !== undefined && typeof group.size === 'number') {
+        return { ...group, size: group.size - contribution };
+      }
       return copyGroup(group);
     })),
   };
