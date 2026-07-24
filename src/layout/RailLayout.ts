@@ -41,6 +41,44 @@ export function prependRailToLayout(layout: EditorLayout, width: number): Editor
   };
 }
 
+/**
+ * Prepends a rail while taking its width only from the original leading
+ * horizontal editor column. Later columns and all nested split sizes are kept
+ * unchanged. Returns undefined when the leading column cannot safely provide
+ * enough room for both the rail and the original editor group.
+ */
+export function prependRailPreservingEditorWidths(
+  layout: EditorLayout,
+  width: number,
+  minimumRailWidth = SAFE_RAIL_WIDTH,
+  minimumEditorWidth = VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
+): EditorLayout | undefined {
+  if ((layout.orientation ?? 0) !== 0 || layout.groups.length === 0) {
+    return undefined;
+  }
+
+  const leadingGroup = layout.groups[0];
+  const leadingWidth = leadingGroup.size;
+  if (typeof leadingWidth !== 'number' || !Number.isFinite(leadingWidth) || leadingWidth <= 0) {
+    return undefined;
+  }
+
+  const requestedRailWidth = Math.max(minimumRailWidth, normalizeRailWidth(width));
+  const railWidth = Math.min(requestedRailWidth, Math.floor(leadingWidth - minimumEditorWidth));
+  if (railWidth < minimumRailWidth) {
+    return undefined;
+  }
+
+  return {
+    orientation: 0,
+    groups: [
+      { size: railWidth },
+      { ...copyGroup(leadingGroup), size: leadingWidth - railWidth },
+      ...layout.groups.slice(1).map(copyGroup),
+    ],
+  };
+}
+
 /** Updates the first leaf, which is the rail after it has been moved left. */
 export function setLeadingRailWidth(layout: EditorLayout, width: number): EditorLayout {
   let updated = false;

@@ -10,6 +10,7 @@ import {
   MIN_RAIL_WIDTH,
   normalizeRailWidth,
   prependRailToLayout,
+  prependRailPreservingEditorWidths,
   resolveRailRatio,
   setLeadingRailWidth,
   shouldPersistObservedRailWidth,
@@ -33,6 +34,44 @@ test('wraps a vertical editor layout so the rail stays full-height', () => {
   assert.equal(result.orientation, 0);
   assert.equal(result.groups[0].size, 320);
   assert.deepEqual(result.groups[1], { groups: [{ size: 400 }, { size: 400 }] });
+});
+
+test('takes a new rail width only from the original leading editor column', () => {
+  const layout = {
+    orientation: 0,
+    groups: [
+      { size: 800, groups: [{ size: 320 }, { size: 480 }] },
+      { size: 300 },
+      { size: 500 },
+    ],
+  } as const;
+
+  const result = prependRailPreservingEditorWidths(layout, 320);
+  assert.deepEqual(result, {
+    orientation: 0,
+    groups: [
+      { size: 320 },
+      { size: 480, groups: [{ size: 320 }, { size: 480 }] },
+      { size: 300 },
+      { size: 500 },
+    ],
+  });
+  assert.deepEqual(layout.groups.map((group) => group.size), [800, 300, 500], 'The captured layout must remain immutable.');
+});
+
+test('limits the rail to preserve the native minimum width of the original leading group', () => {
+  assert.deepEqual(
+    prependRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 500 }, { size: 600 }] }, 400),
+    { orientation: 0, groups: [{ size: 280 }, { size: 220 }, { size: 600 }] },
+  );
+  assert.equal(
+    prependRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 400 }, { size: 600 }] }, 300),
+    undefined,
+  );
+  assert.equal(
+    prependRailPreservingEditorWidths({ orientation: 1, groups: [{ size: 500 }, { size: 500 }] }, 300),
+    undefined,
+  );
 });
 
 test('updates only the leading rail leaf and validates persisted widths', () => {
