@@ -14,6 +14,7 @@ import {
   isEditorLayout,
   normalizeRailRatio,
   insertRailPreservingEditorWidths,
+  removeRailRestoringEditorWidths,
   resolveRailRatio,
   SAFE_RAIL_WIDTH,
   setRailRootGroupWidth,
@@ -22,6 +23,7 @@ import {
   VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
   type EditorLayout,
   type RailPosition,
+  type RailWidthContribution,
 } from '../layout/RailLayout';
 import { getStrings, resolveLocale } from '../i18n';
 import type { LocaleStrings } from '../i18n/locale';
@@ -74,6 +76,12 @@ interface ActiveUserTabRestore {
   readonly selection?: vscode.Selection;
 }
 
+interface CloseLayoutRestore {
+  readonly position: RailPosition;
+  readonly editorGroupCount: number;
+  readonly contributions: readonly RailWidthContribution[];
+}
+
 export class VerticalTabsPanel {
   private static readonly panels = new SingletonPanel<VerticalTabsPanel>();
   private static readonly visibilityEmitter = new vscode.EventEmitter<boolean>();
@@ -97,6 +105,7 @@ export class VerticalTabsPanel {
   // finished creating and sizing the dedicated editor group.
   private arrangingRail = true;
   private lastObservedRailWidth: number | undefined;
+  private closeLayoutRestore: CloseLayoutRestore | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, tabs: [], manualGroups: [], displayGroups: [] };
@@ -453,8 +462,35 @@ export class VerticalTabsPanel {
         viewColumn: restoredViewColumn,
       });
     }
+    await this.captureCloseLayoutRestore(preparedRailGroup?.previousLayout);
     await this.refresh({ reason: 'ensureRail' });
     return true;
+  }
+
+  private async captureCloseLayoutRestore(previousLayout: EditorLayout | undefined): Promise<void> {
+    this.closeLayoutRestore = undefined;
+    if (!previousLayout || (previousLayout.orientation ?? 0) !== 0) {
+      return;
+    }
+    const currentLayout = await getEditorLayout();
+    if (
+      !currentLayout
+      || currentLayout.orientation !== 0
+      || currentLayout.groups.length !== previousLayout.groups.length + 1
+    ) {
+      return;
+    }
+    const contributions = describeRailWidthContributions(previousLayout, currentLayout, this.railPosition);
+    this.closeLayoutRestore = {
+      position: this.railPosition,
+      editorGroupCount: previousLayout.groups.length,
+      contributions,
+    };
+    logDebug('记录隐藏垂直标签栏时的编辑器组宽度返还信息', {
+      position: this.railPosition,
+      editorGroupCount: previousLayout.groups.length,
+      contributions,
+    });
   }
 
   private async saveEditorWidthRatio(position: RailPosition = this.railPosition): Promise<void> {
@@ -615,17 +651,55 @@ export class VerticalTabsPanel {
 
   private async close(): Promise<void> {
     logInfo('开始关闭垂直标签面板');
-    await this.saveEditorWidthRatio();
-    const group = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
-    if (group && group.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0])) {
-      try {
-        await vscode.window.tabGroups.close(group, true);
-        logDebug('已关闭垂直标签专用编辑器分组');
-      } catch (error) {
-        // Falling back to panel disposal still removes the extension view.
-        logWarn('关闭垂直标签专用编辑器分组失败，将回退到释放面板', error);
+    const activeTabRestore = captureActiveUserTabRestore();
+    await VerticalTabsPanel.enqueueLayout(async () => {
+      await this.saveEditorWidthRatio();
+      const currentLayout = await getEditorLayout();
+      const contributions = currentLayout
+        && this.closeLayoutRestore?.position === this.railPosition
+        && this.closeLayoutRestore.editorGroupCount === currentLayout.groups.length - 1
+        ? this.closeLayoutRestore.contributions
+        : [];
+      const restoredLayout = currentLayout
+        ? removeRailRestoringEditorWidths(currentLayout, this.railPosition, contributions)
+        : undefined;
+      logDebug('准备隐藏垂直标签栏并恢复用户编辑器组宽度', {
+        position: this.railPosition,
+        contributions,
+        currentLayout,
+        restoredLayout,
+      });
+
+      const group = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+      if (group && group.tabs.length === 1 && isVerticalTabsPanel(group.tabs[0])) {
+        try {
+          const closed = await vscode.window.tabGroups.close(group, true);
+          if (closed) {
+            logDebug('已关闭垂直标签专用编辑器分组');
+            if (restoredLayout) {
+              await waitForEditorLayoutLeafCount(countLayoutLeaves(restoredLayout));
+              if (!await applyEditorLayout(restoredLayout)) {
+                logWarn('隐藏垂直标签栏后无法恢复用户编辑器组宽度', { restoredLayout });
+              } else {
+                logInfo('隐藏垂直标签栏后已恢复用户编辑器组宽度', {
+                  position: this.railPosition,
+                  contributions,
+                  restoredLayout,
+                });
+              }
+            }
+            if (activeTabRestore) {
+              await this.restoreActiveUserTab(activeTabRestore);
+            }
+          } else {
+            logWarn('关闭垂直标签专用编辑器分组未成功');
+          }
+        } catch (error) {
+          // Falling back to panel disposal still removes the extension view.
+          logWarn('关闭垂直标签专用编辑器分组失败，将回退到释放面板', error);
+        }
       }
-    }
+    });
     this.panel.dispose();
   }
 
@@ -1318,6 +1392,7 @@ export class VerticalTabsPanel {
     const previousPosition = this.railPosition;
     const activeTabRestore = captureActiveUserTabRestore();
     await this.saveEditorWidthRatio(previousPosition);
+    this.closeLayoutRestore = undefined;
     this.railPosition = nextPosition;
     const moved = await VerticalTabsPanel.enqueueLayout(
       () => this.relocateRail(nextPosition, activeTabRestore),
@@ -1388,7 +1463,7 @@ export class VerticalTabsPanel {
   private async restoreActiveUserTab(restore: ActiveUserTabRestore): Promise<void> {
     const tab = findUserTabForRestore(restore);
     if (!tab) {
-      logWarn('垂直标签栏换边后找不到原活动标签', { restore });
+      logWarn('垂直标签栏布局调整后找不到原活动标签', { restore });
       return;
     }
     if (tab.input instanceof vscode.TabInputText) {
@@ -1397,7 +1472,7 @@ export class VerticalTabsPanel {
         preserveFocus: false,
         ...(restore.selection ? { selection: restore.selection } : {}),
       });
-      logDebug('垂直标签栏换边后已恢复活动文本标签', { restore, target: describeTab(tab) });
+      logDebug('垂直标签栏布局调整后已恢复活动文本标签', { restore, target: describeTab(tab) });
       return;
     }
     await this.activateTab(tab);
@@ -2721,6 +2796,18 @@ async function getEditorLayout(): Promise<EditorLayout | undefined> {
   }
 }
 
+async function waitForEditorLayoutLeafCount(expectedLeaves: number): Promise<boolean> {
+  for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
+    const layout = await getEditorLayout();
+    if (layout && countLayoutLeaves(layout) === expectedLeaves) {
+      return true;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+  }
+  logWarn('等待编辑器组关闭后的布局发布超时', { expectedLeaves });
+  return false;
+}
+
 async function applyEditorLayout(layout: EditorLayout): Promise<boolean> {
   try {
     logDebug('应用编辑器布局', { layout });
@@ -2888,7 +2975,10 @@ function describeRailWidthContributions(
   previousLayout: EditorLayout,
   nextLayout: EditorLayout,
   position: RailPosition,
-): readonly Record<string, number>[] {
+): readonly (RailWidthContribution & {
+  readonly previousWidth: number;
+  readonly nextWidth: number;
+})[] {
   const nextEditorGroups = position === 'left'
     ? nextLayout.groups.slice(1)
     : nextLayout.groups.slice(0, -1);
