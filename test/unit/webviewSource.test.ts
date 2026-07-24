@@ -142,6 +142,29 @@ test('tab colors distinguish selection, shown editors, and the focused editor', 
   assert.match(style, /\.tab-row\.is-focused::before \{[\s\S]+var\(--vscode-tab-activeBorderTop/);
 });
 
+test('active tab following is configurable and expands then reveals the focused tab', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+  const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default: unknown; scope?: string; markdownDescription?: string }> } };
+  };
+  const setting = manifest.contributes.configuration.properties['verticalTabs.alwaysFollowActiveTab'];
+
+  assert.equal(setting?.default, true);
+  assert.equal(setting?.scope, 'window');
+  assert.equal(setting?.markdownDescription, '%verticalTabs.config.alwaysFollowActiveTab%');
+  assert.match(packageNls['verticalTabs.config.alwaysFollowActiveTab'] ?? '', /automatically expands its group and scrolls the tab into view/);
+  assert.match(packageNlsZhCn['verticalTabs.config.alwaysFollowActiveTab'] ?? '', /自动展开其所属分组，并将对应标签滚动到可见区域/);
+  assert.match(panelSource, /alwaysFollowActiveTab: readAlwaysFollowActiveTab\(\)/);
+  assert.match(panelSource, /get<boolean>\('alwaysFollowActiveTab', true\)/);
+  assert.match(webviewSource, /snapshot\.tabs\.find\(\(tab\) => tab\.isFocused\)/);
+  assert.match(webviewSource, /activeTabFollowTracker\.shouldFollow\(focusedTab\?\.target, snapshot\.alwaysFollowActiveTab\)/);
+  assert.match(webviewSource, /setDisplayGroupCollapsed\(focusedGroup, false, false\)/);
+  assert.match(webviewSource, /scrollIntoView\(\{ block: 'nearest', inline: 'nearest' \}\)/);
+});
+
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as { contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> } } };

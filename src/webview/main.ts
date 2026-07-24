@@ -1,4 +1,5 @@
 import type { ExtensionMessage, GroupMode, ProductIconName, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
 import { TabSelection } from './TabSelection';
  import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
  import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -83,6 +84,7 @@ let dragRequestSequence = 0;
 let pendingActivateTarget: TabTarget | undefined;
 let pendingActivateTimestamp = 0;
 const selection = new TabSelection();
+const activeTabFollowTracker = new ActiveTabFollowTracker();
 
 window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
@@ -149,6 +151,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
     collapsedGroups.clear();
     vscode.setState({});
   }
+  const followedTarget = prepareActiveTabFollow(message.snapshot);
   pruneSelectedTabs(message.snapshot.tabs);
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
   if (sortModeSelect) sortModeSelect.value = message.snapshot.sortMode;
@@ -164,6 +167,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   for (const group of filteredGroups) appendDisplayGroup(groups, group);
   updateTreeActionState();
   correctPendingActivation();
+  revealFollowedTab(followedTarget);
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${tabs.length}, groups=${displayGroups.length}`);
 }
@@ -763,6 +767,28 @@ function button(label: string, title: string): HTMLButtonElement {
   result.textContent = label;
   result.title = title;
   return result;
+}
+
+function prepareActiveTabFollow(
+  snapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'],
+): TabTarget | undefined {
+  const focusedTab = snapshot.tabs.find((tab) => tab.isFocused);
+  if (!activeTabFollowTracker.shouldFollow(focusedTab?.target, snapshot.alwaysFollowActiveTab) || !focusedTab) {
+    return undefined;
+  }
+  const focusedGroup = snapshot.displayGroups.find((group) =>
+    group.tabs.some((tab) => sameTarget(tab.target, focusedTab.target)));
+  if (focusedGroup?.showHeader && isGroupCollapsed(focusedGroup)) {
+    setDisplayGroupCollapsed(focusedGroup, false, false);
+  }
+  return focusedTab.target;
+}
+
+function revealFollowedTab(target: TabTarget | undefined): void {
+  if (!target) return;
+  window.requestAnimationFrame(() => {
+    findTabRow(target)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
 }
 
 function iconButton(icon: string, title: string): HTMLButtonElement {

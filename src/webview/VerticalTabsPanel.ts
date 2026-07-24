@@ -109,7 +109,7 @@ export class VerticalTabsPanel {
   private closeLayoutRestore: CloseLayoutRestore | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, tabs: [], manualGroups: [], displayGroups: [] };
   private groupMode: GroupMode;
   private sortMode: SortMode;
   private toolbarPosition: ToolbarPosition;
@@ -882,6 +882,7 @@ export class VerticalTabsPanel {
       toolbarControlsVisible: this.toolbarControlsVisible,
       searchVisible: this.searchVisible,
       searchGroups: this.searchGroups,
+      alwaysFollowActiveTab: readAlwaysFollowActiveTab(),
       relativePathDisplay: readRelativePathDisplay(),
       manualOrderByGroup: this.manualOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
@@ -3430,6 +3431,10 @@ function readRelativePathDisplay(): RelativePathDisplay {
 function readToolbarPosition(): ToolbarPosition {
   const value = vscode.workspace.getConfiguration('verticalTabs').get<unknown>('toolbarPosition', 'top');
   return value === 'bottom' ? 'bottom' : 'top';
+}
+
+function readAlwaysFollowActiveTab(): boolean {
+  return vscode.workspace.getConfiguration('verticalTabs').get<boolean>('alwaysFollowActiveTab', true);
 }
 
 function isGroupMode(value: unknown): value is GroupMode {
