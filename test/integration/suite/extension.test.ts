@@ -103,6 +103,77 @@ suite('Vertical Tabs extension', () => {
     assert.ok(Math.abs(nextSizes[0] + nextSizes[1] - previousSizes[0]) <= 1, `Only the original leading editor should provide space for the rail; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
   });
 
+  test('preserves a minimized edge editor group when opening the rail on either side', async function () {
+    this.timeout(30_000);
+    const configuration = vscode.workspace.getConfiguration('verticalTabs');
+
+    try {
+      for (const position of ['left', 'right'] as const) {
+        await vscode.commands.executeCommand('verticalTabs.close');
+        await waitFor(() => verticalTabs().length === 0);
+        await closeNonVerticalTabs();
+        await configuration.update('position', position, vscode.ConfigurationTarget.Global);
+
+        const firstDocument = await vscode.workspace.openTextDocument({ content: `${position} minimized edge first editor` });
+        await vscode.window.showTextDocument(firstDocument, { preserveFocus: false });
+        await vscode.commands.executeCommand('workbench.action.newGroupRight');
+        const secondDocument = await vscode.workspace.openTextDocument({ content: `${position} minimized edge second editor` });
+        await vscode.window.showTextDocument(secondDocument, { preserveFocus: false });
+        await waitFor(() => vscode.window.tabGroups.all.length === 2);
+
+        const minimizedIndex = position === 'left' ? 0 : 1;
+        await vscode.commands.executeCommand('vscode.setEditorLayout', {
+          orientation: 0,
+          groups: position === 'left'
+            ? [{ size: 220 }, { size: 1180 }]
+            : [{ size: 1180 }, { size: 220 }],
+        });
+        const previousLayout = await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 2
+          && candidate.groups[minimizedIndex]?.size === 220
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
+        const previousSizes = previousLayout.groups.map((group) => group.size as number);
+        const activeDocument = position === 'left' ? secondDocument : firstDocument;
+        await vscode.window.showTextDocument(activeDocument, {
+          viewColumn: position === 'left' ? vscode.ViewColumn.Two : vscode.ViewColumn.One,
+          preserveFocus: false,
+        });
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+
+        await vscode.commands.executeCommand('verticalTabs.open');
+        await waitFor(() => verticalTabs().length === 1 && vscode.window.tabGroups.all.length === 3 && isRailAtEdge(position));
+        await waitFor(() => activeTextDocumentUri() === activeDocument.uri.toString());
+        const nextLayout = await waitForEditorLayout((candidate) => (
+          candidate.groups.length === 3
+          && candidate.groups.every((group) => typeof group.size === 'number')
+        ));
+        const nextSizes = nextLayout.groups.map((group) => group.size as number);
+        const railIndex = position === 'left' ? 0 : 2;
+        const shiftedMinimizedIndex = position === 'left' ? 1 : 1;
+        const widestIndexBefore = position === 'left' ? 1 : 0;
+        const widestIndexAfter = position === 'left' ? 2 : 0;
+        const railWidth = nextSizes[railIndex];
+        const donatedWidth = previousSizes[widestIndexBefore] - nextSizes[widestIndexAfter];
+
+        assert.ok(railWidth >= 222, `The ${position} rail should receive a safe width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`);
+        assert.ok(
+          Math.abs(nextSizes[shiftedMinimizedIndex] - previousSizes[minimizedIndex]) <= 1,
+          `The minimized ${position} edge editor should keep its width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+        );
+        assert.ok(
+          Math.abs(donatedWidth - railWidth) <= 1,
+          `Only the widest editor should provide the ${position} rail width; before ${JSON.stringify(previousLayout)}, after ${JSON.stringify(nextLayout)}.`,
+        );
+      }
+    } finally {
+      await configuration.update('position', 'left', vscode.ConfigurationTarget.Global);
+      if (verticalTabs().length > 0 && !isRailAtEdge('left')) {
+        await waitFor(() => isRailAtEdge('left'));
+      }
+    }
+  });
+
   test('creates on the right and applies live left-right position changes without losing focus', async function () {
     this.timeout(20_000);
     const configuration = vscode.workspace.getConfiguration('verticalTabs');

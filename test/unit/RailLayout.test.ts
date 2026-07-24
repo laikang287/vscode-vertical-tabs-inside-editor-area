@@ -67,9 +67,9 @@ test('limits the rail to preserve the native minimum width of the original leadi
     prependRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 500 }, { size: 600 }] }, 400),
     { orientation: 0, groups: [{ size: 280 }, { size: 220 }, { size: 600 }] },
   );
-  assert.equal(
+  assert.deepEqual(
     prependRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 400 }, { size: 600 }] }, 300),
-    undefined,
+    { orientation: 0, groups: [{ size: 300 }, { size: 400 }, { size: 300 }] },
   );
   assert.equal(
     prependRailPreservingEditorWidths({ orientation: 1, groups: [{ size: 500 }, { size: 500 }] }, 300),
@@ -98,6 +98,71 @@ test('takes a new right rail width only from the original trailing editor column
     ],
   });
   assert.deepEqual(layout.groups.map((group) => group.size), [500, 300, 800]);
+});
+
+test('preserves a minimized edge group and takes left or right rail width from the widest group', () => {
+  const leftLayout = {
+    orientation: 0,
+    groups: [
+      { size: 220 },
+      { size: 955, groups: [{ size: 400 }, { size: 555 }] },
+    ],
+  } as const;
+  const rightLayout = {
+    orientation: 0,
+    groups: [
+      { size: 955, groups: [{ size: 400 }, { size: 555 }] },
+      { size: 220 },
+    ],
+  } as const;
+
+  const left = insertRailPreservingEditorWidths(leftLayout, 320, 'left');
+  assert.deepEqual(left, {
+    orientation: 0,
+    groups: [
+      { size: 320 },
+      { size: 220 },
+      { size: 635, groups: [{ size: 400 }, { size: 555 }] },
+    ],
+  });
+
+  const right = insertRailPreservingEditorWidths(rightLayout, 320, 'right');
+  assert.deepEqual(right, {
+    orientation: 0,
+    groups: [
+      { size: 635, groups: [{ size: 400 }, { size: 555 }] },
+      { size: 220 },
+      { size: 320 },
+    ],
+  });
+  assert.deepEqual(leftLayout.groups.map((group) => group.size), [220, 955], 'The left source layout must remain immutable.');
+  assert.deepEqual(rightLayout.groups.map((group) => group.size), [955, 220], 'The right source layout must remain immutable.');
+});
+
+test('combines widest-group slack without shrinking an editor below its native minimum', () => {
+  const layout = {
+    orientation: 0,
+    groups: [{ size: 400 }, { size: 400 }, { size: 220 }],
+  } as const;
+
+  const result = insertRailPreservingEditorWidths(layout, 300, 'left');
+  assert.deepEqual(result, {
+    orientation: 0,
+    groups: [{ size: 300 }, { size: 220 }, { size: 280 }, { size: 220 }],
+  });
+  assert.equal(result?.groups.reduce((total, group) => total + (group.size ?? 0), 0), 1020);
+  assert.deepEqual(layout.groups.map((group) => group.size), [400, 400, 220]);
+});
+
+test('rejects a preserved insertion when total editor slack cannot provide a safe rail', () => {
+  assert.equal(
+    insertRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 300 }, { size: 300 }] }, 280, 'left'),
+    undefined,
+  );
+  assert.equal(
+    insertRailPreservingEditorWidths({ orientation: 0, groups: [{ size: 220 }, { size: 400 }] }, 280, 'right'),
+    undefined,
+  );
 });
 
 test('updates only the leading rail leaf and validates persisted widths', () => {

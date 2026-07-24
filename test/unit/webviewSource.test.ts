@@ -397,6 +397,16 @@ test('extension logs and skips width application when a rail-sized root group al
   assert.match(source, /setRailRootGroupWidth\(layout, railWidth, position\)/);
 });
 
+test('extension keeps the native new-group layout when preserved rail allocation is unsafe', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /widthContributions: describeRailWidthContributions\(previousLayout, preservedLayout, position\)/);
+  assert.match(
+    source,
+    /if \(previousLayout && countLayoutLeaves\(layout\) === countLayoutLeaves\(previousLayout\) \+ 1\)[\s\S]+if \(preservedLayout\)[\s\S]+return applyEditorLayout\(preservedLayout\);[\s\S]+return true;\s*}\s*const existingRailLikeGroup/,
+  );
+});
+
 test('extension retries undelivered render messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 

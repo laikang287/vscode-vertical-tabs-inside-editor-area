@@ -2826,23 +2826,27 @@ async function applyRailRatio(
     const preservedRailWidth = Math.max(SAFE_RAIL_WIDTH, Math.ceil(previousTotalWidth * normalizedRatio));
     const preservedLayout = insertRailPreservingEditorWidths(previousLayout, preservedRailWidth, position);
     if (preservedLayout) {
-      logDebug('按创建前布局应用垂直标签栏宽度，仅压缩原边缘编辑器组', {
+      logDebug('按创建前布局安全分配垂直标签栏宽度', {
         position,
         requestedRatio: ratio,
         normalizedRatio,
+        widthContributions: describeRailWidthContributions(previousLayout, preservedLayout, position),
         previousLayout,
         currentLayout: layout,
         nextLayout: preservedLayout,
       });
       return applyEditorLayout(preservedLayout);
     }
-    logWarn('创建前边缘编辑器组空间不足，回退到当前布局调整方式', {
+    logWarn('创建前编辑器组没有足够安全余量，保留 VS Code 新建分组后的原生布局', {
       position,
       requestedRatio: ratio,
       normalizedRatio,
+      minimumRailWidth: SAFE_RAIL_WIDTH,
+      minimumEditorWidth: VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH,
       previousLayout,
       currentLayout: layout,
     });
+    return true;
   }
   const existingRailLikeGroup = findExistingRailLikeRootGroup(layout, position);
   logDebug('准备调整垂直标签栏宽度', {
@@ -2878,6 +2882,35 @@ async function applyRailRatio(
     nextLayout,
   });
   return applyEditorLayout(nextLayout);
+}
+
+function describeRailWidthContributions(
+  previousLayout: EditorLayout,
+  nextLayout: EditorLayout,
+  position: RailPosition,
+): readonly Record<string, number>[] {
+  const nextEditorGroups = position === 'left'
+    ? nextLayout.groups.slice(1)
+    : nextLayout.groups.slice(0, -1);
+  return previousLayout.groups.flatMap((group, index) => {
+    const previousWidth = group.size;
+    const nextWidth = nextEditorGroups[index]?.size;
+    if (
+      typeof previousWidth !== 'number'
+      || !Number.isFinite(previousWidth)
+      || typeof nextWidth !== 'number'
+      || !Number.isFinite(nextWidth)
+      || nextWidth >= previousWidth
+    ) {
+      return [];
+    }
+    return [{
+      editorGroupIndex: index,
+      previousWidth,
+      nextWidth,
+      contribution: previousWidth - nextWidth,
+    }];
+  });
 }
 
 function clampAutomaticRailRatio(ratio: number, details: Record<string, unknown>): number {
