@@ -9,6 +9,7 @@ const ru: LocaleStrings = {
   pinnedGroup: 'Закреплённая группа',
   closeGroupAndDelete: 'Закрыть все вкладки в группе и удалить группу',
   closeTab: 'Закрыть вкладку',
+  unsavedChanges: 'Несохранённые изменения',
   close: 'Закрыть',
   closeOthers: 'Закрыть другие',
   closeBelow: 'Закрыть ниже',

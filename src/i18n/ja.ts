@@ -9,6 +9,7 @@ const ja: LocaleStrings = {
   pinnedGroup: '固定グループ',
   closeGroupAndDelete: 'グループ内の全タブを閉じてグループを削除',
   closeTab: 'タブを閉じる',
+  unsavedChanges: '未保存の変更',
   close: '閉じる',
   closeOthers: 'その他を閉じる',
   closeBelow: '下側を閉じる',

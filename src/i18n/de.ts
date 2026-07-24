@@ -9,6 +9,7 @@ const de: LocaleStrings = {
   pinnedGroup: 'Angeheftete Gruppe',
   closeGroupAndDelete: 'Alle Tabs in Gruppe schließen und Gruppe löschen',
   closeTab: 'Tab schließen',
+  unsavedChanges: 'Nicht gespeicherte Änderungen',
   close: 'Schließen',
   closeOthers: 'Andere schließen',
   closeBelow: 'Untere schließen',

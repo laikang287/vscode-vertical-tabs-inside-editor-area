@@ -49,6 +49,8 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.tabs[0].target.tabIndex, 1);
   assert.deepEqual(snapshot.tabs[0].target.identity, { kind: 'text', uri: 'file:///workspace/src/index.ts' });
   assert.equal(snapshot.tabs[0].manualGroupId, 'work');
+  assert.equal(snapshot.tabs[0].isDirty, true);
+  assert.equal(snapshot.tabs[1].isDirty, false);
   assert.equal(snapshot.tabs[0].description, undefined);
   assert.equal(snapshot.tabs[1].description, undefined);
   assert.equal(snapshot.tabs[0].activationKind, 'reliable');

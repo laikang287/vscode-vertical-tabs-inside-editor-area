@@ -50,7 +50,8 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
-  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; flex: 0 0 23px; justify-content: center; padding-right: 3px; \}/);
+  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; padding-right: 3px; \}/);
+  assert.match(style, /\.group-actions \{ flex: 0 0 23px; \}/);
   assert.match(style, /\.group-header \.tab-action \{ line-height: 20px; min-width: 20px; padding: 0; \}/);
 });
 
@@ -75,6 +76,19 @@ test('pinned tab icons render in a reserved left slot so peer labels stay aligne
   assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
   assert.match(style, /\.tab-pin-slot \{ flex: 0 0 14px;[\s\S]+text-align: center; \}/);
   assert.match(style, /\.tab-copy \{ display: flex; flex: 1; flex-direction: column;[\s\S]+min-width: 0; \}/);
+});
+
+test('dirty tabs render an accessible status indicator immediately before the close button', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.doesNotMatch(source, /tab\.isDirty \? '● ' : ''/);
+  assert.match(source, /if \(tab\.isDirty\) \{[\s\S]+dirty\.className = 'tab-dirty-indicator'/);
+  assert.match(source, /dirty\.title = i18n\.unsavedChanges/);
+  assert.match(source, /dirty\.setAttribute\('aria-label', i18n\.unsavedChanges\)/);
+  assert.match(source, /actions\.append\(dirty\);[\s\S]+actions\.append\(closeSelectionButton\(tab\)\)/);
+  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: 23px; \}/);
+  assert.match(style, /\.tab-dirty-indicator \{[\s\S]+pointer-events: none;/);
 });
 
 test('pinned groups render an indicator, sort first, and reject unsupported host messages', () => {

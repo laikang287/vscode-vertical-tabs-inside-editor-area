@@ -44,7 +44,7 @@ let dropHighlightedGroup: HTMLElement | undefined;
 const EN_DEFAULTS: Record<string, string> = {
   emptyState: 'No displayable editor tabs.', expand: 'Expand', collapse: 'Collapse',
   expandGroup: 'Expand group', collapseGroup: 'Collapse group', pinnedGroup: 'Pinned group',
-  closeGroupAndDelete: 'Close all tabs in group and delete group', closeTab: 'Close tab', close: 'Close',
+  closeGroupAndDelete: 'Close all tabs in group and delete group', closeTab: 'Close tab', unsavedChanges: 'Unsaved changes', close: 'Close',
   closeOthers: 'Close others', closeBelow: 'Close below', closeGroup: 'Close all tabs in group',
   closeSaved: 'Close saved', closeAll: 'Close all', closeSavedTabs: 'Close saved tabs in group',
   closeAllUnpinned: 'Close all unpinned tabs in group', pinTab: 'Pin tab', unpinTab: 'Unpin tab',
@@ -432,7 +432,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   copy.className = 'tab-copy';
   const label = document.createElement('span');
   label.className = 'tab-label';
-  label.textContent = `${tab.isDirty ? '● ' : ''}${tab.label}${tab.isPreview ? i18n.previewSuffix : ''}`;
+  label.textContent = `${tab.label}${tab.isPreview ? i18n.previewSuffix : ''}`;
   activate.addEventListener("lostpointercapture", () => {
     logToExtension("debug", "MULTI_CLICK_DEBUG lostpointercapture", JSON.stringify({ label: tab.label, preserve: preserveMultiSelectionOnPointerDown }));
     if (preserveMultiSelectionOnPointerDown) {
@@ -466,6 +466,15 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   });
   const actions = document.createElement('div');
   actions.className = 'tab-actions';
+  if (tab.isDirty) {
+    const dirty = document.createElement('span');
+    dirty.className = 'tab-dirty-indicator';
+    dirty.textContent = '●';
+    dirty.title = i18n.unsavedChanges;
+    dirty.setAttribute('aria-label', i18n.unsavedChanges);
+    dirty.setAttribute('role', 'img');
+    actions.append(dirty);
+  }
   actions.append(closeSelectionButton(tab));
   row.append(activate, actions);
   return row;
