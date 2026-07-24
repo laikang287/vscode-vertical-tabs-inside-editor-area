@@ -23,7 +23,7 @@ test('bulk close and create group actions are only exposed from context menus', 
   assert.doesNotMatch(panelSource, /id="close-saved"/);
   assert.doesNotMatch(panelSource, /id="close-all"/);
   assert.match(webviewSource, /verticalTabs\?\.addEventListener\('contextmenu'/);
-  assert.match(webviewSource, /function showContextMenu\(x: number, y: number, tab\?: VerticalTabItem, group\?: VerticalTabDisplayGroup\)/);
+  assert.match(webviewSource, /function showContextMenu\([\s\S]+?tab\?: VerticalTabItem,[\s\S]+?group\?: VerticalTabDisplayGroup,[\s\S]+?invoker\?: HTMLElement/);
  assert.match(webviewSource, /if \(tab\) \{[\s\S]+actionButton\(i18n\.close/);
   assert.match(webviewSource, /messageButton\(i18n\.close, i18n\.closeGroup, \{ type: 'closeGroup', groupId: group\.id \}\)/);
  assert.match(webviewSource, /createGroupButton\(snapshot\?\.groupMode === 'manual'\)/);
@@ -37,7 +37,7 @@ test('every visible group header has a close icon and manual rename stays in the
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
-  assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group\)/);
+  assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group, header\)/);
  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
   assert.match(source, /const remove = iconButton\('close', i18n\.closeGroupAndDelete\)/);
  assert.match(source, /remove\.className = 'group-action tab-action'/);
@@ -559,10 +559,36 @@ test('extension marks built-in welcome and settings webviews as activatable', ()
 test('webview enables best-effort activation with a distinct tooltip', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.match(source, /activate\.disabled = !tab\.isActivatable/);
+  assert.match(source, /activate\.setAttribute\('aria-disabled', String\(!tab\.isActivatable\)\)/);
+  assert.match(source, /if \(!tab\.isActivatable\) return/);
   assert.match(source, /function activationTitle\(tab: VerticalTabItem\): string/);
   assert.match(source, /tab\.activationKind === 'bestEffort'/);
   assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
+});
+
+test('tab tree uses one roving tab stop and supports keyboard navigation and context menus', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(panelSource, /id="groups" role="tree" tabindex="0"/);
+  assert.match(source, /header\.className = 'group-header tree-navigation-item'/);
+  assert.match(source, /activate\.className = 'tab-main tree-navigation-item'/);
+  assert.match(source, /header\.tabIndex = -1/);
+  assert.match(source, /activate\.tabIndex = -1/);
+  assert.match(source, /function initializeTreeFocus/);
+  assert.match(source, /for \(const item of items\) item\.tabIndex = -1/);
+  assert.match(source, /if \(target\) target\.tabIndex = 0/);
+  assert.match(source, /groups\?\.addEventListener\('keydown', handleTreeKeyDown\)/);
+  assert.match(source, /event\.key === 'Enter' && item\.classList\.contains\('tab-main'\)/);
+  assert.match(source, /openKeyboardContextMenu\(event, header, undefined, group\)/);
+  assert.match(source, /openKeyboardContextMenu\(event, activate, tab\)/);
+  assert.match(source, /isKeyboardContextMenuKey\(event\.key, event\.shiftKey\)/);
+  assert.match(source, /menu\.addEventListener\('keydown', handleContextMenuKeyDown\)/);
+  assert.match(source, /nextVerticalNavigationIndex\(currentIndex, actions\.length, event\.key, true\)/);
+  assert.match(source, /dismissContextMenu\(true\)/);
+  assert.match(source, /invoker\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(style, /\.tab-context-action:focus-visible/);
 });
 
 test('webview collapses an existing multi-selection on click while retaining block dragging and keyboard activation', () => {

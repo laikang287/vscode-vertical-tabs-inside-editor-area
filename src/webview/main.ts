@@ -1,10 +1,11 @@
 import type { ExtensionMessage, GroupMode, ProductIconName, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
 import { TabSelection } from './TabSelection';
- import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
- import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
+import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
+import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
+import { isKeyboardContextMenuKey, nextVerticalNavigationIndex, type VerticalNavigationKey } from './keyboardNavigation';
 
- declare var __i18n: Record<string, string> | undefined;
+declare var __i18n: Record<string, string> | undefined;
 
 declare const acquireVsCodeApi: () => { getState(): WebviewState | undefined; postMessage(message: unknown): void; setState(state: WebviewState): void };
 
@@ -33,6 +34,7 @@ const toggleSearchButton = document.querySelector<HTMLButtonElement>('#toggle-se
 const sortModeSelect = document.querySelector<HTMLSelectElement>('#sort-mode');
 const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 let contextMenu: HTMLElement | undefined;
+let contextMenuInvoker: HTMLElement | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let currentSearchQuery = '';
 let currentSearchGroups = false;
@@ -95,6 +97,11 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
+groups?.addEventListener('keydown', handleTreeKeyDown);
+groups?.addEventListener('focusin', (event) => {
+  const item = treeItemFromEventTarget(event.target);
+  if (item) setTreeTabStop(item);
+});
 toggleToolbarControlsButton?.addEventListener('click', () => {
   const visible = toolbarControls?.hidden ?? false;
   setToolbarControlsVisible(visible);
@@ -135,7 +142,7 @@ document.addEventListener('dragover', (event) => {
   if (!(event.target instanceof Element) || !event.target.closest('.tab-group')) clearDropIndicator();
 });
 window.addEventListener('blur', () => dismissContextMenu());
-window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(); });
+window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(true); });
 new ResizeObserver(([entry]) => { const width = Math.round(entry.contentRect.width); if (width >= 180) vscode.postMessage({ type: 'railWidth', width }); }).observe(document.documentElement);
 logToExtension('debug', 'Webview 脚本已启动');
 requestInitialSnapshot('ready');
@@ -160,16 +167,114 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   setSearchContainerVisible(message.snapshot.searchVisible);
   currentSearchGroups = message.snapshot.searchGroups;
   searchGroupToggle?.classList.toggle('is-active', message.snapshot.searchGroups);
+  const hadTreeFocus = groups.contains(document.activeElement);
+  const previousTreeFocusKey = currentTreeFocusKey();
   groups.replaceChildren();
   const { tabs, displayGroups } = message.snapshot;
   description.textContent = tabs.length === 0 ? i18n.emptyState : '';
   const filteredGroups = applySearchFilter(displayGroups, currentSearchQuery, currentSearchGroups);
   for (const group of filteredGroups) appendDisplayGroup(groups, group);
+  initializeTreeFocus(previousTreeFocusKey, hadTreeFocus);
   updateTreeActionState();
   correctPendingActivation();
   revealFollowedTab(followedTarget);
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${tabs.length}, groups=${displayGroups.length}`);
+}
+
+function handleTreeKeyDown(event: KeyboardEvent): void {
+  const item = treeItemFromEventTarget(event.target);
+  if (!item || event.target !== item) return;
+  if (event.key === 'Enter' && item.classList.contains('tab-main')) {
+    event.preventDefault();
+    item.click();
+    return;
+  }
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    handleTreeHorizontalNavigation(event, item);
+    return;
+  }
+  if (!isVerticalNavigationKey(event.key)) return;
+  const items = treeNavigationItems();
+  const currentIndex = items.indexOf(item);
+  const nextIndex = nextVerticalNavigationIndex(currentIndex, items.length, event.key);
+  const nextItem = items[nextIndex];
+  if (!nextItem) return;
+  event.preventDefault();
+  focusTreeItem(nextItem);
+}
+
+function handleTreeHorizontalNavigation(event: KeyboardEvent, item: HTMLElement): void {
+  if (item.classList.contains('group-header')) {
+    const expanded = item.getAttribute('aria-expanded') === 'true';
+    if ((event.key === 'ArrowRight' && !expanded) || (event.key === 'ArrowLeft' && expanded)) {
+      event.preventDefault();
+      item.click();
+    }
+    return;
+  }
+  if (event.key !== 'ArrowLeft') return;
+  const groupHeader = item.closest<HTMLElement>('.tab-group')?.querySelector<HTMLElement>('.group-header');
+  if (!groupHeader) return;
+  event.preventDefault();
+  focusTreeItem(groupHeader);
+}
+
+function isVerticalNavigationKey(key: string): key is VerticalNavigationKey {
+  return key === 'ArrowUp' || key === 'ArrowDown' || key === 'Home' || key === 'End';
+}
+
+function treeNavigationItems(): HTMLElement[] {
+  return groups ? Array.from(groups.querySelectorAll<HTMLElement>('.tree-navigation-item')) : [];
+}
+
+function treeItemFromEventTarget(target: EventTarget | null): HTMLElement | undefined {
+  if (!(target instanceof Element)) return undefined;
+  const item = target.closest<HTMLElement>('.tree-navigation-item');
+  return item && groups?.contains(item) ? item : undefined;
+}
+
+function currentTreeFocusKey(): string | undefined {
+  return treeItemFromEventTarget(document.activeElement)?.dataset.focusKey
+    ?? groups?.querySelector<HTMLElement>('.tree-navigation-item[tabindex="0"]')?.dataset.focusKey;
+}
+
+function initializeTreeFocus(preferredKey: string | undefined, restoreFocus: boolean): void {
+  if (!groups) return;
+  const items = treeNavigationItems();
+  const preferred = preferredKey
+    ? items.find((item) => item.dataset.focusKey === preferredKey)
+    : undefined;
+  const fallback = groups.querySelector<HTMLElement>('.tab-row.is-focused .tab-main')
+    ?? groups.querySelector<HTMLElement>('.tab-row.is-active .tab-main')
+    ?? groups.querySelector<HTMLElement>('.tab-main')
+    ?? items[0];
+  const target = preferred ?? fallback;
+  for (const item of items) item.tabIndex = -1;
+  groups.tabIndex = target ? -1 : 0;
+  if (target) target.tabIndex = 0;
+  if (restoreFocus) {
+    (target ?? groups).focus({ preventScroll: true });
+  }
+}
+
+function setTreeTabStop(item: HTMLElement): void {
+  if (!groups?.contains(item)) return;
+  for (const candidate of treeNavigationItems()) candidate.tabIndex = candidate === item ? 0 : -1;
+  groups.tabIndex = -1;
+}
+
+function focusTreeItem(item: HTMLElement): void {
+  setTreeTabStop(item);
+  item.focus();
+}
+
+function treeFocusKeyForGroup(group: VerticalTabDisplayGroup): string {
+  return `group:${group.id}`;
+}
+
+function treeFocusKeyForTab(tab: VerticalTabItem): string {
+  return `tab:${tab.target.groupIndex}:${JSON.stringify(tab.target.identity)}`;
 }
 
 function requestInitialSnapshot(type: 'ready' | 'requestRefresh'): void {
@@ -215,22 +320,26 @@ function appendDisplayGroup(parent: HTMLElement, group: VerticalTabDisplayGroup)
     collapsed ? 'is-collapsed' : '',
   ].filter(Boolean).join(' ');
   section.dataset.groupId = group.id;
+  section.setAttribute('role', 'group');
   section.addEventListener('dragover', (event) => handleGroupDragOver(event, group));
   section.addEventListener('drop', (event) => handleGroupDrop(event, group));
   if (group.showHeader) {
     const header = document.createElement('header');
-    header.className = 'group-header';
-    header.tabIndex = 0;
-    header.setAttribute('role', 'button');
+    header.className = 'group-header tree-navigation-item';
+    header.dataset.focusKey = treeFocusKeyForGroup(group);
+    header.tabIndex = -1;
+    header.setAttribute('role', 'treeitem');
+    header.setAttribute('aria-level', '1');
     header.setAttribute('aria-expanded', String(!collapsed));
     header.title = collapsed ? i18n.expandGroup : i18n.collapseGroup;
     header.addEventListener('click', () => toggleDisplayGroup(group));
     header.addEventListener('contextmenu', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      showContextMenu(event.clientX, event.clientY, undefined, group);
+      showContextMenu(event.clientX, event.clientY, undefined, group, header);
     });
     header.addEventListener('keydown', (event) => {
+      if (openKeyboardContextMenu(event, header, undefined, group)) return;
       if (event.key !== 'Enter' && event.key !== ' ') return;
       event.preventDefault();
       toggleDisplayGroup(group);
@@ -359,12 +468,18 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   row.addEventListener('dragover', (event) => handleTabDragOver(event, row, tab, group));
   row.addEventListener('drop', (event) => handleTabDrop(event, row, tab, group));
   const activate = document.createElement('button');
-  activate.className = 'tab-main';
+  activate.className = 'tab-main tree-navigation-item';
   activate.type = 'button';
-  activate.disabled = !tab.isActivatable;
+  activate.tabIndex = -1;
+  activate.dataset.focusKey = treeFocusKeyForTab(tab);
+  activate.setAttribute('role', 'treeitem');
+  activate.setAttribute('aria-level', String(level + 1));
+  activate.setAttribute('aria-selected', String(selected));
+  activate.setAttribute('aria-disabled', String(!tab.isActivatable));
   activate.title = activationTitle(tab);
   activate.setAttribute('aria-label', tabAccessibleLabel(tab));
   const requestActivation = (targetOverride?: TabTarget) => {
+    if (!tab.isActivatable) return;
     const target = targetOverride ?? tab.target;
     const requestId = nextActivateRequestId();
     logToExtension('debug', '标签激活按钮发送单次激活请求', targetDetails(target, tab.label, requestId));
@@ -420,6 +535,9 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
       collapsePreservedMultiSelection();
     }
   });
+  activate.addEventListener('keydown', (event) => {
+    openKeyboardContextMenu(event, activate, tab);
+  });
   activate.addEventListener('click', (event) => {
     logToExtension('debug', 'MULTI_CLICK_DEBUG click fired', JSON.stringify({ label: tab.label, detail: event.detail, preserve: preserveMultiSelectionOnPointerDown, draggedAfter: draggedAfterPreservePointerDown }));
     // Most mouse and pen activation is handled on pointerdown. A click on an
@@ -474,7 +592,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
     event.preventDefault();
     event.stopPropagation();
     if (!isSelected(tab)) selectSingle(tab);
-    showContextMenu(event.clientX, event.clientY, tab);
+    showContextMenu(event.clientX, event.clientY, tab, undefined, activate);
   });
   const actions = document.createElement('div');
   actions.className = 'tab-actions';
@@ -794,6 +912,7 @@ function revealFollowedTab(target: TabTarget | undefined): void {
 function iconButton(icon: string, title: string): HTMLButtonElement {
   const result = document.createElement('button');
   result.type = 'button';
+  result.tabIndex = -1;
   result.title = title;
   result.setAttribute('aria-label', title);
   result.append(codicon(icon));
@@ -929,7 +1048,13 @@ function dropDetails(event: DragEvent, source: TabTarget, groupId: string, befor
   ].filter(Boolean).join(', ');
 }
 
-function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: VerticalTabDisplayGroup): void {
+function showContextMenu(
+  x: number,
+  y: number,
+  tab?: VerticalTabItem,
+  group?: VerticalTabDisplayGroup,
+  invoker?: HTMLElement,
+): void {
   dismissContextMenu();
   const menu = document.createElement('div');
   menu.className = 'tab-context-menu';
@@ -961,12 +1086,77 @@ function showContextMenu(x: number, y: number, tab?: VerticalTabItem, group?: Ve
     groupActionButton(i18n.closeSaved, i18n.closeSavedTabs, 'closeSaved'),
     groupActionButton(i18n.closeAll, i18n.closeAllUnpinned, 'closeAll'),
   );
-  menu.querySelectorAll('button').forEach((item) => item.classList.add('tab-context-action'));
+  menu.querySelectorAll<HTMLButtonElement>('button').forEach((item) => {
+    item.classList.add('tab-context-action');
+    item.setAttribute('role', 'menuitem');
+    item.tabIndex = -1;
+  });
+  menu.addEventListener('keydown', handleContextMenuKeyDown);
   document.body.append(menu);
   const bounds = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
   menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
   contextMenu = menu;
+  contextMenuInvoker = invoker;
+  focusContextMenuItem(menu, 0);
+}
+
+function openKeyboardContextMenu(
+  event: KeyboardEvent,
+  invoker: HTMLElement,
+  tab?: VerticalTabItem,
+  group?: VerticalTabDisplayGroup,
+): boolean {
+  if (!isKeyboardContextMenuKey(event.key, event.shiftKey)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  const bounds = invoker.getBoundingClientRect();
+  showContextMenu(
+    bounds.left + Math.min(24, bounds.width / 2),
+    bounds.top + Math.min(24, bounds.height),
+    tab,
+    group,
+    invoker,
+  );
+  return true;
+}
+
+function handleContextMenuKeyDown(event: KeyboardEvent): void {
+  const menu = event.currentTarget;
+  if (!(menu instanceof HTMLElement)) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    dismissContextMenu(true);
+    return;
+  }
+  if (event.key === 'Enter' || event.key === ' ') {
+    const action = event.target;
+    if (!(action instanceof HTMLButtonElement) || action.disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    action.click();
+    return;
+  }
+  if (!isVerticalNavigationKey(event.key)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const actions = enabledContextMenuItems(menu);
+  const currentIndex = actions.findIndex((item) => item === document.activeElement);
+  const nextIndex = nextVerticalNavigationIndex(currentIndex, actions.length, event.key, true);
+  focusContextMenuItem(menu, nextIndex);
+}
+
+function enabledContextMenuItems(menu: HTMLElement): HTMLButtonElement[] {
+  return Array.from(menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+}
+
+function focusContextMenuItem(menu: HTMLElement, index: number): void {
+  const actions = enabledContextMenuItems(menu);
+  const target = actions[index];
+  if (!target) return;
+  for (const action of actions) action.tabIndex = action === target ? 0 : -1;
+  target.focus();
 }
 
 function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
@@ -1082,9 +1272,14 @@ function parseTargetDataset(value: string | undefined): TabTarget | undefined {
   }
 }
 
-function dismissContextMenu(): void {
+function dismissContextMenu(restoreFocus = false): void {
+  const invoker = contextMenuInvoker;
   contextMenu?.remove();
   contextMenu = undefined;
+  contextMenuInvoker = undefined;
+  if (!restoreFocus || !invoker?.isConnected) return;
+  if (invoker.classList.contains('tree-navigation-item')) setTreeTabStop(invoker);
+  invoker.focus({ preventScroll: true });
 }
 
 
