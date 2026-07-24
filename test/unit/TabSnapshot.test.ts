@@ -11,9 +11,11 @@ const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'README.md', path: 'README.md', directoryName: 'workspace', relativePath: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
 ] }];
 
-test('defaults the toolbar to the top and preserves an explicit bottom position', () => {
+test('defaults presentation settings and preserves explicit overrides', () => {
   assert.equal(buildSnapshot(source, 1, []).toolbarPosition, 'top');
+  assert.equal(buildSnapshot(source, 1, []).alwaysFollowActiveTab, true);
   assert.equal(buildSnapshot(source, 2, [], { toolbarPosition: 'bottom' }).toolbarPosition, 'bottom');
+  assert.equal(buildSnapshot(source, 2, [], { alwaysFollowActiveTab: false }).alwaysFollowActiveTab, false);
 });
 
 test('moves single and non-contiguous selected keys to the exact before-target position', () => {

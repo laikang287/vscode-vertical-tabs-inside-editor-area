@@ -1,4 +1,5 @@
 {
+  "verticalTabs.config.alwaysFollowActiveTab": "始终跟随活动标签。开启后，切换当前聚焦的编辑器时会自动展开其所属分组，并将对应标签滚动到可见区域；关闭后可在手动浏览标签列表时保持当前位置。",
   "verticalTabs.config.position": "垂直标签栏在编辑器区域内的位置。修改后立即生效。",
   "verticalTabs.config.position.left": "将垂直标签栏放在编辑器区域最左侧。",
   "verticalTabs.config.position.right": "将垂直标签栏放在编辑器区域最右侧。",
