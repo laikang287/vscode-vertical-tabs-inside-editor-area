@@ -125,6 +125,33 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
+test('editor-area position setting supports live left and right placement with a safe fallback', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: unknown[]; scope?: string }> } };
+  };
+  const position = manifest.contributes.configuration.properties['verticalTabs.position'];
+
+  assert.equal(position?.default, 'left');
+  assert.deepEqual(position?.enum, ['left', 'right']);
+  assert.equal(position?.scope, 'window');
+  assert.match(panelSource, /return value === 'right' \? 'right' : 'left'/);
+  assert.match(panelSource, /event\.affectsConfiguration\('verticalTabs\.position'\)/);
+  assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupLeft/);
+  assert.match(panelSource, /workbench\.action\.moveActiveEditorGroupRight/);
+  assert.match(panelSource, /workbench\.action\.focusLastEditorGroup/);
+  assert.match(panelSource, /this\.railPosition === 'left'[\s\S]+newGroupRight[\s\S]+newGroupLeft/);
+});
+
+test('adjacent navigation reuses an open panel without stealing the active editor focus', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(
+    panelSource,
+    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction\)/,
+  );
+});
+
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
@@ -271,20 +298,19 @@ test('extension avoids persisting and restoring transient empty-rail widths', ()
   assert.match(source, /lastObservedRailWidth/);
   assert.match(source, /canPersistObservedRatio/);
   assert.match(source, /clampAutomaticRailRatio/);
-  assert.match(source, /自动应用垂直标签栏宽度比例过大，已限制以避免压缩右侧编辑器组/);
+  assert.match(source, /自动应用垂直标签栏宽度比例过大，已限制以避免过度压缩用户编辑器组/);
 });
 
 test('extension logs and skips width application when a rail-sized root group already exists', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /function findExistingRailLikeRootGroup\(layout: EditorLayout, ratio: number\)/);
-  assert.match(source, /准备调整左侧标签栏宽度/);
+  assert.match(source, /function findExistingRailLikeRootGroup\([\s\S]+position: RailPosition/);
+  assert.match(source, /getRailRootGroupIndex\(layout, position\)/);
   assert.match(source, /existingRailLikeGroup/);
-  assert.match(source, /const leading = sizedGroups\.find\(\(group\) => group\.index === 0\)/);
-  assert.match(source, /if \(leadingRatio > MAX_EMPTY_RAIL_RESTORE_RATIO\) return undefined/);
+  assert.match(source, /const railGroup = sizedGroups\.find\(\(group\) => group\.index === railIndex\)/);
+  assert.match(source, /if \(railRatio > MAX_EMPTY_RAIL_RESTORE_RATIO\) return undefined/);
   assert.doesNotMatch(source, /candidate\.ratio >= 0\.6/);
-  assert.match(source, /跳过调整左侧标签栏宽度：当前布局中已有匹配目标比例的小宽度编辑器组/);
-  assert.match(source, /应用左侧标签栏宽度布局/);
+  assert.match(source, /setRailRootGroupWidth\(layout, railWidth, position\)/);
 });
 
 test('extension retries undelivered render messages', () => {

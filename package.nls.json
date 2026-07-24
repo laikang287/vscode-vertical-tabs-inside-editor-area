@@ -1,4 +1,7 @@
 {
+  "verticalTabs.config.position": "Position of the vertical tab bar inside the editor area. Changes are applied immediately.",
+  "verticalTabs.config.position.left": "Place the vertical tab bar at the left edge of the editor area.",
+  "verticalTabs.config.position.right": "Place the vertical tab bar at the right edge of the editor area.",
   "verticalTabs.config.rememberState": "When enabled, remembers group mode, sort mode, manual groups, pinned groups, and adjusted width per workspace. When disabled, always uses the default values.",
   "verticalTabs.config.tabWidthRatio": "Width percentage of the vertical tab bar relative to the editor area. Controls the tab bar width on first display or when automatic memory is disabled. Default 20%.",
   "verticalTabs.config.defaultGroupMode": "Default grouping mode. Always used when automatic memory is disabled; used only when no saved value exists when automatic memory is enabled.",

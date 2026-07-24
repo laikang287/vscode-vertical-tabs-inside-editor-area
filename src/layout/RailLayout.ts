@@ -8,6 +8,8 @@ export const MAX_PERSISTED_RAIL_RATIO = 0.3;
 export const VSCODE_MINIMIZED_EDITOR_GROUP_WIDTH = 220;
 export const SAFE_RAIL_WIDTH = 222;
 
+export type RailPosition = 'left' | 'right';
+
 export interface EditorLayoutGroup {
   readonly size?: number;
   readonly groups?: readonly EditorLayoutGroup[];
@@ -184,7 +186,7 @@ export function getObservedRailRatio(layout: EditorLayout | undefined, railWidth
   return totalWidth > 0 ? railWidth / totalWidth : undefined;
 }
 
-export function getRailGroupRatio(layout: EditorLayout): number | undefined {
+export function getRailGroupRatio(layout: EditorLayout, position: RailPosition = 'left'): number | undefined {
   if (!hasSeparateEditorArea(layout)) {
     return undefined;
   }
@@ -193,23 +195,70 @@ export function getRailGroupRatio(layout: EditorLayout): number | undefined {
     return undefined;
   }
   const total = sizes.reduce((sum, size) => sum + size, 0);
-  return total > 0 ? sizes[0] / total : undefined;
+  return total > 0 ? sizes[getRailRootGroupIndex(layout, position)] / total : undefined;
 }
 
-export function shouldPersistObservedRailWidth(layout: EditorLayout | undefined, railWidth: number | undefined): boolean {
-  if (!hasUsableRightEditorArea(layout)) {
+export function shouldPersistObservedRailWidth(
+  layout: EditorLayout | undefined,
+  railWidth: number | undefined,
+  position: RailPosition = 'left',
+): boolean {
+  if (!hasUsableEditorAreaOppositeRail(layout, position)) {
     return false;
   }
   const ratio = getObservedRailRatio(layout, railWidth);
   return isPersistableRailRatio(ratio);
 }
 
-export function shouldPersistRailGroupRatio(layout: EditorLayout | undefined): boolean {
-  if (!hasUsableRightEditorArea(layout)) {
+export function shouldPersistRailGroupRatio(
+  layout: EditorLayout | undefined,
+  position: RailPosition = 'left',
+): boolean {
+  if (!hasUsableEditorAreaOppositeRail(layout, position)) {
     return false;
   }
-  const ratio = getRailGroupRatio(layout);
+  const ratio = getRailGroupRatio(layout, position);
   return isPersistableRailRatio(ratio);
+}
+
+export function getRailRootGroupIndex(layout: EditorLayout, position: RailPosition): number {
+  return position === 'left' ? 0 : Math.max(0, layout.groups.length - 1);
+}
+
+export function setRailRootGroupWidth(
+  layout: EditorLayout,
+  width: number,
+  position: RailPosition,
+): EditorLayout | undefined {
+  if (layout.orientation !== 0 || layout.groups.length < 2) {
+    return undefined;
+  }
+
+  const railIndex = getRailRootGroupIndex(layout, position);
+  const railWidth = normalizeRailWidth(width);
+  const siblingIndexes = layout.groups.map((_, index) => index).filter((index) => index !== railIndex);
+  const siblingWidths = siblingIndexes.map((index) => {
+    const size = layout.groups[index]?.size;
+    return typeof size === 'number' && Number.isFinite(size) && size > 0 ? size : 1;
+  });
+  const siblingTotal = siblingWidths.reduce((sum, size) => sum + size, 0);
+  const availableWidth = Math.max(1, getEditorAreaWidth(layout) - railWidth);
+  let siblingOffset = 0;
+
+  return {
+    ...layout,
+    groups: layout.groups.map((group, index) => {
+      if (index === railIndex) {
+        return { ...group, size: railWidth };
+      }
+      const siblingWidth = siblingWidths[siblingOffset] ?? 1;
+      siblingOffset += 1;
+      return {
+        ...group,
+        size: Math.max(1, Math.round(availableWidth * siblingWidth / siblingTotal)),
+      };
+    }),
+  };
 }
 
 export function isEditorLayout(value: unknown): value is EditorLayout {
@@ -266,11 +315,20 @@ function updateGroupsAtPath(
   });
 }
 
-function hasUsableRightEditorArea(layout: EditorLayout | undefined): layout is EditorLayout {
+function hasUsableEditorAreaOppositeRail(
+  layout: EditorLayout | undefined,
+  position: RailPosition,
+): layout is EditorLayout {
   if (!hasSeparateEditorArea(layout)) {
     return false;
   }
-  return layout.groups.slice(1).some((group) => typeof group.size === 'number' && Number.isFinite(group.size) && group.size >= MIN_RAIL_WIDTH);
+  const railIndex = getRailRootGroupIndex(layout, position);
+  return layout.groups.some((group, index) => (
+    index !== railIndex
+    && typeof group.size === 'number'
+    && Number.isFinite(group.size)
+    && group.size >= MIN_RAIL_WIDTH
+  ));
 }
 
 function isPersistableRailRatio(ratio: number | undefined): boolean {
