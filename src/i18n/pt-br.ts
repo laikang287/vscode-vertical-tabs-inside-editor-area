@@ -56,15 +56,10 @@ const ptBr: LocaleStrings = {
   hideSearch: "Ocultar pesquisa",
   regexSearch: "Usar expressão regular",
   invalidRegex: "Expressão regular inválida: {0}",
-  filterTabs: "Filtrar abas",
-  filterUnsaved: "Abas não salvas",
-  filterPinned: "Abas fixadas",
-  filterCurrentGroup: "Abas do grupo de editores atual",
-  filterFileType: "Filtrar por tipo de arquivo",
-  allFileTypes: "Todos os tipos de arquivo",
+  searchWorkspaceRelativePaths: "Pesquisar caminhos relativos ao espaço de trabalho",
   searchResultCount: "{0} abas correspondentes",
   searchResultCountWithGroups: "{0} abas correspondentes · {1} grupos correspondentes",
-  noSearchResults: "Nenhuma aba corresponde à pesquisa e aos filtros atuais.",
+  noSearchResults: "Nenhuma aba corresponde à pesquisa atual.",
 };
 
 export default ptBr;

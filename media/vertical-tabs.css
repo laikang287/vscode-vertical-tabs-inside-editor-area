@@ -95,7 +95,7 @@ body {
   font: inherit;
   font-size: 11px;
   min-width: 0;
-  padding: 3px 52px 3px 5px;
+  padding: 3px 74px 3px 5px;
   width: 100%;
 }
 
@@ -116,8 +116,7 @@ body {
   top: 2px;
 }
 
-.search-mode-toggle,
-.search-filter-toggle {
+.search-mode-toggle {
   background: transparent;
   border: 0;
   border-radius: 3px;
@@ -131,46 +130,15 @@ body {
   padding: 2px 4px;
 }
 
-.search-mode-toggle.is-active,
-.search-filter-toggle.is-active {
+.search-mode-toggle.is-active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
   opacity: 1;
 }
 
-.search-mode-toggle:hover,
-.search-filter-toggle:hover {
+.search-mode-toggle:hover {
   background: var(--vscode-toolbar-hoverBackground);
   opacity: 1;
-}
-.search-filter-toggle:disabled {
-  cursor: not-allowed;
-  opacity: .35;
-}
-
-.search-filters {
-  display: flex;
-  gap: 2px;
-  min-width: 0;
-}
-
-.search-filter-toggle {
-  background: var(--vscode-button-secondaryBackground, transparent);
-  color: var(--vscode-button-secondaryForeground, var(--vscode-input-foreground));
-  flex: 0 0 24px;
-  font-size: 14px;
-  min-height: 22px;
-}
-
-.file-type-filter {
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border, transparent);
-  color: var(--vscode-dropdown-foreground);
-  flex: 1;
-  font: inherit;
-  font-size: 11px;
-  min-width: 54px;
-  padding: 1px 3px;
 }
 
 .search-feedback {

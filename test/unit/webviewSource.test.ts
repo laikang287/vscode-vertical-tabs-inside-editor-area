@@ -859,7 +859,7 @@ test('parent-directory file collisions require confirmation and replace related 
 });
 
 
-test('search, combined tab filters, result feedback, and regular-expression controls are present', () => {
+test('search uses one control row with an opt-in workspace-relative path mode', () => {
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const styleSource = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
@@ -869,30 +869,34 @@ test('search, combined tab filters, result feedback, and regular-expression cont
   assert.match(panelSource, /id="search-input"/);
   assert.match(panelSource, /id="search-group-toggle"/);
   assert.match(panelSource, /id="regex-search-toggle"/);
-  assert.match(panelSource, /id="filter-unsaved"/);
-  assert.match(panelSource, /id="filter-pinned"/);
-  assert.match(panelSource, /id="filter-current-group"/);
-  assert.match(panelSource, /id="filter-file-type"/);
+  assert.match(panelSource, /id="search-workspace-relative-path-toggle"[\s\S]*aria-pressed="false"[\s\S]*codicon-root-folder/);
+  assert.doesNotMatch(panelSource, /id="filter-(?:unsaved|pinned|current-group|file-type)"/);
+  assert.doesNotMatch(panelSource, /class="search-filters"/);
   assert.match(panelSource, /id="search-result-count"/);
   assert.match(panelSource, /id="search-error"/);
   assert.ok(webviewSource.includes("querySelector<HTMLInputElement>('#search-input')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#search-group-toggle')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#regex-search-toggle')"));
+  assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#search-workspace-relative-path-toggle')"));
   assert.ok(webviewSource.includes("querySelector<HTMLButtonElement>('#toggle-search')"));
   assert.ok(webviewSource.includes("querySelector<HTMLElement>('#search-container')"));
   assert.ok(webviewSource.includes("type: 'setSearchVisible'"));
   assert.ok(webviewSource.includes("type: 'setSearchGroups'"));
+  assert.match(webviewSource, /let currentSearchWorkspaceRelativePaths = false/);
+  assert.match(webviewSource, /searchWorkspaceRelativePaths: currentSearchWorkspaceRelativePaths/);
   assert.match(webviewSource, /evaluateTabSearch/);
   assert.match(webviewSource, /appendHighlightedText/);
   assert.match(webviewSource, /searchCollapsedGroups/);
   assert.match(webviewSource, /event\.key !== 'Escape'/);
-  assert.match(webviewSource, /clearSearchAndFilters/);
+  assert.match(webviewSource, /function clearSearch/);
   assert.match(webviewSource, /function applyCurrentFilter/);
   assert.match(webviewSource, /function setSearchContainerVisible/);
   assert.match(panelSource, /lastFocusedUserGroup/);
   assert.match(panelSource, /updateLastFocusedUserGroup/);
   assert.match(styleSource, /\.search-match/);
   assert.match(styleSource, /\.search-error/);
+  assert.doesNotMatch(styleSource, /\.search-filters/);
+  assert.doesNotMatch(styleSource, /\.search-filter-toggle/);
   assert.match(panelSource, /searchVisible:/);
   assert.match(panelSource, /searchGroups:/);
   assert.match(panelSource, /SEARCH_VISIBLE_STORAGE_KEY/);

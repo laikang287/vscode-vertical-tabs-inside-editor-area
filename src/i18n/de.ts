@@ -56,15 +56,10 @@ const de: LocaleStrings = {
   hideSearch: "Suche ausblenden",
   regexSearch: "Regulären Ausdruck verwenden",
   invalidRegex: "Ungültiger regulärer Ausdruck: {0}",
-  filterTabs: "Tabs filtern",
-  filterUnsaved: "Nicht gespeicherte Tabs",
-  filterPinned: "Angeheftete Tabs",
-  filterCurrentGroup: "Tabs in der aktuellen Editorgruppe",
-  filterFileType: "Nach Dateityp filtern",
-  allFileTypes: "Alle Dateitypen",
+  searchWorkspaceRelativePaths: "Workspace-relative Pfade durchsuchen",
   searchResultCount: "{0} passende Tabs",
   searchResultCountWithGroups: "{0} passende Tabs · {1} passende Gruppen",
-  noSearchResults: "Keine Tabs entsprechen der aktuellen Suche und den Filtern.",
+  noSearchResults: "Keine Tabs entsprechen der aktuellen Suche.",
 };
 
 export default de;

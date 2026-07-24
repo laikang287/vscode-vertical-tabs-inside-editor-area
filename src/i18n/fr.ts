@@ -56,15 +56,10 @@ const fr: LocaleStrings = {
   hideSearch: "Masquer la recherche",
   regexSearch: "Utiliser une expression régulière",
   invalidRegex: "Expression régulière non valide : {0}",
-  filterTabs: "Filtrer les onglets",
-  filterUnsaved: "Onglets non enregistrés",
-  filterPinned: "Onglets épinglés",
-  filterCurrentGroup: "Onglets du groupe d’éditeurs actuel",
-  filterFileType: "Filtrer par type de fichier",
-  allFileTypes: "Tous les types de fichiers",
+  searchWorkspaceRelativePaths: "Rechercher les chemins relatifs à l’espace de travail",
   searchResultCount: "{0} onglets correspondants",
   searchResultCountWithGroups: "{0} onglets correspondants · {1} groupes correspondants",
-  noSearchResults: "Aucun onglet ne correspond à la recherche et aux filtres actuels.",
+  noSearchResults: "Aucun onglet ne correspond à la recherche actuelle.",
 };
 
 export default fr;

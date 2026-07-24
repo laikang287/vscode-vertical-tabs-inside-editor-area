@@ -2545,13 +2545,8 @@ export class VerticalTabsPanel {
           <div class="search-mode-actions">
             <button id="regex-search-toggle" class="search-mode-toggle" type="button" title="${i18n.regexSearch}" aria-label="${i18n.regexSearch}" aria-pressed="false">.*</button>
             <button id="search-group-toggle" class="search-mode-toggle" type="button" title="${i18n.searchGroup}" aria-label="${i18n.searchGroup}" aria-pressed="false"><span class="codicon codicon-group-by-ref-type" aria-hidden="true"></span></button>
+            <button id="search-workspace-relative-path-toggle" class="search-mode-toggle" type="button" title="${i18n.searchWorkspaceRelativePaths}" aria-label="${i18n.searchWorkspaceRelativePaths}" aria-pressed="false"><span class="codicon codicon-root-folder" aria-hidden="true"></span></button>
           </div>
-        </div>
-        <div class="search-filters" aria-label="${i18n.filterTabs}">
-          <button id="filter-unsaved" class="search-filter-toggle" type="button" title="${i18n.filterUnsaved}" aria-label="${i18n.filterUnsaved}" aria-pressed="false"><span class="codicon codicon-circle-filled" aria-hidden="true"></span></button>
-          <button id="filter-pinned" class="search-filter-toggle" type="button" title="${i18n.filterPinned}" aria-label="${i18n.filterPinned}" aria-pressed="false"><span class="codicon codicon-pinned" aria-hidden="true"></span></button>
-          <button id="filter-current-group" class="search-filter-toggle" type="button" title="${i18n.filterCurrentGroup}" aria-label="${i18n.filterCurrentGroup}" aria-pressed="false"><span class="codicon codicon-layout" aria-hidden="true"></span></button>
-          <select id="filter-file-type" class="file-type-filter" title="${i18n.filterFileType}" aria-label="${i18n.filterFileType}"><option value="">${i18n.allFileTypes}</option></select>
         </div>
         <div class="search-feedback">
           <span id="search-result-count" class="search-result-count" role="status" hidden></span>

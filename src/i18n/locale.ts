@@ -54,12 +54,7 @@ export interface LocaleStrings {
   readonly hideSearch: string;
   readonly regexSearch: string;
   readonly invalidRegex: string;
-  readonly filterTabs: string;
-  readonly filterUnsaved: string;
-  readonly filterPinned: string;
-  readonly filterCurrentGroup: string;
-  readonly filterFileType: string;
-  readonly allFileTypes: string;
+  readonly searchWorkspaceRelativePaths: string;
   readonly searchResultCount: string;
   readonly searchResultCountWithGroups: string;
   readonly noSearchResults: string;
