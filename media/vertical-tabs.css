@@ -6,7 +6,7 @@
   --vertical-tab-item-gap: 2px;
   --vertical-tab-pin-slot-width: 12px;
   --vertical-tab-tree-indent: 12px;
-  --vertical-tab-group-background-shade: rgba(0, 0, 0, .12);
+  --vertical-tab-group-background-shade: rgba(0, 0, 0, .16);
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
@@ -14,7 +14,7 @@
 }
 
 body.vscode-dark {
-  --vertical-tab-group-background-shade: rgba(0, 0, 0, .28);
+  --vertical-tab-group-background-shade: rgba(255, 255, 255, .12);
 }
 
 body.vscode-high-contrast,
