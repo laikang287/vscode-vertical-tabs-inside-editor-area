@@ -113,7 +113,7 @@ export function selectCloseTargets(snapshot: VerticalTabsSnapshot, action: Close
 export function selectCloseTargetsForTabs(snapshot: VerticalTabsSnapshot, action: 'close' | 'closeOthers' | 'closeBelow', targets: readonly VerticalTabItem['target'][]): VerticalTabItem['target'][] {
   const selectedTabs = resolveSnapshotTargets(snapshot, targets);
   if (selectedTabs.length === 0) return [];
-  if (action === 'close') return selectedTabs.map((tab) => tab.target);
+  if (action === 'close') return selectedTabs.filter((tab) => !tab.isPinned).map((tab) => tab.target);
   const selectedKeys = new Set(selectedTabs.map((tab) => occurrenceKey(tab.target)));
   const result: VerticalTabItem[] = [];
   for (const group of snapshot.displayGroups) {
