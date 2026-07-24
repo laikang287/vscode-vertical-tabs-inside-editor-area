@@ -691,11 +691,12 @@ test('toolbar position setting fixes the toolbar at either edge and reverses onl
   assert.equal(typeof packageNlsZhCn['verticalTabs.config.toolbarPosition'], 'string');
 });
 
-test('webview only shows the drag cursor on draggable tab rows', () => {
+test('draggable tabs and group headers keep the regular clickable cursor', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(style, /\.tab-row\[draggable="true"\] \{ cursor: grab; \}/);
-  assert.match(style, /\.tab-row\[draggable="true"\]:active \{ cursor: grabbing; \}/);
+  assert.match(style, /\.group-header \{[\s\S]*?cursor: pointer;[\s\S]*?\}/);
+  assert.match(style, /\.tab-row \{[\s\S]*?cursor: pointer;[\s\S]*?\}/);
+  assert.doesNotMatch(style, /cursor:\s*grab(?:bing)?/);
   assert.doesNotMatch(style, /\.tab-drag-handle/);
 });
 
