@@ -3,6 +3,10 @@
   "verticalTabs.command.close": "隱藏垂直分頁",
   "verticalTabs.launcher.show": "[顯示](command:verticalTabs.open)",
   "verticalTabs.launcher.hide": "[隱藏](command:verticalTabs.close)",
+  "verticalTabs.command.previousInGroupOnRelease": "垂直標籤頁: 完全放開快速鍵後切換到目前垂直群組內的上一個標籤",
+  "verticalTabs.command.nextInGroupOnRelease": "垂直標籤頁: 完全放開快速鍵後切換到目前垂直群組內的下一個標籤",
+  "verticalTabs.command.previousAcrossGroupsOnRelease": "垂直標籤頁: 完全放開快速鍵後跨垂直群組切換到上一個標籤",
+  "verticalTabs.command.nextAcrossGroupsOnRelease": "垂直標籤頁: 完全放開快速鍵後跨垂直群組切換到下一個標籤",
   "verticalTabs.command.saveWorkset": "垂直標籤頁: 儲存工作集",
   "verticalTabs.command.loadWorkset": "垂直標籤頁: 載入工作集",
   "verticalTabs.command.manageWorksets": "垂直標籤頁: 管理工作集"

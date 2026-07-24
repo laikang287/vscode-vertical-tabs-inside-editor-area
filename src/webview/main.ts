@@ -1,5 +1,6 @@
 import type { ExtensionMessage, GroupMode, NativeContextMenuEntry, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
+import { ShortcutReleaseTracker } from './ShortcutReleaseTracker';
 import { TabSelection } from './TabSelection';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -116,6 +117,7 @@ let pendingActivateTimestamp = 0;
 let keyboardNavigationPreviewTarget: TabTarget | undefined;
 const selection = new TabSelection();
 const activeTabFollowTracker = new ActiveTabFollowTracker();
+const shortcutReleaseTracker = new ShortcutReleaseTracker();
 
 window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
@@ -131,6 +133,15 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   }
   if (event.data.type === 'previewTabNavigation') {
     previewKeyboardNavigation(event.data.target);
+    return;
+  }
+  if (event.data.type === 'armShortcutReleaseCapture') {
+    shortcutReleaseTracker.arm(event.data.sessionId, event.data.primaryKey);
+    groups?.focus({ preventScroll: true });
+    return;
+  }
+  if (event.data.type === 'cancelShortcutReleaseCapture') {
+    shortcutReleaseTracker.cancel(event.data.sessionId);
     return;
   }
   if (event.data.type === 'clearTabNavigationPreview') {
@@ -208,8 +219,21 @@ document.addEventListener('dragleave', (event) => { if (event.relatedTarget === 
 document.addEventListener('dragover', (event) => {
   if (!(event.target instanceof Element) || !event.target.closest('.tab-group')) clearDropIndicator();
 });
-window.addEventListener('blur', () => dismissContextMenu());
-window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(true); });
+window.addEventListener('pointerdown', () => cancelShortcutReleaseCapture('pointer'), true);
+window.addEventListener('keyup', handleShortcutReleaseKeyUp, true);
+window.addEventListener('blur', () => {
+  cancelShortcutReleaseCapture('blur');
+  dismissContextMenu();
+});
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (shortcutReleaseTracker.activeSessionId) {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelShortcutReleaseCapture('escape');
+  }
+  dismissContextMenu(true);
+});
 new ResizeObserver(([entry]) => { const width = Math.round(entry.contentRect.width); if (width >= 180) vscode.postMessage({ type: 'railWidth', width }); }).observe(document.documentElement);
 logToExtension('debug', 'Webview 脚本已启动');
 requestInitialSnapshot('ready');
@@ -1598,6 +1622,26 @@ function clearKeyboardNavigationPreview(): void {
   keyboardNavigationPreviewTarget = undefined;
   for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
     row.classList.remove('is-keyboard-preview');
+  }
+}
+
+function handleShortcutReleaseKeyUp(event: KeyboardEvent): void {
+  const result = shortcutReleaseTracker.keyUp({
+    key: event.key,
+    ctrlKey: event.ctrlKey,
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
+    metaKey: event.metaKey,
+  });
+  if (result.type === 'complete') {
+    vscode.postMessage({ type: 'shortcutReleaseComplete', sessionId: result.sessionId });
+  }
+}
+
+function cancelShortcutReleaseCapture(reason: 'escape' | 'blur' | 'pointer'): void {
+  const sessionId = shortcutReleaseTracker.cancel();
+  if (sessionId) {
+    vscode.postMessage({ type: 'shortcutReleaseCancel', sessionId, reason });
   }
 }
 

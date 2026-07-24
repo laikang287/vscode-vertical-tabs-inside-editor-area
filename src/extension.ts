@@ -23,6 +23,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const nextInGroupCommand = registerLoggedCommand('verticalTabs.nextInGroup', () => VerticalTabsPanel.navigate(context, 1, 'group'));
   const previousAcrossGroupsCommand = registerLoggedCommand('verticalTabs.previousAcrossGroups', () => VerticalTabsPanel.navigate(context, -1, 'all'));
   const nextAcrossGroupsCommand = registerLoggedCommand('verticalTabs.nextAcrossGroups', () => VerticalTabsPanel.navigate(context, 1, 'all'));
+  const previousInGroupOnReleaseCommand = registerLoggedCommand('verticalTabs.previousInGroupOnRelease', () => VerticalTabsPanel.navigateOnRelease(context, -1, 'group'));
+  const nextInGroupOnReleaseCommand = registerLoggedCommand('verticalTabs.nextInGroupOnRelease', () => VerticalTabsPanel.navigateOnRelease(context, 1, 'group'));
+  const previousAcrossGroupsOnReleaseCommand = registerLoggedCommand('verticalTabs.previousAcrossGroupsOnRelease', () => VerticalTabsPanel.navigateOnRelease(context, -1, 'all'));
+  const nextAcrossGroupsOnReleaseCommand = registerLoggedCommand('verticalTabs.nextAcrossGroupsOnRelease', () => VerticalTabsPanel.navigateOnRelease(context, 1, 'all'));
   const moveUpInGroupCommand = registerLoggedCommand('verticalTabs.moveUpInGroup', () => VerticalTabsPanel.moveTab(context, -1, 'tab'));
   const moveDownInGroupCommand = registerLoggedCommand('verticalTabs.moveDownInGroup', () => VerticalTabsPanel.moveTab(context, 1, 'tab'));
   const moveToPreviousGroupCommand = registerLoggedCommand('verticalTabs.moveToPreviousGroup', () => VerticalTabsPanel.moveTab(context, -1, 'group'));
@@ -46,6 +50,10 @@ export function activate(context: vscode.ExtensionContext): void {
     nextInGroupCommand,
     previousAcrossGroupsCommand,
     nextAcrossGroupsCommand,
+    previousInGroupOnReleaseCommand,
+    nextInGroupOnReleaseCommand,
+    previousAcrossGroupsOnReleaseCommand,
+    nextAcrossGroupsOnReleaseCommand,
     moveUpInGroupCommand,
     moveDownInGroupCommand,
     moveToPreviousGroupCommand,

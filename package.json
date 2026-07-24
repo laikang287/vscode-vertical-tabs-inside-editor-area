@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "Vertical Tabs Inside Editor Area",
   "description": "A vertical tab navigator locked inside the editor area. Shows all tabs across VS Code editor groups with grouping, pinning, drag-and-drop, sorting, and multi-language support.",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -65,6 +65,22 @@
       {
         "command": "verticalTabs.nextAcrossGroups",
         "title": "%verticalTabs.command.nextAcrossGroups%"
+      },
+      {
+        "command": "verticalTabs.previousInGroupOnRelease",
+        "title": "%verticalTabs.command.previousInGroupOnRelease%"
+      },
+      {
+        "command": "verticalTabs.nextInGroupOnRelease",
+        "title": "%verticalTabs.command.nextInGroupOnRelease%"
+      },
+      {
+        "command": "verticalTabs.previousAcrossGroupsOnRelease",
+        "title": "%verticalTabs.command.previousAcrossGroupsOnRelease%"
+      },
+      {
+        "command": "verticalTabs.nextAcrossGroupsOnRelease",
+        "title": "%verticalTabs.command.nextAcrossGroupsOnRelease%"
       },
       {
         "command": "verticalTabs.moveUpInGroup",
@@ -302,6 +318,24 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "verticalTabs.previousInGroupOnRelease",
+          "when": "false"
+        },
+        {
+          "command": "verticalTabs.nextInGroupOnRelease",
+          "when": "false"
+        },
+        {
+          "command": "verticalTabs.previousAcrossGroupsOnRelease",
+          "when": "false"
+        },
+        {
+          "command": "verticalTabs.nextAcrossGroupsOnRelease",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "verticalTabs.open",

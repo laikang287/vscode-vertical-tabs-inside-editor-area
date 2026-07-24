@@ -26,6 +26,17 @@ test('accepts render acknowledgement messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'renderAck', revision: 7 }), { type: 'renderAck', revision: 7 });
 });
 
+test('accepts bounded shortcut release messages', () => {
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'shortcutReleaseComplete', sessionId: 'shortcut-release-12' }),
+    { type: 'shortcutReleaseComplete', sessionId: 'shortcut-release-12' },
+  );
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'shortcutReleaseCancel', sessionId: 'shortcut-release-12', reason: 'blur' }),
+    { type: 'shortcutReleaseCancel', sessionId: 'shortcut-release-12', reason: 'blur' },
+  );
+});
+
 test('accepts bounded webview log messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'debug', message: 'started' }), { type: 'webviewLog', level: 'debug', message: 'started' });
   assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' }), { type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' });
@@ -86,6 +97,10 @@ test('rejects malformed and unknown messages', () => {
     { type: 'renderAck', revision: -1 },
     { type: 'renderAck', revision: 1.5 },
     { type: 'renderAck', revision: '7' },
+    { type: 'shortcutReleaseComplete', sessionId: '' },
+    { type: 'shortcutReleaseComplete', sessionId: 'shortcut-release-0' },
+    { type: 'shortcutReleaseComplete', sessionId: 'shortcut-release-12345678901234567' },
+    { type: 'shortcutReleaseCancel', sessionId: 'shortcut-release-1', reason: 'timeout' },
     { type: 'activateTab' },
     { type: 'activateTab', target, requestId: '' },
     { type: 'activateTab', target, requestId: 42 },

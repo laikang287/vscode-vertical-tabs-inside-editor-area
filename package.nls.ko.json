@@ -3,6 +3,10 @@
   "verticalTabs.command.close": "세로 탭 숨기기",
   "verticalTabs.launcher.show": "[표시](command:verticalTabs.open)",
   "verticalTabs.launcher.hide": "[숨기기](command:verticalTabs.close)",
+  "verticalTabs.command.previousInGroupOnRelease": "세로 탭: 바로 가기 키를 모두 놓을 때 현재 세로 그룹의 이전 탭으로 전환",
+  "verticalTabs.command.nextInGroupOnRelease": "세로 탭: 바로 가기 키를 모두 놓을 때 현재 세로 그룹의 다음 탭으로 전환",
+  "verticalTabs.command.previousAcrossGroupsOnRelease": "세로 탭: 바로 가기 키를 모두 놓을 때 세로 그룹 전체의 이전 탭으로 전환",
+  "verticalTabs.command.nextAcrossGroupsOnRelease": "세로 탭: 바로 가기 키를 모두 놓을 때 세로 그룹 전체의 다음 탭으로 전환",
   "verticalTabs.command.saveWorkset": "세로 탭: 작업 집합 저장",
   "verticalTabs.command.loadWorkset": "세로 탭: 작업 집합 불러오기",
   "verticalTabs.command.manageWorksets": "세로 탭: 작업 집합 관리"

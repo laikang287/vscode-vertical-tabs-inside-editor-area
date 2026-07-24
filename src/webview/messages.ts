@@ -35,6 +35,8 @@ export type NativeContextMenuEntry =
   | { readonly kind: 'submenu'; readonly label: string; readonly entries: readonly NativeContextMenuEntry[] };
 export type WebviewMessage =
   | { readonly type: 'ready'; readonly collapsedGroupKeys?: readonly string[] } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
+  | { readonly type: 'shortcutReleaseComplete'; readonly sessionId: string }
+  | { readonly type: 'shortcutReleaseCancel'; readonly sessionId: string; readonly reason: ShortcutReleaseCancelReason }
   | { readonly type: 'selectionChanged'; readonly targets: readonly TabTarget[] }
   | { readonly type: 'renderAck'; readonly revision: number }
   | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
@@ -66,7 +68,10 @@ export type ExtensionMessage =
   | { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot }
   | { readonly type: 'nativeTabMenu'; readonly requestId: string; readonly entries: readonly NativeContextMenuEntry[] }
   | { readonly type: 'previewTabNavigation'; readonly target: TabTarget }
+  | { readonly type: 'armShortcutReleaseCapture'; readonly sessionId: string; readonly primaryKey: 'Tab' }
+  | { readonly type: 'cancelShortcutReleaseCapture'; readonly sessionId: string }
   | { readonly type: 'clearTabNavigationPreview' };
+export type ShortcutReleaseCancelReason = 'escape' | 'blur' | 'pointer';
 const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
@@ -75,6 +80,12 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
     return { type: 'ready', ...(value.collapsedGroupKeys === undefined ? {} : { collapsedGroupKeys: value.collapsedGroupKeys }) };
   }
   if (value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll' || value.type === 'requestCreateGroup' || value.type === 'manageWorksets') return { type: value.type };
+  if (value.type === 'shortcutReleaseComplete' && isShortcutReleaseSessionId(value.sessionId)) {
+    return { type: 'shortcutReleaseComplete', sessionId: value.sessionId };
+  }
+  if (value.type === 'shortcutReleaseCancel' && isShortcutReleaseSessionId(value.sessionId) && isShortcutReleaseCancelReason(value.reason)) {
+    return { type: 'shortcutReleaseCancel', sessionId: value.sessionId, reason: value.reason };
+  }
   if (value.type === 'selectionChanged' && isTabTargetArray(value.targets)) return { type: 'selectionChanged', targets: value.targets };
   if (value.type === 'renderAck' && isNonNegativeInteger(value.revision)) return { type: 'renderAck', revision: value.revision };
   if (value.type === 'webviewLog' && isWebviewLogLevel(value.level) && isLogMessage(value.message) && (value.details === undefined || isLogDetails(value.details))) {
@@ -120,6 +131,8 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
 function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
 function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
+function isShortcutReleaseCancelReason(value: unknown): value is ShortcutReleaseCancelReason { return value === 'escape' || value === 'blur' || value === 'pointer'; }
+function isShortcutReleaseSessionId(value: unknown): value is string { return typeof value === 'string' && /^shortcut-release-[1-9][0-9]{0,15}$/.test(value); }
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }

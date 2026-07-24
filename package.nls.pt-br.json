@@ -3,6 +3,10 @@
   "verticalTabs.command.close": "Ocultar abas verticais",
   "verticalTabs.launcher.show": "[Mostrar](command:verticalTabs.open)",
   "verticalTabs.launcher.hide": "[Ocultar](command:verticalTabs.close)",
+  "verticalTabs.command.previousInGroupOnRelease": "Abas verticais: alternar para a aba anterior no grupo vertical atual ao soltar o atalho",
+  "verticalTabs.command.nextInGroupOnRelease": "Abas verticais: alternar para a próxima aba no grupo vertical atual ao soltar o atalho",
+  "verticalTabs.command.previousAcrossGroupsOnRelease": "Abas verticais: alternar para a aba anterior entre grupos verticais ao soltar o atalho",
+  "verticalTabs.command.nextAcrossGroupsOnRelease": "Abas verticais: alternar para a próxima aba entre grupos verticais ao soltar o atalho",
   "verticalTabs.command.saveWorkset": "Abas verticais: salvar conjunto de trabalho",
   "verticalTabs.command.loadWorkset": "Abas verticais: carregar conjunto de trabalho",
   "verticalTabs.command.manageWorksets": "Abas verticais: gerenciar conjuntos de trabalho"
