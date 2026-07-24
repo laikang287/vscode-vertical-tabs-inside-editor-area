@@ -56,7 +56,10 @@ export type WebviewMessage =
   | { readonly type: 'reorderManualGroup'; readonly groupId: string; readonly beforeGroupId?: string }
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
-export type ExtensionMessage = { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot };
+export type ExtensionMessage =
+  | { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot }
+  | { readonly type: 'previewTabNavigation'; readonly target: TabTarget }
+  | { readonly type: 'clearTabNavigationPreview' };
 const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
