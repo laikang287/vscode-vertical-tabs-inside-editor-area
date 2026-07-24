@@ -23,6 +23,8 @@ const ko: LocaleStrings = {
   pinGroup: '그룹 고정',
   unpinGroup: '그룹 고정 해제',
   cannotPinVscodeGroup: 'VS Code 그룹을 따를 때 그룹을 고정할 수 없습니다',
+  moveRequiresManualSort: '탭을 위아래로 이동하기 전에 정렬을 수동으로 전환하세요.',
+  cannotMoveBetweenFileTypeGroups: '파일 형식 그룹 간에는 탭을 이동할 수 없습니다.',
   rename: '이름 바꾸기',
   renameGroup: '그룹 이름 바꾸기',
   groupName: '그룹 이름',

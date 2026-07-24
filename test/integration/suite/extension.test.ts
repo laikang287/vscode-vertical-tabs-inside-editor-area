@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -395,6 +396,62 @@ suite('Vertical Tabs extension', () => {
     await vscode.commands.executeCommand('verticalTabs.moveToPreviousGroup');
     await waitFor(() => destinationDocumentTab(documents[1])?.group === sourceGroup);
     assert.equal(textTabUris(sourceGroup).at(-1), documents[1].uri.toString());
+  });
+
+  test('switches tabs by vertical sorted order rather than native horizontal order', async function () {
+    this.timeout(20_000);
+    const configuration = vscode.workspace.getConfiguration('verticalTabs');
+    const originalRememberState = configuration.inspect<boolean>('rememberState')?.globalValue;
+    const originalGroupMode = configuration.inspect<string>('defaultGroupMode')?.globalValue;
+    const originalSortMode = configuration.inspect<string>('defaultSortMode')?.globalValue;
+    const tempDirectory = vscode.Uri.file(path.join(os.tmpdir(), `vertical-tabs-command-order-${Date.now()}`));
+    const uris = ['c.ts', 'b.ts', 'a.ts'].map((name) => vscode.Uri.joinPath(tempDirectory, name));
+
+    try {
+      await vscode.commands.executeCommand('verticalTabs.close');
+      await waitFor(() => verticalTabs().length === 0);
+      await closeNonVerticalTabs();
+      await configuration.update('rememberState', false, vscode.ConfigurationTarget.Global);
+      await configuration.update('defaultGroupMode', 'vscode', vscode.ConfigurationTarget.Global);
+      await configuration.update('defaultSortMode', 'nameAsc', vscode.ConfigurationTarget.Global);
+
+      await vscode.workspace.fs.createDirectory(tempDirectory);
+      for (const uri of uris) {
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(uri.path, 'utf8'));
+      }
+      const documents = await Promise.all(uris.map((uri) => vscode.workspace.openTextDocument(uri)));
+      for (const document of documents) {
+        await vscode.window.showTextDocument(document, { preserveFocus: false, preview: false });
+      }
+
+      await vscode.commands.executeCommand('verticalTabs.open');
+      await waitFor(() => verticalTabs().length === 1);
+      await vscode.window.showTextDocument(documents[1], { preserveFocus: false });
+      await waitFor(() => activeTextDocumentUri() === uris[1]!.toString());
+
+      // Native order is c, b, a while the vertical name order is a, b, c.
+      await vscode.commands.executeCommand('verticalTabs.nextInGroup');
+      await waitFor(() => activeTextDocumentUri() === uris[0]!.toString());
+      await vscode.commands.executeCommand('verticalTabs.previousInGroup');
+      await waitFor(() => activeTextDocumentUri() === uris[1]!.toString());
+    } finally {
+      const temporaryTabs = nonVerticalTabs()
+        .filter(({ tab }) => {
+          const input = tab.input;
+          return input instanceof vscode.TabInputText && uris.some((uri) => uri.toString() === input.uri.toString());
+        })
+        .map(({ tab }) => tab);
+      if (temporaryTabs.length > 0) await vscode.window.tabGroups.close(temporaryTabs, true);
+      try {
+        await vscode.workspace.fs.delete(tempDirectory, { recursive: true, useTrash: false });
+      } catch {
+        // A failed assertion can leave the temporary directory already removed.
+      }
+      await vscode.commands.executeCommand('verticalTabs.close');
+      await configuration.update('defaultGroupMode', originalGroupMode, vscode.ConfigurationTarget.Global);
+      await configuration.update('defaultSortMode', originalSortMode, vscode.ConfigurationTarget.Global);
+      await configuration.update('rememberState', originalRememberState, vscode.ConfigurationTarget.Global);
+    }
   });
 
   test('activates existing built-in webview tabs without duplicating them', async function () {

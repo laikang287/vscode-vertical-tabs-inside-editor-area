@@ -23,6 +23,8 @@ const zhCn: LocaleStrings = {
   pinGroup: '固定分组',
   unpinGroup: '取消固定分组',
   cannotPinVscodeGroup: '跟随 VS Code 分组时不能固定分组',
+  moveRequiresManualSort: '请先将排序方式切换为“手动排序”，再向上或向下移动标签。',
+  cannotMoveBetweenFileTypeGroups: '不能在不同文件类型分组之间移动标签。',
   rename: '重命名',
   renameGroup: '重命名分组',
   groupName: '分组名称',

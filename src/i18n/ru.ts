@@ -23,6 +23,8 @@ const ru: LocaleStrings = {
   pinGroup: 'Закрепить группу',
   unpinGroup: 'Открепить группу',
   cannotPinVscodeGroup: 'Нельзя закрепить группу при следовании группам VS Code',
+  moveRequiresManualSort: 'Перед перемещением вкладок вверх или вниз переключитесь на ручную сортировку.',
+  cannotMoveBetweenFileTypeGroups: 'Вкладки нельзя перемещать между группами типов файлов.',
   rename: 'Переименовать',
   renameGroup: 'Переименовать группу',
   groupName: 'Имя группы',

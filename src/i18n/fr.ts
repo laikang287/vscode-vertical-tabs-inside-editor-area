@@ -23,6 +23,8 @@ const fr: LocaleStrings = {
   pinGroup: 'Épingler le groupe',
   unpinGroup: 'Désépingler le groupe',
   cannotPinVscodeGroup: 'Impossible d\'épingler le groupe en suivant les groupes VS Code',
+  moveRequiresManualSort: 'Passez au tri manuel avant de déplacer les onglets vers le haut ou le bas.',
+  cannotMoveBetweenFileTypeGroups: 'Les onglets ne peuvent pas être déplacés entre les groupes de types de fichiers.',
   rename: 'Renommer',
   renameGroup: 'Renommer le groupe',
   groupName: 'Nom du groupe',

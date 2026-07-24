@@ -23,6 +23,8 @@ const de: LocaleStrings = {
   pinGroup: 'Gruppe anheften',
   unpinGroup: 'Gruppe lösen',
   cannotPinVscodeGroup: 'Gruppe kann nicht angeheftet werden, wenn VS Code-Gruppen gefolgt wird',
+  moveRequiresManualSort: 'Wechseln Sie vor dem Verschieben von Tabs nach oben oder unten zur manuellen Sortierung.',
+  cannotMoveBetweenFileTypeGroups: 'Tabs können nicht zwischen Dateitypgruppen verschoben werden.',
   rename: 'Umbenennen',
   renameGroup: 'Gruppe umbenennen',
   groupName: 'Gruppenname',

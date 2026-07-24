@@ -23,6 +23,8 @@ const ptBr: LocaleStrings = {
   pinGroup: 'Fixar grupo',
   unpinGroup: 'Desafixar grupo',
   cannotPinVscodeGroup: 'Não é possível fixar grupo ao seguir grupos do VS Code',
+  moveRequiresManualSort: 'Altere para ordenação manual antes de mover abas para cima ou para baixo.',
+  cannotMoveBetweenFileTypeGroups: 'As abas não podem ser movidas entre grupos de tipos de arquivo.',
   rename: 'Renomear',
   renameGroup: 'Renomear grupo',
   groupName: 'Nome do grupo',

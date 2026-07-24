@@ -23,6 +23,8 @@ const es: LocaleStrings = {
   pinGroup: 'Fijar grupo',
   unpinGroup: 'Desfijar grupo',
   cannotPinVscodeGroup: 'No se puede fijar grupo al seguir grupos de VS Code',
+  moveRequiresManualSort: 'Cambie a ordenación manual antes de mover pestañas hacia arriba o abajo.',
+  cannotMoveBetweenFileTypeGroups: 'Las pestañas no se pueden mover entre grupos de tipos de archivo.',
   rename: 'Renombrar',
   renameGroup: 'Renombrar grupo',
   groupName: 'Nombre del grupo',
