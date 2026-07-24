@@ -8,7 +8,7 @@ import type {
   TabTargetIdentity,
   TabActivationKind,
   TabInputKind,
-  TabVisualIcon,
+  TabResourceStatus,
   ToolbarPosition,
   VerticalTabDisplayGroup,
   VerticalTabItem,
@@ -23,8 +23,7 @@ export interface SnapshotSourceTab {
   readonly isPinned: boolean;
   readonly isPreview: boolean;
   readonly inputKind: TabInputKind;
-  readonly languageId?: string;
-  readonly icon?: TabVisualIcon;
+  readonly resourceStatus?: TabResourceStatus;
   readonly path?: string;
   readonly directoryName?: string;
   readonly relativePath?: string;
@@ -90,8 +89,7 @@ export function buildSnapshot(
       groupId: tab.manualGroupId,
       isFile: isFileTab(tab),
       inputKind: tab.inputKind,
-      languageId: tab.languageId,
-      icon: tab.icon ?? fallbackIcon(tab.inputKind),
+      resourceStatus: tab.resourceStatus,
       resourcePath: tab.path,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
@@ -489,15 +487,6 @@ function activationKind(tab: SnapshotSourceTab): TabActivationKind {
     return 'bestEffort';
   }
   return 'unsupported';
-}
-
-function fallbackIcon(inputKind: TabInputKind): TabVisualIcon {
-  if (inputKind === 'diff') return { kind: 'codicon', name: 'diff' };
-  if (inputKind === 'notebook' || inputKind === 'notebookDiff') return { kind: 'codicon', name: 'notebook' };
-  if (inputKind === 'terminal') return { kind: 'codicon', name: 'terminal' };
-  if (inputKind === 'webview') return { kind: 'codicon', name: 'preview' };
-  if (inputKind === 'unknown') return { kind: 'codicon', name: 'symbol-misc' };
-  return { kind: 'codicon', name: 'file' };
 }
 
 function isFileTab(tab: SnapshotSourceTab): boolean {

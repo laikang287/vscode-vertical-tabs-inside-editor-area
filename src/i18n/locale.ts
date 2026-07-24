@@ -26,7 +26,12 @@ export interface LocaleStrings {
   readonly groupName: string;
   readonly newGroup: string;
   readonly newGroupOnlyManual: string;
-  readonly previewSuffix: string;
+  readonly previewTab: string;
+  readonly pinnedTab: string;
+  readonly readonlyResource: string;
+  readonly resourceMissing: string;
+  readonly resourceNoPermissions: string;
+  readonly resourceUnavailable: string;
   readonly bestEffortActivation: string;
   readonly unsupportedActivation: string;
   readonly hideToolbarControls: string;

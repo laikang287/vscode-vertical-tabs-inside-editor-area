@@ -1,11 +1,8 @@
 ﻿:root {
   --vertical-tab-action-size: 22px;
-  --vertical-tab-dirty-width: 8px;
-  --vertical-tab-icon-size: 16px;
   --vertical-tab-inline-padding: 6px;
-  --vertical-tab-item-gap: 2px;
-  --vertical-tab-pin-slot-width: 12px;
-  --vertical-tab-tree-indent: 12px;
+  --vertical-tab-status-gap: 2px;
+  --vertical-tab-status-size: 14px;
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
@@ -282,7 +279,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .group-toggle { color: inherit; flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
 .group-actions, .tab-actions { align-items: center; display: flex; justify-content: center; }
 .group-actions { flex: 0 0 23px; padding-right: 3px; }
-.tab-actions { flex: 0 0 auto; min-width: var(--vertical-tab-action-size); padding-right: 0; }
+.tab-actions { flex: 0 0 auto; min-width: 0; padding-right: 0; }
 .group-action { color: inherit; }
 .group-header .tab-action { height: 20px; line-height: 20px; min-width: 20px; padding: 0; }
 .group-name {
@@ -324,7 +321,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   z-index: 20;
 }
 .tab-drop-indicator[hidden] { display: none; }
-.tab-row.tree-level-1 { padding-left: var(--vertical-tab-tree-indent); }
 .tab-row:hover {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-list-hoverForeground, inherit);
@@ -360,24 +356,12 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: var(--vertical-tab-item-gap);
   padding: 2px 0 2px var(--vertical-tab-inline-padding);
   text-align: left;
 }
 .tab-row.has-description .tab-main { padding-bottom: 3px; padding-top: 3px; }
 .tab-main[aria-disabled="true"] { cursor: not-allowed; }
 .tab-row:hover .tab-main { background: transparent; }
-.tab-icon {
-  flex: 0 0 var(--vertical-tab-icon-size);
-  height: 18px;
-  line-height: 18px;
-  margin: 0;
-  text-align: center;
-  width: var(--vertical-tab-icon-size);
-}
-.tab-seti-icon { font-family: "seti"; font-size: 150%; }
-.tab-product-icon { color: var(--vscode-icon-foreground, inherit); font-size: 16px; }
-.tab-pin-slot { flex: 0 0 var(--vertical-tab-pin-slot-width); font-size: 12px; line-height: 18px; text-align: center; }
 .tab-text {
   display: flex;
   flex: 1;
@@ -387,24 +371,38 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-primary {
   align-items: center;
   display: flex;
-  gap: 5px;
   line-height: 18px;
   min-width: 0;
 }
 .tab-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tab-row.is-preview .tab-label { font-style: italic; }
-.tab-status { flex: 0 0 auto; font-size: 12px; opacity: .9; }
-.tab-dirty-indicator {
+.tab-status-list {
   align-items: center;
-  color: var(--vscode-tab-unfocusedActiveModifiedBorder, var(--vscode-tab-activeModifiedBorder, currentColor));
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--vertical-tab-status-gap);
+}
+.tab-status-list:empty { display: none; }
+.tab-status {
+  align-items: center;
   display: inline-flex;
-  flex: 0 0 var(--vertical-tab-dirty-width);
-  font-size: 10px;
+  flex: 0 0 var(--vertical-tab-status-size);
+  font-size: 12px;
+  height: 20px;
   justify-content: center;
   line-height: 20px;
-  pointer-events: none;
+  opacity: .9;
   user-select: none;
+  width: var(--vertical-tab-status-size);
 }
+.tab-status-dirty {
+  color: var(--vscode-tab-unfocusedActiveModifiedBorder, var(--vscode-tab-activeModifiedBorder, currentColor));
+  font-size: 10px;
+}
+.tab-status-missing,
+.tab-status-no-permissions { color: var(--vscode-errorForeground); }
+.tab-status-resource-unavailable,
+.tab-status-navigation-unavailable { color: var(--vscode-notificationsWarningIcon-foreground, var(--vscode-editorWarning-foreground)); }
 .tab-description {
   color: var(--vscode-descriptionForeground);
   font-size: 10px;
@@ -416,10 +414,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 }
 .is-active .tab-description,
 .is-focused .tab-description { color: inherit; opacity: .68; }
-.tab-row.is-focused .tab-product-icon {
-  color: var(--vscode-list-activeSelectionIconForeground, inherit);
-}
-
 .tab-actions { opacity: 1; }
 .tab-action {
   font-size: 16px;
@@ -427,6 +421,13 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   line-height: var(--vertical-tab-action-size);
   min-width: var(--vertical-tab-action-size);
   padding: 0;
+}
+.tab-close-action { display: none; }
+.tab-row:hover .tab-close-action,
+.tab-row:focus-within .tab-close-action {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
 }
 
 body.vscode-high-contrast .tab-row.is-focused,

@@ -74,6 +74,5 @@ function tab(label: string, groupIndex: number, tabIndex: number): VerticalTabIt
     isActivatable: true,
     isFile: true,
     inputKind: 'text',
-    icon: { kind: 'codicon', name: 'file' },
   };
 }

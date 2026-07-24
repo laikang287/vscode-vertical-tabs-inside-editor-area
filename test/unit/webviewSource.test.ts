@@ -62,57 +62,76 @@ test('group names preserve their original capitalization', () => {
   assert.doesNotMatch(style, /\.group-name \{[\s\S]*?text-transform: uppercase;[\s\S]*?\}/);
 });
 
-test('tab close buttons are always visible and context menu labels use the requested short wording', () => {
+test('tab close buttons reclaim their width until the row is hovered or keyboard-focused', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(style, /\.tab-actions \{ opacity: 1; \}/);
-  assert.doesNotMatch(style, /\.tab-actions[^\n]*opacity:\s*0/);
+  assert.match(source, /result\.className = 'tab-action tab-close-action'/);
+  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: 0; padding-right: 0; \}/);
+  assert.match(style, /\.tab-close-action \{ display: none; \}/);
+  assert.match(style, /\.tab-row:hover \.tab-close-action,[\s\S]+\.tab-row:focus-within \.tab-close-action \{[\s\S]+display: inline-flex;/);
   assert.match(source, /actionButton\(i18n\.closeOthers, i18n\.closeOthers, 'closeOthers'/);
   assert.match(source, /actionButton\(i18n\.closeBelow, i18n\.closeBelow, 'closeBelow'/);
   assert.doesNotMatch(source, /关闭其它标签|关闭下侧标签/);
 });
 
-test('pinned tab icons render in a reserved left slot so peer labels stay aligned', () => {
+test('tab labels have no leading icon slot and pinned state renders on the right', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const messages = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(source, /pin\.className = 'tab-pin-slot'/);
-  assert.match(source, /if \(tab\.isPinned\) pin\.append\(codicon\('pinned'\)\)/);
-  assert.match(source, /activate\.append\(icon, pin, text\)/);
-  assert.doesNotMatch(source, /tab\.label\}\$\{tab\.isPinned \? ' 📌' : ''\}/);
-  assert.match(style, /\.tab-pin-slot \{ flex: 0 0 var\(--vertical-tab-pin-slot-width\);[\s\S]+text-align: center; \}/);
+  assert.match(source, /activate\.append\(text\)/);
+  assert.match(source, /\{ kind: 'pinned', icon: 'pinned', label: i18n\.pinnedTab \}/);
+  assert.doesNotMatch(source, /createTabIcon|tab-pin-slot|activate\.append\(icon/);
+  assert.doesNotMatch(messages, /TabVisualIcon|ProductIconName|readonly icon:/);
+  assert.doesNotMatch(style, /\.tab-(?:icon|seti-icon|product-icon|pin-slot)/);
   assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column;[\s\S]+min-width: 0;[\s\S]+?\}/);
 });
 
-test('dirty tabs render an accessible status indicator immediately before the close button', () => {
+test('tab statuses render in a stable accessible list immediately before the close button', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.doesNotMatch(source, /tab\.isDirty \? '● ' : ''/);
-  assert.match(source, /if \(tab\.isDirty\) \{[\s\S]+dirty\.className = 'tab-dirty-indicator'/);
-  assert.match(source, /dirty\.title = i18n\.unsavedChanges/);
-  assert.match(source, /dirty\.setAttribute\('aria-label', i18n\.unsavedChanges\)/);
-  assert.match(source, /actions\.append\(dirty\);[\s\S]+actions\.append\(closeSelectionButton\(tab\)\)/);
-  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: var\(--vertical-tab-action-size\); padding-right: 0; \}/);
-  assert.match(style, /\.tab-dirty-indicator \{[\s\S]+pointer-events: none;/);
+  assert.match(source, /statuses\.className = 'tab-status-list'/);
+  assert.match(source, /statusIcon\.classList\.add\('tab-status', `tab-status-\$\{status\.kind\}`\)/);
+  assert.match(source, /statusIcon\.title = status\.label/);
+  assert.match(source, /actions\.append\(statuses, closeSelectionButton\(tab\)\)/);
+  assert.match(source, /tabAccessibleLabel\(tab\)[\s\S]+tabStatusLabels\(tab\)/);
+  assert.match(source, /\{ kind: 'dirty', icon: 'circle-filled', label: i18n\.unsavedChanges \}/);
+  const descriptors = source.match(/function tabStatusDescriptors[\s\S]+?return statuses;\s*}/)?.[0] ?? '';
+  const orderedStates = [
+    'tab.isPreview',
+    'tab.isPinned',
+    "tab.resourceStatus === 'readonly'",
+    'tab.isDirty',
+    "tab.resourceStatus === 'missing'",
+    "tab.resourceStatus === 'noPermissions'",
+    "tab.resourceStatus === 'unavailable'",
+    '!tab.isActivatable',
+  ];
+  let lastIndex = -1;
+  for (const state of orderedStates) {
+    const index = descriptors.indexOf(state);
+    assert.ok(index > lastIndex, `${state} should render after the preceding status`);
+    lastIndex = index;
+  }
+  assert.match(style, /\.tab-status-list \{[\s\S]+gap: var\(--vertical-tab-status-gap\)/);
+  assert.match(style, /\.tab-status \{[\s\S]+user-select: none;/);
+  assert.doesNotMatch(style, /\.tab-status \{[^}]+pointer-events: none;/);
+  assert.match(source, /function codicon[\s\S]+icon\.setAttribute\('aria-hidden', 'true'\)/);
 });
 
 test('compact tab spacing prioritizes label and path width without shrinking the close target', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(style, /--vertical-tab-action-size: 22px;/);
-  assert.match(style, /--vertical-tab-dirty-width: 8px;/);
-  assert.match(style, /--vertical-tab-icon-size: 16px;/);
+  assert.match(style, /--vertical-tab-status-size: 14px;/);
+  assert.match(style, /--vertical-tab-status-gap: 2px;/);
   assert.match(style, /--vertical-tab-inline-padding: 6px;/);
-  assert.match(style, /--vertical-tab-item-gap: 2px;/);
-  assert.match(style, /--vertical-tab-pin-slot-width: 12px;/);
-  assert.match(style, /--vertical-tab-tree-indent: 12px;/);
-  assert.match(style, /\.tab-row\.tree-level-1 \{ padding-left: var\(--vertical-tab-tree-indent\); \}/);
-  assert.match(style, /\.tab-main \{[\s\S]+gap: var\(--vertical-tab-item-gap\);[\s\S]+padding: 2px 0 2px var\(--vertical-tab-inline-padding\);/);
-  assert.match(style, /\.tab-icon \{[\s\S]+flex: 0 0 var\(--vertical-tab-icon-size\);[\s\S]+margin: 0;[\s\S]+width: var\(--vertical-tab-icon-size\);/);
+  assert.doesNotMatch(style, /vertical-tab-tree-indent|\.tab-row\.tree-level-1/);
+  assert.match(style, /\.tab-main \{[\s\S]+padding: 2px 0 2px var\(--vertical-tab-inline-padding\);/);
   assert.match(style, /\.tab-label \{ flex: 1 1 auto; min-width: 0;[\s\S]+text-overflow: ellipsis;/);
-  assert.match(style, /\.tab-dirty-indicator \{[\s\S]+flex: 0 0 var\(--vertical-tab-dirty-width\);/);
   assert.match(style, /\.tab-action \{[\s\S]+height: var\(--vertical-tab-action-size\);[\s\S]+min-width: var\(--vertical-tab-action-size\);/);
 });
 
@@ -328,23 +347,23 @@ test('MRU sorting tracks verified activations across editor groups without rewri
   assert.match(panelSource, /if \(this\.sortMode === 'mru'\) \{[\s\S]+最近使用排序不回写 VS Code 原生标签顺序/);
 });
 
-test('webview renders Seti file icons and Codicon actions in a compact two-line layout', () => {
+test('webview renders status Codicons and a compact icon-free two-line label layout', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
-  assert.match(source, /function createTabIcon\(tab: VerticalTabItem\): HTMLSpanElement/);
-  assert.match(source, /icon\.className = 'tab-icon tab-seti-icon'/);
   assert.match(source, /const result = iconButton\('close', i18n\.closeTab\)/);
-  assert.match(source, /codicon\('pinned'\)/);
+  assert.match(source, /\{ kind: 'pinned', icon: 'pinned', label: i18n\.pinnedTab \}/);
   assert.match(source, /tab\.isPreview \? 'is-preview' : ''/);
-  assert.match(source, /activate\.append\(icon, pin, text\)/);
+  assert.match(source, /activate\.append\(text\)/);
   assert.match(source, /activate\.setAttribute\('aria-label', tabAccessibleLabel\(tab\)\)/);
   assert.match(source, /icon\.setAttribute\('aria-hidden', 'true'\)/);
   assert.doesNotMatch(source, /button\('×'|textContent = '📌'|button\(collapsed \? '▶' : '▼'/);
   assert.match(panelSource, /codicon-search/);
   assert.match(panelSource, /codicon-settings-gear/);
-  assert.match(style, /\.tab-seti-icon \{ font-family: "seti"; font-size: 150%; \}/);
+  assert.doesNotMatch(source, /Seti|createTabIcon|tab-icon/);
+  assert.doesNotMatch(panelSource, /Seti|seti/);
+  assert.doesNotMatch(style, /tab-seti-icon|tab-product-icon|tab-icon/);
   assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column/);
   assert.match(style, /\.tab-row\.has-description \.tab-main/);
   assert.match(style, /\.tab-row\.is-preview \.tab-label \{ font-style: italic; \}/);
@@ -432,11 +451,30 @@ test('webview reports startup, render, and script failures to the extension log'
   assert.match(source, /等待标签快照超时/);
 });
 
-test('extension snapshot mtime lookup has a timeout', () => {
+test('extension resource metadata lookup has a timeout without treating timeout as an error state', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /INPUT_MTIME_TIMEOUT_MS = 250/);
-  assert.match(source, /withTimeout\(vscode\.workspace\.fs\.stat\(uri\), INPUT_MTIME_TIMEOUT_MS\)/);
+  assert.match(source, /INPUT_METADATA_TIMEOUT_MS = 250/);
+  assert.match(source, /withTimeout\(vscode\.workspace\.fs\.stat\(uri\), INPUT_METADATA_TIMEOUT_MS\)/);
+  assert.match(source, /errorCode = fileSystemErrorCode\(error\)/);
+  assert.match(source, /classifyTabResourceStatus\(\{[\s\S]+errorCode,/);
+});
+
+test('extension deduplicates resource metadata, uses the modified diff side, and refreshes watched resources', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(source, /const resourceMetadataCache = new Map<string, Promise<TabResourceMetadata>>/);
+  assert.match(source, /resolveCachedResourceMetadata\(cache, key, \(\) => this\.readResourceMetadata\(uri\)\)/);
+  assert.match(source, /input instanceof vscode\.TabInputTextDiff \|\| input instanceof vscode\.TabInputNotebookDiff[\s\S]+input\.modified/);
+  assert.match(source, /vscode\.workspace\.fs\.isWritableFileSystem\(uri\.scheme\)/);
+  assert.match(source, /stat\.permissions & vscode\.FilePermission\.Readonly/);
+  assert.match(source, /new vscode\.RelativePattern\(wanted\.parent, '\*'\)/);
+  assert.match(source, /watcher\.onDidCreate\(shouldRefresh\)/);
+  assert.match(source, /watcher\.onDidChange\(shouldRefresh\)/);
+  assert.match(source, /watcher\.onDidDelete\(shouldRefresh\)/);
+  assert.match(source, /event\.affectsConfiguration\('files\.readonlyInclude'\)/);
+  assert.match(source, /event\.affectsConfiguration\('files\.readonlyExclude'\)/);
+  assert.match(source, /event\.affectsConfiguration\('files\.readonlyFromPermissions'\)/);
 });
 
 test('extension registers the webview message listener before setting html and keeps an initial host refresh fallback', () => {
@@ -447,7 +485,7 @@ test('extension registers the webview message listener before setting html and k
   assert.match(source, /reason: 'hostInitialFallback', ensureEmptyLayout: false/);
   assert.match(source, /SNAPSHOT_REFRESH_TIMEOUT_MS = 2000/);
   assert.match(source, /刷新垂直标签快照失败，将发送上一份可用快照避免 Webview 停留在加载态/);
-  assert.match(source, /private async toSnapshotTabSafe\(tab: vscode\.Tab\): Promise<SnapshotSourceTab>/);
+  assert.match(source, /private async toSnapshotTabSafe\([\s\S]+resourceMetadataCache: Map<string, Promise<TabResourceMetadata>>/);
 });
 
 test('extension restores the prepared rail layout without a fixed visible delay', () => {
@@ -561,7 +599,7 @@ test('extension inlines styles and restricts icon fonts to local Webview resourc
   assert.match(source, /private readWebviewStyle\(\): string/);
   assert.match(source, /media', 'vertical-tabs\.css'/);
   assert.match(source, /fs\.readFileSync\(stylePath, 'utf8'\)/);
-  assert.match(source, /已内联读取 Webview 样式与图标字体/);
+  assert.match(source, /已内联读取 Webview 样式与 Codicon 字体/);
   assert.match(source, /读取 Webview 样式失败，将使用最小降级样式/);
   assert.match(source, /Webview 样式加载失败，请查看 Vertical Tabs 输出日志。/);
   assert.match(source, /font-src \$\{this\.panel\.webview\.cspSource\}/);
@@ -571,9 +609,7 @@ test('extension inlines styles and restricts icon fonts to local Webview resourc
   assert.doesNotMatch(source, /style-src \$\{cspSource\}/);
   assert.match(source, /node_modules\/@vscode\/codicons|out', 'codicon\.css'/);
   assert.match(source, /out', 'codicon\.ttf'/);
-  assert.match(source, /webview\.asWebviewUri\(setiFontPath\)/);
-  assert.match(source, /vscode\.env\.appRoot\), 'extensions', 'theme-seti', 'icons'/);
-  assert.match(source, /localResourceRoots\.push\(setiRoot\)/);
+  assert.doesNotMatch(source, /setiFontPath|theme-seti|setiRoot/);
   assert.match(source, /this\.panel\.webview\.options = createWebviewOptions\(context\)/);
 });
 
@@ -594,7 +630,8 @@ test('webview enables best-effort activation with a distinct tooltip', () => {
   assert.match(source, /if \(!tab\.isActivatable\) return/);
   assert.match(source, /function activationTitle\(tab: VerticalTabItem\): string/);
   assert.match(source, /tab\.activationKind === 'bestEffort'/);
-  assert.match(source, /使用 VS Code 内置导航命令尝试跳转/);
+  assert.match(source, /i18n\.bestEffortActivation/);
+  assert.match(source, /i18n\.unsupportedActivation/);
 });
 
 test('tab tree uses one roving tab stop and supports keyboard navigation and context menus', () => {
