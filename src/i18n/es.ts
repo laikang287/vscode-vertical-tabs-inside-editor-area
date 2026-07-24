@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const es: LocaleStrings = {
   emptyState: 'No hay pestañas de editor mostrables.',
+  verticalTabsStatusBarName: 'Pestañas verticales',
+  showVerticalTabs: 'Mostrar pestañas verticales',
+  hideVerticalTabs: 'Ocultar pestañas verticales',
   expand: 'Expandir',
   collapse: 'Contraer',
   expandGroup: 'Expandir grupo',

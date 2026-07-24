@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const de: LocaleStrings = {
   emptyState: 'Keine anzeigbaren Editor-Tabs.',
+  verticalTabsStatusBarName: 'Vertikale Tabs',
+  showVerticalTabs: 'Vertikale Tabs anzeigen',
+  hideVerticalTabs: 'Vertikale Tabs ausblenden',
   expand: 'Erweitern',
   collapse: 'Zuklappen',
   expandGroup: 'Gruppe erweitern',

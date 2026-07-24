@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const ru: LocaleStrings = {
   emptyState: 'Нет отображаемых вкладок редактора.',
+  verticalTabsStatusBarName: 'Вертикальные вкладки',
+  showVerticalTabs: 'Показать вертикальные вкладки',
+  hideVerticalTabs: 'Скрыть вертикальные вкладки',
   expand: 'Развернуть',
   collapse: 'Свернуть',
   expandGroup: 'Развернуть группу',

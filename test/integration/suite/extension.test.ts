@@ -312,7 +312,7 @@ suite('Vertical Tabs extension', () => {
         configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> };
         viewsContainers: { activitybar: Array<{ id: string }> };
         views: Record<string, Array<{ id: string; visibility?: string; initialSize?: number }>>;
-        menus: { 'view/title': Array<{ command: string; when: string }> };
+        menus?: { 'view/title'?: Array<{ command: string; when: string }> };
       };
     };
     assert.ok(manifest.activationEvents.includes('onStartupFinished'));
@@ -334,20 +334,13 @@ suite('Vertical Tabs extension', () => {
     assert.equal(launcher?.initialSize, 1);
     assert.deepEqual(
       manifest.contributes.commands.find((entry) => entry.command === 'verticalTabs.open'),
-      { command: 'verticalTabs.open', title: '%verticalTabs.command.open%', icon: '$(eye)' },
+      { command: 'verticalTabs.open', title: '%verticalTabs.command.open%' },
     );
     assert.deepEqual(
       manifest.contributes.commands.find((entry) => entry.command === 'verticalTabs.close'),
-      { command: 'verticalTabs.close', title: '%verticalTabs.command.close%', icon: '$(eye-closed)' },
+      { command: 'verticalTabs.close', title: '%verticalTabs.command.close%' },
     );
-    assert.ok(manifest.contributes.menus['view/title'].some((entry) => (
-      entry.command === 'verticalTabs.open'
-      && entry.when === 'view == verticalTabs.launcher && !verticalTabs.visible'
-    )));
-    assert.ok(manifest.contributes.menus['view/title'].some((entry) => (
-      entry.command === 'verticalTabs.close'
-      && entry.when === 'view == verticalTabs.launcher && verticalTabs.visible'
-    )));
+    assert.equal(manifest.contributes.menus?.['view/title'], undefined);
     const configurableCommands = [
       'verticalTabs.previousInGroup',
       'verticalTabs.nextInGroup',

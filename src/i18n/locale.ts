@@ -1,5 +1,8 @@
 export interface LocaleStrings {
   readonly emptyState: string;
+  readonly verticalTabsStatusBarName: string;
+  readonly showVerticalTabs: string;
+  readonly hideVerticalTabs: string;
   readonly expand: string;
   readonly collapse: string;
   readonly expandGroup: string;

@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-test('sidebar launcher stays compact and localizes show and hide actions in every supported language', () => {
+test('sidebar launcher stays compact and localizes fallback show and hide actions in every supported language', () => {
   const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
     contributes: {
       commands: Array<{ command: string; title: string; icon?: string }>;
       views: Record<string, Array<{ id: string; visibility?: string; initialSize?: number }>>;
       viewsWelcome: Array<{ view: string; when?: string; contents: string }>;
-      menus: { 'view/title': Array<{ command: string; when: string; group: string }> };
+      menus?: { 'view/title'?: Array<{ command: string; when: string; group: string }> };
     };
   };
   const launcher = manifest.contributes.views['vertical-tabs-activitybar']?.find((view) => view.id === 'verticalTabs.launcher');
@@ -21,12 +21,10 @@ test('sidebar launcher stays compact and localizes show and hide actions in ever
   assert.deepEqual(openCommand, {
     command: 'verticalTabs.open',
     title: '%verticalTabs.command.open%',
-    icon: '$(eye)',
   });
   assert.deepEqual(closeCommand, {
     command: 'verticalTabs.close',
     title: '%verticalTabs.command.close%',
-    icon: '$(eye-closed)',
   });
   assert.deepEqual(manifest.contributes.viewsWelcome, [
     {
@@ -40,18 +38,7 @@ test('sidebar launcher stays compact and localizes show and hide actions in ever
       contents: '%verticalTabs.launcher.hide%',
     },
   ]);
-  assert.deepEqual(manifest.contributes.menus['view/title'], [
-    {
-      command: 'verticalTabs.open',
-      when: 'view == verticalTabs.launcher && !verticalTabs.visible',
-      group: 'navigation@1',
-    },
-    {
-      command: 'verticalTabs.close',
-      when: 'view == verticalTabs.launcher && verticalTabs.visible',
-      group: 'navigation@1',
-    },
-  ]);
+  assert.equal(manifest.contributes.menus?.['view/title'], undefined);
 
   for (const locale of ['en', 'zh-cn', 'zh-tw', 'ja', 'ko', 'de', 'fr', 'es', 'pt-br', 'ru']) {
     const suffix = locale === 'en' ? '' : `.${locale}`;
@@ -61,6 +48,21 @@ test('sidebar launcher stays compact and localizes show and hide actions in ever
     assert.match(messages['verticalTabs.launcher.show'] ?? '', /^\[[^\]]+\]\(command:verticalTabs\.open\)$/);
     assert.match(messages['verticalTabs.launcher.hide'] ?? '', /^\[[^\]]+\]\(command:verticalTabs\.close\)$/);
   }
+});
+
+test('extension registers an always-visible status bar toggle and refreshes it with relevant state', () => {
+  const extensionSource = readFileSync(path.resolve(__dirname, '../../../src/extension.ts'), 'utf8');
+  const statusBarSource = readFileSync(path.resolve(__dirname, '../../../src/statusbar/VerticalTabsStatusBar.ts'), 'utf8');
+
+  assert.match(extensionSource, /const statusBar = new VerticalTabsStatusBar\(\)/);
+  assert.match(extensionSource, /context\.subscriptions\.push\([\s\S]*statusBar,/);
+  assert.match(statusBarSource, /createStatusBarItem\(/);
+  assert.match(statusBarSource, /vscode\.StatusBarAlignment\.Right/);
+  assert.match(statusBarSource, /this\.item\.command = 'verticalTabs\.toggle'/);
+  assert.match(statusBarSource, /VerticalTabsPanel\.onDidChangeVisibility\(\(\) => this\.refresh\(\)\)/);
+  assert.match(statusBarSource, /event\.affectsConfiguration\('verticalTabs\.position'\)/);
+  assert.match(statusBarSource, /event\.affectsConfiguration\('verticalTabs\.language'\)/);
+  assert.match(statusBarSource, /this\.item\.show\(\)/);
 });
 
 test('context menu close actions dismiss the menu after posting', () => {

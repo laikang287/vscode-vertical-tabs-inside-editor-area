@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const fr: LocaleStrings = {
   emptyState: 'Aucun onglet éditeur affichable.',
+  verticalTabsStatusBarName: 'Onglets verticaux',
+  showVerticalTabs: 'Afficher les onglets verticaux',
+  hideVerticalTabs: 'Masquer les onglets verticaux',
   expand: 'Développer',
   collapse: 'Réduire',
   expandGroup: 'Développer le groupe',

@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const ja: LocaleStrings = {
   emptyState: '表示可能なエディタータブはありません。',
+  verticalTabsStatusBarName: '垂直タブ',
+  showVerticalTabs: '垂直タブを表示',
+  hideVerticalTabs: '垂直タブを非表示',
   expand: '展開',
   collapse: '折りたたむ',
   expandGroup: 'グループを展開',

@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const ptBr: LocaleStrings = {
   emptyState: 'Nenhuma aba de editor exibível.',
+  verticalTabsStatusBarName: 'Abas verticais',
+  showVerticalTabs: 'Mostrar abas verticais',
+  hideVerticalTabs: 'Ocultar abas verticais',
   expand: 'Expandir',
   collapse: 'Recolher',
   expandGroup: 'Expandir grupo',

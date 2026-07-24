@@ -2,6 +2,9 @@ import type { LocaleStrings } from './locale';
 
 const zhCn: LocaleStrings = {
   emptyState: '没有可显示的编辑器标签。',
+  verticalTabsStatusBarName: '垂直标签页',
+  showVerticalTabs: '显示垂直标签页',
+  hideVerticalTabs: '隐藏垂直标签页',
   expand: '展开',
   collapse: '折叠',
   expandGroup: '展开分组',
