@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "Vertical Tabs Inside Editor Area",
   "description": "A vertical tab navigator locked inside the editor area. Shows all tabs across VS Code editor groups with grouping, pinning, drag-and-drop, sorting, and multi-language support.",
-  "version": "0.23.1",
+  "version": "0.23.3",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -43,14 +43,6 @@
         "title": "Vertical Tabs: Focus"
       },
       {
-        "command": "verticalTabs.previous",
-        "title": "Vertical Tabs: Previous Tab"
-      },
-      {
-        "command": "verticalTabs.next",
-        "title": "Vertical Tabs: Next Tab"
-      },
-      {
         "command": "verticalTabs.previousInGroup",
         "title": "%verticalTabs.command.previousInGroup%"
       },
@@ -65,22 +57,6 @@
       {
         "command": "verticalTabs.nextAcrossGroups",
         "title": "%verticalTabs.command.nextAcrossGroups%"
-      },
-      {
-        "command": "verticalTabs.previousInGroupOnRelease",
-        "title": "%verticalTabs.command.previousInGroupOnRelease%"
-      },
-      {
-        "command": "verticalTabs.nextInGroupOnRelease",
-        "title": "%verticalTabs.command.nextInGroupOnRelease%"
-      },
-      {
-        "command": "verticalTabs.previousAcrossGroupsOnRelease",
-        "title": "%verticalTabs.command.previousAcrossGroupsOnRelease%"
-      },
-      {
-        "command": "verticalTabs.nextAcrossGroupsOnRelease",
-        "title": "%verticalTabs.command.nextAcrossGroupsOnRelease%"
       },
       {
         "command": "verticalTabs.moveUpInGroup",
@@ -320,19 +296,19 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "verticalTabs.previousInGroupOnRelease",
+          "command": "verticalTabs.previousInGroup",
           "when": "false"
         },
         {
-          "command": "verticalTabs.nextInGroupOnRelease",
+          "command": "verticalTabs.nextInGroup",
           "when": "false"
         },
         {
-          "command": "verticalTabs.previousAcrossGroupsOnRelease",
+          "command": "verticalTabs.previousAcrossGroups",
           "when": "false"
         },
         {
-          "command": "verticalTabs.nextAcrossGroupsOnRelease",
+          "command": "verticalTabs.nextAcrossGroups",
           "when": "false"
         }
       ],

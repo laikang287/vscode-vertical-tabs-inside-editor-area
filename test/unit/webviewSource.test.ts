@@ -395,25 +395,25 @@ test('editor-area position setting supports live left and right placement with a
   assert.match(panelSource, /this\.railPosition === 'left'[\s\S]+newGroupRight[\s\S]+newGroupLeft/);
 });
 
-test('adjacent navigation reuses an open panel without stealing the active editor focus', () => {
+test('shortcut navigation reuses an open panel and waits for key release', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(
     panelSource,
-    /const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigate\(direction, scope\)/,
+    /static async navigateOnRelease[\s\S]+const instance = VerticalTabsPanel\.panels\.current \?\? await VerticalTabsPanel\.open\(context\);[\s\S]+await instance\?\.navigateOnRelease\(direction, scope\)/,
   );
 });
 
-test('shortcut navigation previews immediately and commits only the latest target after an idle delay', () => {
+test('shortcut navigation previews immediately and commits only after the validated release message', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const messagesSource = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
-  const navigateMethod = panelSource.match(/private async navigate\([\s\S]+?\n  \}\n\n  private async ensureShortcutNavigationSnapshot/)?.[0] ?? '';
 
-  assert.match(panelSource, /const SHORTCUT_NAVIGATION_COMMIT_DELAY_MS = 160/);
-  assert.match(navigateMethod, /this\.shortcutNavigation\.queue\(target\)/);
-  assert.doesNotMatch(navigateMethod, /this\.refresh\(/);
+  assert.doesNotMatch(panelSource, /SHORTCUT_NAVIGATION_COMMIT_DELAY_MS|DeferredTargetCommitter/);
+  assert.match(panelSource, /this\.postMessage\(\{ type: 'previewTabNavigation', target \}\)/);
+  assert.match(panelSource, /this\.postMessage\(\{ type: 'armShortcutReleaseCapture'/);
+  assert.match(panelSource, /completeShortcutReleaseNavigation/);
   assert.match(panelSource, /private async commitShortcutNavigation\(target: TabTarget\)/);
   assert.match(panelSource, /await this\.activateTab\(tab\);\s*await this\.refresh\(\{ reason: 'navigate' \}\)/);
   assert.match(messagesSource, /type: 'previewTabNavigation'/);

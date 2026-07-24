@@ -71,7 +71,7 @@ export type ExtensionMessage =
   | { readonly type: 'armShortcutReleaseCapture'; readonly sessionId: string; readonly primaryKey: 'Tab' }
   | { readonly type: 'cancelShortcutReleaseCapture'; readonly sessionId: string }
   | { readonly type: 'clearTabNavigationPreview' };
-export type ShortcutReleaseCancelReason = 'escape' | 'blur' | 'pointer';
+export type ShortcutReleaseCancelReason = 'escape' | 'pointer';
 const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
@@ -131,7 +131,7 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
 function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
 function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
-function isShortcutReleaseCancelReason(value: unknown): value is ShortcutReleaseCancelReason { return value === 'escape' || value === 'blur' || value === 'pointer'; }
+function isShortcutReleaseCancelReason(value: unknown): value is ShortcutReleaseCancelReason { return value === 'escape' || value === 'pointer'; }
 function isShortcutReleaseSessionId(value: unknown): value is string { return typeof value === 'string' && /^shortcut-release-[1-9][0-9]{0,15}$/.test(value); }
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }

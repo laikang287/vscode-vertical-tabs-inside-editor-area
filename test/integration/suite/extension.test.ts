@@ -1,6 +1,5 @@
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -17,17 +16,11 @@ suite('Vertical Tabs extension', () => {
     assert.ok(commands.includes('verticalTabs.toggle'), 'The toggle command should be registered.');
     assert.ok(commands.includes('verticalTabs.close'), 'The close command should be registered.');
     assert.ok(commands.includes('verticalTabs.focus'), 'The focus command should be registered.');
-    assert.ok(commands.includes('verticalTabs.previous'), 'The previous command should be registered.');
-    assert.ok(commands.includes('verticalTabs.next'), 'The next command should be registered.');
     for (const command of [
       'verticalTabs.previousInGroup',
       'verticalTabs.nextInGroup',
       'verticalTabs.previousAcrossGroups',
       'verticalTabs.nextAcrossGroups',
-      'verticalTabs.previousInGroupOnRelease',
-      'verticalTabs.nextInGroupOnRelease',
-      'verticalTabs.previousAcrossGroupsOnRelease',
-      'verticalTabs.nextAcrossGroupsOnRelease',
       'verticalTabs.moveUpInGroup',
       'verticalTabs.moveDownInGroup',
       'verticalTabs.moveToPreviousGroup',
@@ -37,6 +30,16 @@ suite('Vertical Tabs extension', () => {
       'verticalTabs.manageWorksets',
     ]) {
       assert.ok(commands.includes(command), `${command} should be registered.`);
+    }
+    for (const command of [
+      'verticalTabs.previous',
+      'verticalTabs.next',
+      'verticalTabs.previousInGroupOnRelease',
+      'verticalTabs.nextInGroupOnRelease',
+      'verticalTabs.previousAcrossGroupsOnRelease',
+      'verticalTabs.nextAcrossGroupsOnRelease',
+    ]) {
+      assert.ok(!commands.includes(command), `${command} should be removed.`);
     }
     assert.ok(commands.includes('verticalTabs.showLogs'), 'The show logs command should be registered.');
 
@@ -363,10 +366,6 @@ suite('Vertical Tabs extension', () => {
       'verticalTabs.nextInGroup',
       'verticalTabs.previousAcrossGroups',
       'verticalTabs.nextAcrossGroups',
-      'verticalTabs.previousInGroupOnRelease',
-      'verticalTabs.nextInGroupOnRelease',
-      'verticalTabs.previousAcrossGroupsOnRelease',
-      'verticalTabs.nextAcrossGroupsOnRelease',
       'verticalTabs.moveUpInGroup',
       'verticalTabs.moveDownInGroup',
       'verticalTabs.moveToPreviousGroup',
@@ -374,9 +373,18 @@ suite('Vertical Tabs extension', () => {
     ];
     assert.ok(configurableCommands.every((command) => manifest.contributes.commands.some((entry) => entry.command === command)));
     assert.ok(configurableCommands.every((command) => !manifest.contributes.keybindings.some((entry) => entry.command === command)), 'Tab switching and moving commands must not have default keybindings.');
+    const removedCommands = [
+      'verticalTabs.previous',
+      'verticalTabs.next',
+      'verticalTabs.previousInGroupOnRelease',
+      'verticalTabs.nextInGroupOnRelease',
+      'verticalTabs.previousAcrossGroupsOnRelease',
+      'verticalTabs.nextAcrossGroupsOnRelease',
+    ];
+    assert.ok(removedCommands.every((command) => !manifest.contributes.commands.some((entry) => entry.command === command)));
   });
 
-  test('switches and moves tabs within and across editor groups', async function () {
+  test('moves tabs within and across editor groups', async function () {
     this.timeout(20_000);
     await vscode.commands.executeCommand('verticalTabs.open');
     await waitFor(() => verticalTabs().length === 1);
@@ -399,25 +407,6 @@ suite('Vertical Tabs extension', () => {
     await waitFor(() => textTabUris(sourceGroup).length === 3);
 
     await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
-    await vscode.commands.executeCommand('verticalTabs.nextInGroup');
-    await waitFor(() => activeTextDocumentUri() === documents[2].uri.toString());
-    await vscode.commands.executeCommand('verticalTabs.previousInGroup');
-    await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
-
-    await Promise.all([
-      vscode.commands.executeCommand('verticalTabs.nextInGroup'),
-      vscode.commands.executeCommand('verticalTabs.nextInGroup'),
-    ]);
-    await new Promise<void>((resolve) => setTimeout(resolve, 80));
-    assert.equal(
-      activeTextDocumentUri(),
-      documents[1].uri.toString(),
-      'A rapid shortcut burst should preview targets without activating an intermediate editor.',
-    );
-    await waitFor(() => activeTextDocumentUri() === documents[0].uri.toString());
-    await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
-    await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
-
     await vscode.commands.executeCommand('verticalTabs.moveUpInGroup');
     await waitFor(() => textTabUris(sourceGroup)[0] === documents[1].uri.toString());
     assert.deepEqual(textTabUris(sourceGroup), [documents[1], documents[0], documents[2]].map((document) => document.uri.toString()));
@@ -431,87 +420,11 @@ suite('Vertical Tabs extension', () => {
     const destinationGroup = destinationDocumentTab(destinationDocument)?.group;
     assert.ok(destinationGroup && destinationGroup !== sourceGroup, 'A second user editor group should contain the destination document.');
 
-    await vscode.window.showTextDocument(documents[2], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
-    await vscode.commands.executeCommand('verticalTabs.nextAcrossGroups');
-    await waitFor(() => activeTextDocumentUri() === destinationDocument.uri.toString());
-    await vscode.commands.executeCommand('verticalTabs.previousAcrossGroups');
-    await waitFor(() => activeTextDocumentUri() === documents[2].uri.toString());
-
     await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
     await vscode.commands.executeCommand('verticalTabs.moveToNextGroup');
     await waitFor(() => destinationDocumentTab(documents[1])?.group === destinationGroup);
-    assert.equal(textTabUris(destinationGroup).at(-1), documents[1].uri.toString());
     await vscode.commands.executeCommand('verticalTabs.moveToPreviousGroup');
     await waitFor(() => destinationDocumentTab(documents[1])?.group === sourceGroup);
-    assert.equal(textTabUris(sourceGroup).at(-1), documents[1].uri.toString());
-  });
-
-  test('switches tabs by vertical sorted order rather than native horizontal order', async function () {
-    this.timeout(20_000);
-    const configuration = vscode.workspace.getConfiguration('verticalTabs');
-    const originalRememberState = configuration.inspect<boolean>('rememberState')?.globalValue;
-    const originalGroupMode = configuration.inspect<string>('defaultGroupMode')?.globalValue;
-    const originalSortMode = configuration.inspect<string>('defaultSortMode')?.globalValue;
-    const tempDirectory = vscode.Uri.file(path.join(os.tmpdir(), `vertical-tabs-command-order-${Date.now()}`));
-    const uris = ['c.ts', 'b.ts', 'a.ts'].map((name) => vscode.Uri.joinPath(tempDirectory, name));
-
-    try {
-      await vscode.commands.executeCommand('verticalTabs.close');
-      await waitFor(() => verticalTabs().length === 0);
-      await closeNonVerticalTabs();
-      await configuration.update('rememberState', false, vscode.ConfigurationTarget.Global);
-      await configuration.update('defaultGroupMode', 'vscode', vscode.ConfigurationTarget.Global);
-      await configuration.update('defaultSortMode', 'nameAsc', vscode.ConfigurationTarget.Global);
-
-      await vscode.workspace.fs.createDirectory(tempDirectory);
-      for (const uri of uris) {
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(uri.path, 'utf8'));
-      }
-      const documents = await Promise.all(uris.map((uri) => vscode.workspace.openTextDocument(uri)));
-      for (const document of documents) {
-        await vscode.window.showTextDocument(document, { preserveFocus: false, preview: false });
-      }
-
-      await vscode.commands.executeCommand('verticalTabs.open');
-      await waitFor(() => verticalTabs().length === 1);
-      await vscode.window.showTextDocument(documents[1], { preserveFocus: false });
-      await waitFor(() => activeTextDocumentUri() === uris[1]!.toString());
-
-      // Native order is c, b, a while the vertical name order is a, b, c.
-      await vscode.commands.executeCommand('verticalTabs.nextInGroup');
-      await waitFor(() => activeTextDocumentUri() === uris[0]!.toString());
-      await vscode.commands.executeCommand('verticalTabs.previousInGroup');
-      await waitFor(() => activeTextDocumentUri() === uris[1]!.toString());
-    } finally {
-      const temporaryTabs = nonVerticalTabs()
-        .filter(({ tab }) => {
-          const input = tab.input;
-          return input instanceof vscode.TabInputText && uris.some((uri) => uri.toString() === input.uri.toString());
-        })
-        .map(({ tab }) => tab);
-      if (temporaryTabs.length > 0) await vscode.window.tabGroups.close(temporaryTabs, true);
-      try {
-        await vscode.workspace.fs.delete(tempDirectory, { recursive: true, useTrash: false });
-      } catch {
-        // A failed assertion can leave the temporary directory already removed.
-      }
-      await vscode.commands.executeCommand('verticalTabs.close');
-      await configuration.update('defaultGroupMode', originalGroupMode, vscode.ConfigurationTarget.Global);
-      await configuration.update('defaultSortMode', originalSortMode, vscode.ConfigurationTarget.Global);
-      await configuration.update('rememberState', originalRememberState, vscode.ConfigurationTarget.Global);
-    }
-  });
-
-  test('activates existing built-in webview tabs without duplicating them', async function () {
-    this.timeout(15_000);
-    await vscode.commands.executeCommand('verticalTabs.close');
-    await waitFor(() => verticalTabs().length === 0);
-
-    await verifyBuiltInWebviewNavigation('settings');
-    await verifyBuiltInWebviewNavigation('welcome');
-
-    await vscode.commands.executeCommand('verticalTabs.close');
-    await waitFor(() => verticalTabs().length === 0);
   });
 
   test('rapid empty-state open requests restore one welcome editor area', async function () {
@@ -693,44 +606,6 @@ async function waitForEditorLayout(predicate: (layout: EditorLayout) => boolean)
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
   }
   assert.fail(`Timed out waiting for the editor layout to settle. Latest layout: ${JSON.stringify(latest)}.`);
-}
-
-async function verifyBuiltInWebviewNavigation(kind: 'settings' | 'welcome'): Promise<void> {
-  await closeNonVerticalTabs();
-  await waitFor(() => vscode.window.tabGroups.all.every((group) => group.tabs.every((tab) => isVerticalTabsTab(tab))));
-  const document = await vscode.workspace.openTextDocument({ content: `navigation before ${kind}` });
-  await vscode.window.showTextDocument(document, { preserveFocus: false });
-  if (kind === 'settings') {
-    await vscode.commands.executeCommand('workbench.action.openSettings');
-  } else {
-    await openWelcomeForTest();
-  }
-  await waitFor(() => matchingBuiltInWebviewTabs(kind).length > 0);
-  const before = matchingBuiltInWebviewTabs(kind).length;
-
-  await vscode.window.showTextDocument(document, { preserveFocus: false });
-  await waitFor(() => activeTextDocumentUri() === document.uri.toString());
-  await vscode.commands.executeCommand('verticalTabs.open');
-  await waitFor(() => verticalTabs().length === 1);
-  await vscode.window.showTextDocument(document, { preserveFocus: false });
-  await waitFor(() => activeTextDocumentUri() === document.uri.toString());
-
-  await vscode.commands.executeCommand('verticalTabs.next');
-  await waitFor(() => matchingBuiltInWebviewTabs(kind).some(({ tab, group }) => group.isActive && group.activeTab === tab));
-  assert.equal(matchingBuiltInWebviewTabs(kind).length, before, `${kind} navigation should not create a duplicate tab.`);
-  await closeNonVerticalTabs();
-}
-
-function matchingBuiltInWebviewTabs(kind: 'settings' | 'welcome'): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
-  const result: Array<{ tab: vscode.Tab; group: vscode.TabGroup }> = [];
-  for (const group of vscode.window.tabGroups.all) {
-    for (const tab of group.tabs) {
-      if (isBuiltInEditorTab(tab, kind)) {
-        result.push({ tab, group });
-      }
-    }
-  }
-  return result;
 }
 
 function isBuiltInEditorTab(tab: vscode.Tab, kind: 'settings' | 'welcome'): boolean {

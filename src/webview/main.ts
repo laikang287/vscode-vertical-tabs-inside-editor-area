@@ -222,10 +222,10 @@ document.addEventListener('dragover', (event) => {
 window.addEventListener('pointerdown', () => cancelShortcutReleaseCapture('pointer'), true);
 window.addEventListener('keyup', handleShortcutReleaseKeyUp, true);
 window.addEventListener('blur', () => {
-  cancelShortcutReleaseCapture('blur');
   dismissContextMenu();
 });
 window.addEventListener('keydown', (event) => {
+  shortcutReleaseTracker.keyDown(event);
   if (event.key !== 'Escape') return;
   if (shortcutReleaseTracker.activeSessionId) {
     event.preventDefault();
@@ -1638,7 +1638,7 @@ function handleShortcutReleaseKeyUp(event: KeyboardEvent): void {
   }
 }
 
-function cancelShortcutReleaseCapture(reason: 'escape' | 'blur' | 'pointer'): void {
+function cancelShortcutReleaseCapture(reason: 'escape' | 'pointer'): void {
   const sessionId = shortcutReleaseTracker.cancel();
   if (sessionId) {
     vscode.postMessage({ type: 'shortcutReleaseCancel', sessionId, reason });

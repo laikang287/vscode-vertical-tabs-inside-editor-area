@@ -25,9 +25,18 @@ export class ShortcutReleaseTracker {
   }
 
   arm(sessionId: string, primaryKey: string): void {
+    const continuesCurrentSession = this.sessionId === sessionId && this.primaryKey === primaryKey;
     this.sessionId = sessionId;
     this.primaryKey = primaryKey;
-    this.primaryReleased = false;
+    if (!continuesCurrentSession) {
+      this.primaryReleased = false;
+    }
+  }
+
+  keyDown(state: ShortcutReleaseKeyState): void {
+    if (this.sessionId && state.key === this.primaryKey) {
+      this.primaryReleased = false;
+    }
   }
 
   keyUp(state: ShortcutReleaseKeyState): ShortcutReleaseResult {

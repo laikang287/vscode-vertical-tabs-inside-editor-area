@@ -30,6 +30,7 @@ test('rearming the same session waits for the final repeated Tab release', () =>
   tracker.arm('shortcut-release-3', 'Tab');
   tracker.keyUp(keyState('Tab', { ctrlKey: true }));
 
+  tracker.keyDown(keyState('Tab', { ctrlKey: true }));
   tracker.arm('shortcut-release-3', 'Tab');
   assert.deepEqual(tracker.keyUp(keyState('Control')), { type: 'none' });
   assert.deepEqual(tracker.keyUp(keyState('Tab')), {
@@ -38,37 +39,51 @@ test('rearming the same session waits for the final repeated Tab release', () =>
   });
 });
 
-test('waits for every modifier used by Ctrl+Shift+Tab', () => {
+test('preserves a repeated Tab release that arrives before the rearm message', () => {
   const tracker = new ShortcutReleaseTracker();
   tracker.arm('shortcut-release-4', 'Tab');
+  tracker.keyUp(keyState('Tab', { ctrlKey: true }));
 
-  assert.deepEqual(tracker.keyUp(keyState('Tab', { ctrlKey: true, shiftKey: true })), { type: 'none' });
-  assert.deepEqual(tracker.keyUp(keyState('Shift', { ctrlKey: true })), { type: 'none' });
+  tracker.keyDown(keyState('Tab', { ctrlKey: true }));
+  tracker.keyUp(keyState('Tab', { ctrlKey: true }));
+  tracker.arm('shortcut-release-4', 'Tab');
   assert.deepEqual(tracker.keyUp(keyState('Control')), {
     type: 'complete',
     sessionId: 'shortcut-release-4',
   });
 });
 
-test('ignores unrelated key releases and completes at most once', () => {
+test('waits for every modifier used by Ctrl+Shift+Tab', () => {
   const tracker = new ShortcutReleaseTracker();
   tracker.arm('shortcut-release-5', 'Tab');
+
+  assert.deepEqual(tracker.keyUp(keyState('Tab', { ctrlKey: true, shiftKey: true })), { type: 'none' });
+  assert.deepEqual(tracker.keyUp(keyState('Shift', { ctrlKey: true })), { type: 'none' });
+  assert.deepEqual(tracker.keyUp(keyState('Control')), {
+    type: 'complete',
+    sessionId: 'shortcut-release-5',
+  });
+});
+
+test('ignores unrelated key releases and completes at most once', () => {
+  const tracker = new ShortcutReleaseTracker();
+  tracker.arm('shortcut-release-6', 'Tab');
 
   assert.deepEqual(tracker.keyUp(keyState('ArrowDown')), { type: 'none' });
   assert.deepEqual(tracker.keyUp(keyState('Tab')), {
     type: 'complete',
-    sessionId: 'shortcut-release-5',
+    sessionId: 'shortcut-release-6',
   });
   assert.deepEqual(tracker.keyUp(keyState('Control')), { type: 'none' });
 });
 
 test('cancellation only clears the matching active session', () => {
   const tracker = new ShortcutReleaseTracker();
-  tracker.arm('shortcut-release-6', 'Tab');
+  tracker.arm('shortcut-release-7', 'Tab');
 
-  assert.equal(tracker.cancel('shortcut-release-7'), undefined);
-  assert.equal(tracker.activeSessionId, 'shortcut-release-6');
-  assert.equal(tracker.cancel('shortcut-release-6'), 'shortcut-release-6');
+  assert.equal(tracker.cancel('shortcut-release-8'), undefined);
+  assert.equal(tracker.activeSessionId, 'shortcut-release-7');
+  assert.equal(tracker.cancel('shortcut-release-7'), 'shortcut-release-7');
   assert.equal(tracker.activeSessionId, undefined);
   assert.deepEqual(tracker.keyUp(keyState('Tab')), { type: 'none' });
 });
