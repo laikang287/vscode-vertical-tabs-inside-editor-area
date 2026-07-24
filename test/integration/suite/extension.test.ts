@@ -115,6 +115,7 @@ suite('Vertical Tabs extension', () => {
     ]);
 
     await waitFor(() => verticalTabs().length === 1);
+    await waitFor(() => verticalTabs()[0]?.group.tabs.length === 1);
     await waitFor(() => nonVerticalTabs().length > 0);
 
     const rails = verticalTabs();

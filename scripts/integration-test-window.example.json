@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "preventFocus": true,
+  "display": "primary",
+  "x": 24,
+  "y": 24,
+  "width": 1280,
+  "height": 800
+}

@@ -7,7 +7,22 @@ const vsixPath = `dist/${packageJson.name}-${packageJson.version}.vsix`;
 await access(vsixPath, constants.R_OK);
 
 const entries = await listZipEntries(vsixPath);
-const forbiddenPrefixes = ['extension/src/', 'extension/test/', 'extension/scripts/', 'extension/dist/', 'extension/node_modules/', 'extension/out/test/'];
+const forbiddenPrefixes = [
+  'extension/.codex/',
+  'extension/.decks-kk/',
+  'extension/.obsidian/',
+  'extension/.vscode-test-window.json',
+  'extension/.worktreeinclude',
+  'extension/src/',
+  'extension/test/',
+  'extension/scripts/',
+  'extension/dist/',
+  'extension/node_modules/',
+  'extension/out/test/',
+  'extension/out/scripts/',
+  'extension/tmp/',
+  'extension/todo_list.csv',
+];
 const forbidden = entries.filter((entry) => forbiddenPrefixes.some((prefix) => entry.startsWith(prefix)));
 
 if (forbidden.length > 0) {

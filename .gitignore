@@ -8,3 +8,4 @@ dist/*.vsix
 tmp
 .decks-kk
 .codex
+.vscode-test-window.json

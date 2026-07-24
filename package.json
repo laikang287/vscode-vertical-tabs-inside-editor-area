@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "Vertical Tabs Inside Editor Area",
   "description": "A vertical tab navigator locked inside the editor area. Shows all tabs across VS Code editor groups with grouping, pinning, drag-and-drop, sorting, and multi-language support.",
-  "version": "0.3.1",
+  "version": "0.5.0",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -192,6 +192,7 @@
     "check-types": "tsc --noEmit",
     "test:unit": "node scripts/run-unit-tests.mjs",
     "test:integration": "npm run compile --silent && node scripts/run-integration-tests.mjs",
+    "test:displays": "node scripts/list-test-displays.mjs",
     "test": "npm run test:unit && npm run test:integration",
     "package": "node scripts/package.mjs",
     "check:vsix": "node scripts/check-vsix.mjs",
@@ -252,6 +253,3 @@
     "theme": "dark"
   }
 }
-
-
-

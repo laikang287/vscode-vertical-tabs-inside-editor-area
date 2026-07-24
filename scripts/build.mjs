@@ -16,6 +16,11 @@ await Promise.all([
   build({ ...shared, entryPoints: ['src/webview/main.ts'], outfile: 'out/webview.js' }),
   build({
     ...shared,
+    entryPoints: ['src/testing/IntegrationTestWindowConfig.ts'],
+    outfile: 'out/scripts/integration-test-window-config.cjs',
+  }),
+  build({
+    ...shared,
     entryPoints: ['test/integration/suite/index.ts', 'test/integration/suite/extension.test.ts'],
     outbase: 'test/integration/suite',
     outdir: 'out/test/integration/suite',

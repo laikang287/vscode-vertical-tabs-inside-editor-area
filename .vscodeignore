@@ -1,17 +1,24 @@
 .vscode/**
 .github/**
+.vscode-test-window.json
+.codex/**
+.decks-kk/**
+.obsidian/**
+.worktreeinclude
+tmp/**
+todo_list.csv
 src/**
 test/**
 scripts/**
 node_modules/**
 dist/**
 out/test/**
+out/scripts/**
 out/**/*.map
 *.ts
 tsconfig.json
 AGENTS.md
 .gitignore
- .vscodeignore
- .obsidian/
- obsidian笔记/
- README.zh-CN.md
+.vscodeignore
+obsidian笔记/
+README.zh-CN.md
