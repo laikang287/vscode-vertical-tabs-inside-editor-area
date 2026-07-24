@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getStrings } from '../../src/i18n';
 import { buildNativeTabMenu, evaluateWhenClause, type NativeMenuContext, type ResolvedNativeMenuEntry } from '../../src/webview/NativeTabMenu';
 
 function context(values: Readonly<Record<string, unknown>>): NativeMenuContext {
@@ -110,4 +111,17 @@ test('hides false contributions, unavailable commands, empty submenus, and subme
   };
 
   assert.deepEqual(buildNativeTabMenu([manifest], context({ resourceScheme: 'file' }), new Set()), []);
+});
+
+test('localizes built-in tab menu actions in every supported interface language', () => {
+  const supportedLocales = ['en', 'zh-cn', 'zh-tw', 'ja', 'ko', 'de', 'fr', 'es', 'pt-br', 'ru'] as const;
+  const available = new Set(['workbench.action.splitEditor']);
+
+  for (const locale of supportedLocales) {
+    const strings = getStrings(locale);
+    const entries = buildNativeTabMenu([], context({}), available, strings);
+    const split = entries.find((entry) =>
+      entry.kind === 'action' && entry.command === 'workbench.action.splitEditor');
+    assert.equal(split?.kind === 'action' ? split.label : undefined, strings.nativeSplitEditor);
+  }
 });

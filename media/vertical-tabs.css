@@ -259,12 +259,16 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   min-width: 0;
 }
 .group-toggle { color: var(--vertical-tab-group-accent); flex: 0 0 18px; height: 20px; line-height: 20px; min-width: 18px; }
-.group-actions, .tab-actions { align-items: center; display: flex; justify-content: center; }
-.group-actions { flex: 0 0 23px; opacity: 0; padding-right: 3px; pointer-events: none; }
-.group-header:hover .group-actions { opacity: 1; pointer-events: auto; }
-.tab-actions { flex: 0 0 auto; min-width: 0; padding-right: 0; }
+.group-actions, .tab-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  min-width: 0;
+  padding-right: 0;
+}
+.group-actions { margin-right: 1px; }
 .group-action { color: inherit; }
-.group-header .tab-action { height: 20px; line-height: 20px; min-width: 20px; padding: 0; }
 .group-name {
   color: var(--vertical-tab-group-accent);
   flex: 1;
@@ -282,7 +286,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 :lang(ko) .group-name {
   font-weight: 400;
 }
-.group-pin-indicator { flex: 0 0 auto; font-size: 14px; line-height: 18px; }
 .group-description { color: var(--vscode-descriptionForeground); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .tab-row {
@@ -411,7 +414,10 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   min-width: var(--vertical-tab-action-size);
   padding: 0;
 }
+.group-close-action,
 .tab-close-action { display: none; }
+.group-header:hover .group-close-action,
+.group-header:focus-within .group-close-action,
 .tab-row:hover .tab-close-action,
 .tab-row:focus-within .tab-close-action {
   align-items: center;

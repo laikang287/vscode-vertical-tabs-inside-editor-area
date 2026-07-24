@@ -472,13 +472,6 @@ function appendDisplayGroup(parent: HTMLElement | DocumentFragment, group: Verti
     name.className = 'group-name';
     appendHighlightedText(name, group.title, currentSearchGroups);
     main.append(name);
-    if (group.isPinned) {
-      const pin = document.createElement('span');
-      pin.className = 'group-pin-indicator codicon codicon-pinned';
-      pin.title = i18n.pinnedGroup;
-      pin.setAttribute('aria-hidden', 'true');
-      main.append(pin);
-    }
     if (group.description) {
       const detail = document.createElement('span');
       detail.className = 'group-description';
@@ -488,13 +481,22 @@ function appendDisplayGroup(parent: HTMLElement | DocumentFragment, group: Verti
     header.append(main);
     const actions = document.createElement('div');
     actions.className = 'group-actions';
+    const statuses = document.createElement('span');
+    statuses.className = 'tab-status-list group-status-list';
+    if (group.isPinned) {
+      const pin = codicon('pinned');
+      pin.classList.add('tab-status', 'group-pin-indicator');
+      pin.title = i18n.pinnedGroup;
+      pin.setAttribute('aria-hidden', 'true');
+      statuses.append(pin);
+    }
     const remove = iconButton('close', i18n.closeGroupAndDelete);
-    remove.className = 'group-action tab-action';
+    remove.className = 'group-action tab-action group-close-action';
     remove.addEventListener('click', (event) => {
       event.stopPropagation();
       vscode.postMessage({ type: 'closeGroup', groupId: group.id });
     });
-    actions.append(remove);
+    actions.append(statuses, remove);
     header.append(actions);
     section.append(header);
   }

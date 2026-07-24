@@ -1,9 +1,3 @@
----
-date created: 2026-07-22 22:18
-author: null
-tags: null
-source: null
----
 
 # 编辑器区域垂直标签页
 

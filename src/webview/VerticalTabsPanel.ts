@@ -74,7 +74,6 @@ import { NativeTabMenuProvider } from './NativeTabMenuProvider';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
 export const VIEW_TYPE = 'verticalTabs.editorArea';
-const TITLE = 'Vertical Tabs';
 const WIDTH_RATIO_STORAGE_KEY = 'verticalTabs.railWidthRatio';
 const GROUP_MODE_STORAGE_KEY = 'verticalTabs.groupMode';
 const SORT_MODE_STORAGE_KEY = 'verticalTabs.sortMode';
@@ -236,6 +235,7 @@ export class VerticalTabsPanel {
     this.collapsedGroupKeys = this.rememberStateEnabled ? readStringSet(context, COLLAPSED_GROUP_KEYS_STORAGE_KEY) : new Set();
     this.worksets = parseStoredWorksets(context.workspaceState.get<unknown>(WORKSETS_STORAGE_KEY));
     this.localeStrings = this.resolveUiLocale();
+    this.panel.title = this.localeStrings.verticalTabsStatusBarName;
     this.railPosition = readRailPosition();
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn, position: this.railPosition });
     this.disposables.push(
@@ -410,7 +410,7 @@ export class VerticalTabsPanel {
     }
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
-      TITLE,
+      resolveConfiguredStrings().verticalTabsStatusBarName,
       {
         viewColumn: preparedRailGroup.viewColumn,
         preserveFocus: true,
@@ -1063,7 +1063,7 @@ export class VerticalTabsPanel {
         durationMs: Date.now() - started,
         error,
       });
-      this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
+      this.postMessage({ type: 'renderTabs', title: this.localeStrings.verticalTabsStatusBarName, snapshot: this.currentSnapshot });
       this.scheduleRenderAckWatch(this.currentSnapshot);
       return;
     }
@@ -1077,7 +1077,7 @@ export class VerticalTabsPanel {
       sortMode: this.currentSnapshot.sortMode,
       durationMs: Date.now() - started,
     });
-    this.postMessage({ type: 'renderTabs', title: TITLE, snapshot: this.currentSnapshot });
+    this.postMessage({ type: 'renderTabs', title: this.localeStrings.verticalTabsStatusBarName, snapshot: this.currentSnapshot });
     this.scheduleRenderAckWatch(this.currentSnapshot);
     if (options.ensureEmptyLayout !== false) {
       void this.ensureUsableEmptyRailLayout().catch((error) => logError('恢复空垂直标签栏布局失败', error));
@@ -1100,7 +1100,7 @@ export class VerticalTabsPanel {
         attempt: this.renderAckAttempts,
         tabCount: snapshot.tabs.length,
       });
-      this.postMessage({ type: 'renderTabs', title: TITLE, snapshot });
+      this.postMessage({ type: 'renderTabs', title: this.localeStrings.verticalTabsStatusBarName, snapshot });
       if (this.renderAckAttempts < RENDER_ACK_MAX_ATTEMPTS) {
         this.renderAckTimer = setTimeout(resend, RENDER_ACK_TIMEOUT_MS);
       }
@@ -1138,7 +1138,7 @@ export class VerticalTabsPanel {
     });
     const resourceMetadataCache = new Map<string, Promise<TabResourceMetadata>>();
     const groups: SnapshotSourceGroup[] = await Promise.all(vscode.window.tabGroups.all.map(async (group, index) => ({
-      label: `编辑器组 ${index + 1}`,
+      label: format(this.localeStrings.editorGroup, index + 1),
       viewColumn: group.viewColumn,
       tabs: await Promise.all(group.tabs.map((tab) => this.toSnapshotTabSafe(tab, resourceMetadataCache))),
     })));
@@ -1218,15 +1218,16 @@ export class VerticalTabsPanel {
       return await this.toSnapshotTab(tab, resourceMetadataCache);
     } catch (error) {
       logError('转换单个标签快照失败，将以不可跳转标签继续渲染', { label: tab.label, error });
+      const label = tab.label || this.localeStrings.unknownTab;
       return {
-        label: tab.label || 'Unknown',
+        label,
         isActive: tab.isActive,
         isFocused: tab.isActive && (tab.group.isActive || tab.group === this.lastFocusedUserGroup),
         isDirty: tab.isDirty,
         isPinned: tab.isPinned,
         isPreview: tab.isPreview,
         inputKind: 'unknown',
-        targetIdentity: { kind: 'unknown', label: tab.label || 'Unknown' },
+        targetIdentity: { kind: 'unknown', label },
         isActivatable: false,
         isVerticalTabsPanel: isVerticalTabsPanel(tab),
         lastActivatedAt: this.mruTracker.lastActivatedAt(tab),
@@ -1452,7 +1453,7 @@ export class VerticalTabsPanel {
       }
       const tab = this.resolveTab(message.target);
       const entries = tab
-        ? await this.nativeTabMenuProvider.createMenu(tab, this.resolveConfiguredLanguage())
+        ? await this.nativeTabMenuProvider.createMenu(tab, this.localeStrings)
         : [];
       this.postMessage({ type: 'nativeTabMenu', requestId: message.requestId, entries });
       return;
@@ -1515,9 +1516,13 @@ export class VerticalTabsPanel {
         return;
       }
       const name = await vscode.window.showInputBox({
-        prompt: '输入分组名称',
-        placeHolder: '分组名称',
-        validateInput: (value) => value.trim().length === 0 ? '分组名称不能为空' : value.trim().length > 80 ? '分组名称不能超过 80 个字符' : undefined,
+        prompt: this.localeStrings.groupNamePrompt,
+        placeHolder: this.localeStrings.groupName,
+        validateInput: (value) => value.trim().length === 0
+          ? this.localeStrings.groupNameRequired
+          : value.trim().length > 80
+            ? format(this.localeStrings.groupNameTooLong, 80)
+            : undefined,
       });
       if (!name?.trim()) {
         logDebug('取消创建手动标签分组');
@@ -1795,10 +1800,7 @@ export class VerticalTabsPanel {
       logInfo('已调用 VS Code 标签右键菜单操作', { command: action.command, invocation: action.invocation, target: describeTab(tab) });
     } catch (error) {
       logError('调用 VS Code 标签右键菜单操作失败', { command: action.command, target: describeTab(tab), error });
-      const chinese = this.resolveConfiguredLanguage().toLowerCase().startsWith('zh');
-      void vscode.window.showWarningMessage(chinese
-        ? `无法执行标签菜单操作“${action.command}”，详情请查看 Vertical Tabs 输出日志。`
-        : `Could not run tab menu action "${action.command}". See the Vertical Tabs output log for details.`);
+      void vscode.window.showWarningMessage(format(this.localeStrings.nativeMenuActionFailed, action.command));
     } finally {
       await this.refresh({ reason: 'operation' });
     }
@@ -1821,6 +1823,7 @@ export class VerticalTabsPanel {
 
     if (event.affectsConfiguration('verticalTabs.language')) {
       this.localeStrings = this.resolveUiLocale();
+      this.panel.title = this.localeStrings.verticalTabsStatusBarName;
       this.configureWebview();
     }
 
@@ -1875,7 +1878,10 @@ export class VerticalTabsPanel {
     );
     if (!moved) {
       void vscode.window.showWarningMessage(
-        `Vertical Tabs could not move to the ${nextPosition} side. See the Vertical Tabs output log for details.`,
+        format(
+          this.localeStrings.moveRailFailed,
+          nextPosition === 'left' ? this.localeStrings.sideLeft : this.localeStrings.sideRight,
+        ),
       );
     }
   }
@@ -2854,15 +2860,15 @@ export class VerticalTabsPanel {
 
   private async confirmFileOverwrite(destinationUri: vscode.Uri, destinationDirty: boolean): Promise<boolean> {
     const detail = destinationDirty
-      ? '目标文件对应的标签有未保存更改。继续后将关闭目标标签，并用拖拽文件的内容覆盖目标文件。'
-      : '继续后将关闭目标文件的现有标签，并用拖拽文件的内容覆盖目标文件。';
+      ? this.localeStrings.overwriteFileDirtyDetail
+      : this.localeStrings.overwriteFileDetail;
     const choice = await vscode.window.showWarningMessage(
-      `目标目录已存在同名文件“${path.posix.basename(destinationUri.path)}”，是否覆盖？`,
+      format(this.localeStrings.overwriteFileConfirm, path.posix.basename(destinationUri.path)),
       { modal: true, detail },
-      '覆盖',
-      '取消',
+      this.localeStrings.overwrite,
+      this.localeStrings.cancel,
     );
-    return choice === '覆盖';
+    return choice === this.localeStrings.overwrite;
   }
 
   private async openMovedResource(sourceInput: vscode.Tab['input'], label: string, destinationUri: vscode.Uri, viewColumn: vscode.ViewColumn): Promise<void> {
@@ -2912,7 +2918,7 @@ export class VerticalTabsPanel {
       await this.persistGroupMode();
     }
     const id = crypto.randomBytes(9).toString('base64url');
-    const name = defaultManualGroupName(source, target);
+    const name = defaultManualGroupName(source, target, this.localeStrings.newGroup);
     this.manualGroups.push({ id, name, collapsed: false });
     const sourceKey = identityKey(targetIdentity(source));
     const targetKey = identityKey(targetIdentity(target));
@@ -3626,10 +3632,7 @@ export class VerticalTabsPanel {
   }
 
   private resolveConfiguredLanguage(): string {
-    const configured = vscode.workspace.getConfiguration('verticalTabs').get<string>('language', 'auto');
-    return configured?.toLowerCase() === 'auto'
-      ? vscode.env.language
-      : (configured ?? 'en');
+    return resolveConfiguredLanguage();
   }
 
   private resolveUiLocale(): LocaleStrings {
@@ -3658,7 +3661,7 @@ export class VerticalTabsPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${this.panel.webview.cspSource}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <style nonce="${nonce}">${styleContent}</style>
-  <title>${TITLE}</title>
+  <title>${i18n.verticalTabsStatusBarName}</title>
 </head>
 <body>
   <main class="vertical-tabs" data-toolbar-position="${this.toolbarPosition}" aria-live="polite">
@@ -3690,7 +3693,7 @@ export class VerticalTabsPanel {
       </div>
     </header>
     <p id="description"></p>
-    <section id="groups" role="tree" tabindex="0" aria-label="打开的编辑器标签"></section>
+    <section id="groups" role="tree" tabindex="0" aria-label="${i18n.openEditorTabs}"></section>
   </main>
   <script nonce="${nonce}">var __i18n = ${JSON.stringify(i18n)};</script>
   <script nonce="${nonce}">${scriptContent}</script>
@@ -3720,7 +3723,7 @@ export class VerticalTabsPanel {
         '#groups { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; }',
         '#groups::-webkit-scrollbar { display: none; }',
         '#description { color: var(--vscode-errorForeground, var(--vscode-descriptionForeground)); font-size: 12px; line-height: 1.5; margin: 4px 6px; }',
-        '#description::after { content: " Webview 样式加载失败，请查看 Vertical Tabs 输出日志。"; }',
+        `#description::after { content: "${escapeCssString(this.localeStrings.webviewStyleLoadFailed)}"; }`,
         '.tab-row, .group-header, .toolbar-actions { display: flex; min-width: 0; }',
         '.tab-main { flex: 1; min-width: 0; text-align: left; }',
       ].join('\n');
@@ -3737,7 +3740,7 @@ export class VerticalTabsPanel {
       logError('读取 Webview 脚本失败，将显示诊断错误', { scriptPath, error });
       return [
         "const description = document.querySelector('#description');",
-        "if (description) description.textContent = '垂直标签脚本加载失败，请查看 Vertical Tabs 输出日志。';",
+        `if (description) description.textContent = ${JSON.stringify(this.localeStrings.webviewScriptLoadFailed)};`,
       ].join('\n');
     }
   }
@@ -4992,7 +4995,7 @@ async function resourceExists(uri: vscode.Uri): Promise<boolean> {
   }
 }
 
-function defaultManualGroupName(source: vscode.Tab, target: vscode.Tab): string {
+function defaultManualGroupName(source: vscode.Tab, target: vscode.Tab, fallbackName: string): string {
   const sourceDir = inputPath(source.input);
   const targetDir = inputPath(target.input);
   if (sourceDir && targetDir) {
@@ -5002,7 +5005,25 @@ function defaultManualGroupName(source: vscode.Tab, target: vscode.Tab): string 
       return path.posix.basename(sourceParent);
     }
   }
-  return '新分组';
+  return fallbackName;
+}
+
+function resolveConfiguredLanguage(): string {
+  const configured = vscode.workspace.getConfiguration('verticalTabs').get<string>('language', 'auto');
+  return configured?.toLowerCase() === 'auto'
+    ? vscode.env.language
+    : (configured ?? 'en');
+}
+
+function resolveConfiguredStrings(): LocaleStrings {
+  return getStrings(resolveLocale(resolveConfiguredLanguage()));
+}
+
+function escapeCssString(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r?\n/g, '\\A ');
 }
 
 function readGroupMode(context: vscode.ExtensionContext): GroupMode {

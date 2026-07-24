@@ -1,5 +1,6 @@
 export interface LocaleStrings {
   readonly emptyState: string;
+  readonly openEditorTabs: string;
   readonly verticalTabsStatusBarName: string;
   readonly showVerticalTabs: string;
   readonly hideVerticalTabs: string;
@@ -29,8 +30,12 @@ export interface LocaleStrings {
   readonly rename: string;
   readonly renameGroup: string;
   readonly groupName: string;
+  readonly groupNamePrompt: string;
+  readonly groupNameRequired: string;
+  readonly groupNameTooLong: string;
   readonly newGroup: string;
   readonly newGroupOnlyManual: string;
+  readonly unknownTab: string;
   readonly previewTab: string;
   readonly pinnedTab: string;
   readonly readonlyResource: string;
@@ -68,6 +73,41 @@ export interface LocaleStrings {
   readonly searchResultCount: string;
   readonly searchResultCountWithGroups: string;
   readonly noSearchResults: string;
+  readonly nativeMenuActionFailed: string;
+  readonly moveRailFailed: string;
+  readonly sideLeft: string;
+  readonly sideRight: string;
+  readonly overwriteFileConfirm: string;
+  readonly overwriteFileDirtyDetail: string;
+  readonly overwriteFileDetail: string;
+  readonly cancel: string;
+  readonly webviewStyleLoadFailed: string;
+  readonly webviewScriptLoadFailed: string;
+  readonly nativeReopenEditorWith: string;
+  readonly nativeSplitEditor: string;
+  readonly nativeSplitUp: string;
+  readonly nativeSplitDown: string;
+  readonly nativeSplitLeft: string;
+  readonly nativeSplitRight: string;
+  readonly nativeMoveIntoPreviousGroup: string;
+  readonly nativeMoveIntoNextGroup: string;
+  readonly nativeMoveIntoLeftGroup: string;
+  readonly nativeMoveIntoRightGroup: string;
+  readonly nativeSplitInGroup: string;
+  readonly nativeJoinInGroup: string;
+  readonly nativeMoveIntoNewWindow: string;
+  readonly nativeCopyIntoNewWindow: string;
+  readonly nativeCopyPath: string;
+  readonly nativeCopyRelativePath: string;
+  readonly nativeRevealInFileExplorer: string;
+  readonly nativeCompareWithSelected: string;
+  readonly nativeMoveTerminalIntoPanel: string;
+  readonly nativeRenameTerminal: string;
+  readonly nativeChangeTerminalColor: string;
+  readonly nativeChangeTerminalIcon: string;
+  readonly nativeSizeTerminalToContentWidth: string;
+  readonly nativeSplitMove: string;
+  readonly nativeShare: string;
   readonly worksets: string;
   readonly saveWorkset: string;
   readonly loadWorkset: string;
@@ -147,8 +187,13 @@ const VSCODE_LANGUAGE_MAP: Readonly<Record<string, SupportedLocale>> = {
 };
 
 const NORMALIZED_MAP: Readonly<Record<string, SupportedLocale>> = {
+  'zh-hans': 'zh-cn',
+  'zh-sg': 'zh-cn',
   'zh_cn': 'zh-cn',
   'zh-tw': 'zh-tw',
+  'zh-hant': 'zh-tw',
+  'zh-hk': 'zh-tw',
+  'zh-mo': 'zh-tw',
   'zh_tw': 'zh-tw',
   'pt_br': 'pt-br',
   'pt': 'pt-br',

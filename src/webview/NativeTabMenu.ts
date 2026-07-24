@@ -1,3 +1,5 @@
+import { getStrings, type LocaleStrings } from '../i18n';
+
 export type WhenResult = boolean | undefined;
 export type NativeMenuInvocation = 'editor' | 'resource';
 
@@ -51,6 +53,35 @@ interface ManifestIndex {
   readonly menus: Map<string, IndexedContribution[]>;
 }
 
+type NativeMenuStrings = Pick<
+  LocaleStrings,
+  | 'nativeReopenEditorWith'
+  | 'nativeSplitEditor'
+  | 'nativeSplitUp'
+  | 'nativeSplitDown'
+  | 'nativeSplitLeft'
+  | 'nativeSplitRight'
+  | 'nativeMoveIntoPreviousGroup'
+  | 'nativeMoveIntoNextGroup'
+  | 'nativeMoveIntoLeftGroup'
+  | 'nativeMoveIntoRightGroup'
+  | 'nativeSplitInGroup'
+  | 'nativeJoinInGroup'
+  | 'nativeMoveIntoNewWindow'
+  | 'nativeCopyIntoNewWindow'
+  | 'nativeCopyPath'
+  | 'nativeCopyRelativePath'
+  | 'nativeRevealInFileExplorer'
+  | 'nativeCompareWithSelected'
+  | 'nativeMoveTerminalIntoPanel'
+  | 'nativeRenameTerminal'
+  | 'nativeChangeTerminalColor'
+  | 'nativeChangeTerminalIcon'
+  | 'nativeSizeTerminalToContentWidth'
+  | 'nativeSplitMove'
+  | 'nativeShare'
+>;
+
 const ROOT_MENU = 'editor/title/context';
 const MAX_MENU_DEPTH = 8;
 const MAX_MENU_ITEMS = 500;
@@ -96,9 +127,9 @@ export function buildNativeTabMenu(
   manifests: readonly NativeMenuManifest[],
   context: NativeMenuContext,
   availableCommands: ReadonlySet<string>,
-  language = 'en',
+  strings: NativeMenuStrings = getStrings('en'),
 ): readonly ResolvedNativeMenuEntry[] {
-  const index = indexManifests([coreMenuManifest(language), ...manifests]);
+  const index = indexManifests([coreMenuManifest(strings), ...manifests]);
   let itemCount = 0;
   const build = (menuId: string, ancestors: ReadonlySet<string>, depth: number): readonly ResolvedNativeMenuEntry[] => {
     if (depth > MAX_MENU_DEPTH || ancestors.has(menuId) || itemCount >= MAX_MENU_ITEMS) return [];
@@ -227,33 +258,31 @@ function indexManifests(manifests: readonly NativeMenuManifest[]): ManifestIndex
   return { commands, submenus, menus };
 }
 
-function coreMenuManifest(language: string): NativeMenuManifest {
-  const zh = language.toLowerCase().startsWith('zh');
-  const title = (english: string, chinese: string): string => zh ? chinese : english;
+function coreMenuManifest(strings: NativeMenuStrings): NativeMenuManifest {
   const commands = [
-    coreCommand('workbench.action.reopenWithEditor', title('Reopen Editor With...', '重新打开方式…')),
-    coreCommand('workbench.action.splitEditor', title('Split Editor', '拆分编辑器')),
-    coreCommand('workbench.action.splitEditorUp', title('Split Up', '向上拆分')),
-    coreCommand('workbench.action.splitEditorDown', title('Split Down', '向下拆分')),
-    coreCommand('workbench.action.splitEditorLeft', title('Split Left', '向左拆分')),
-    coreCommand('workbench.action.splitEditorRight', title('Split Right', '向右拆分')),
-    coreCommand('workbench.action.moveEditorToAboveGroup', title('Move into Previous Group', '移动到上方组')),
-    coreCommand('workbench.action.moveEditorToBelowGroup', title('Move into Next Group', '移动到下方组')),
-    coreCommand('workbench.action.moveEditorToLeftGroup', title('Move into Left Group', '移动到左侧组')),
-    coreCommand('workbench.action.moveEditorToRightGroup', title('Move into Right Group', '移动到右侧组')),
-    coreCommand('workbench.action.splitEditorInGroup', title('Split in Group', '在组内拆分')),
-    coreCommand('workbench.action.joinEditorInGroup', title('Join in Group', '在组内合并')),
-    coreCommand('workbench.action.moveEditorToNewWindow', title('Move into New Window', '移动到新窗口')),
-    coreCommand('workbench.action.copyEditorToNewWindow', title('Copy into New Window', '复制到新窗口')),
-    resourceCommand('copyFilePath', title('Copy Path', '复制路径')),
-    resourceCommand('copyRelativeFilePath', title('Copy Relative Path', '复制相对路径')),
-    resourceCommand('revealInExplorer', title('Reveal in File Explorer', '在文件资源管理器中显示')),
-    resourceCommand('compareSelected', title('Compare with Selected', '与已选项进行比较')),
-    coreCommand('workbench.action.terminal.moveToTerminalPanel', title('Move Terminal into Panel', '将终端移动到面板')),
-    coreCommand('workbench.action.terminal.rename', title('Rename Terminal', '重命名终端')),
-    coreCommand('workbench.action.terminal.changeColor', title('Change Terminal Color', '更改终端颜色')),
-    coreCommand('workbench.action.terminal.changeIcon', title('Change Terminal Icon', '更改终端图标')),
-    coreCommand('workbench.action.terminal.sizeToContentWidth', title('Size Terminal to Content Width', '使终端适应内容宽度')),
+    coreCommand('workbench.action.reopenWithEditor', strings.nativeReopenEditorWith),
+    coreCommand('workbench.action.splitEditor', strings.nativeSplitEditor),
+    coreCommand('workbench.action.splitEditorUp', strings.nativeSplitUp),
+    coreCommand('workbench.action.splitEditorDown', strings.nativeSplitDown),
+    coreCommand('workbench.action.splitEditorLeft', strings.nativeSplitLeft),
+    coreCommand('workbench.action.splitEditorRight', strings.nativeSplitRight),
+    coreCommand('workbench.action.moveEditorToAboveGroup', strings.nativeMoveIntoPreviousGroup),
+    coreCommand('workbench.action.moveEditorToBelowGroup', strings.nativeMoveIntoNextGroup),
+    coreCommand('workbench.action.moveEditorToLeftGroup', strings.nativeMoveIntoLeftGroup),
+    coreCommand('workbench.action.moveEditorToRightGroup', strings.nativeMoveIntoRightGroup),
+    coreCommand('workbench.action.splitEditorInGroup', strings.nativeSplitInGroup),
+    coreCommand('workbench.action.joinEditorInGroup', strings.nativeJoinInGroup),
+    coreCommand('workbench.action.moveEditorToNewWindow', strings.nativeMoveIntoNewWindow),
+    coreCommand('workbench.action.copyEditorToNewWindow', strings.nativeCopyIntoNewWindow),
+    resourceCommand('copyFilePath', strings.nativeCopyPath),
+    resourceCommand('copyRelativeFilePath', strings.nativeCopyRelativePath),
+    resourceCommand('revealInExplorer', strings.nativeRevealInFileExplorer),
+    resourceCommand('compareSelected', strings.nativeCompareWithSelected),
+    coreCommand('workbench.action.terminal.moveToTerminalPanel', strings.nativeMoveTerminalIntoPanel),
+    coreCommand('workbench.action.terminal.rename', strings.nativeRenameTerminal),
+    coreCommand('workbench.action.terminal.changeColor', strings.nativeChangeTerminalColor),
+    coreCommand('workbench.action.terminal.changeIcon', strings.nativeChangeTerminalIcon),
+    coreCommand('workbench.action.terminal.sizeToContentWidth', strings.nativeSizeTerminalToContentWidth),
   ];
   const root = [
     menuCommand('workbench.action.reopenWithEditor', '2_open@1'),
@@ -290,8 +319,8 @@ function coreMenuManifest(language: string): NativeMenuManifest {
       contributes: {
         commands,
         submenus: [
-          { id: 'verticalTabs.native.splitMove', label: title('Split / Move', '拆分 / 移动') },
-          { id: 'editor/title/context/share', label: title('Share', '共享') },
+          { id: 'verticalTabs.native.splitMove', label: strings.nativeSplitMove },
+          { id: 'editor/title/context/share', label: strings.nativeShare },
         ],
         menus: {
           [ROOT_MENU]: root,

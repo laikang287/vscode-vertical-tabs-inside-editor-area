@@ -1,6 +1,7 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import type { LocaleStrings } from '../i18n';
 import {
   buildNativeTabMenu,
   type NativeMenuContext,
@@ -30,7 +31,7 @@ export class NativeTabMenuProvider implements vscode.Disposable {
     });
   }
 
-  async createMenu(tab: vscode.Tab, language: string): Promise<readonly NativeContextMenuEntry[]> {
+  async createMenu(tab: vscode.Tab, strings: LocaleStrings): Promise<readonly NativeContextMenuEntry[]> {
     this.generation = (this.generation % Number.MAX_SAFE_INTEGER) + 1;
     const generation = this.generation;
     const availableCommands = new Set(await vscode.commands.getCommands(true));
@@ -38,7 +39,7 @@ export class NativeTabMenuProvider implements vscode.Disposable {
       this.getManifests(),
       createContext(tab),
       availableCommands,
-      language,
+      strings,
     );
     if (generation !== this.generation) return [];
     this.actions = new Map();

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
+import { getStrings, resolveLocale } from '../i18n';
 import { ACTIVE_LOG_LEVEL, LogLevel, Logger } from './Logger';
 
-const OUTPUT_CHANNEL_NAME = 'Vertical Tabs';
 let outputChannel: vscode.OutputChannel | undefined;
 let logger: Logger | undefined;
 
@@ -9,10 +9,15 @@ export function initializeLogging(context: vscode.ExtensionContext): void {
   if (logger) {
     return;
   }
-  outputChannel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
+  const configuredLanguage = vscode.workspace.getConfiguration('verticalTabs').get<string>('language', 'auto');
+  const language = configuredLanguage?.toLowerCase() === 'auto'
+    ? vscode.env.language
+    : (configuredLanguage ?? 'en');
+  const outputChannelName = getStrings(resolveLocale(language)).verticalTabsStatusBarName;
+  outputChannel = vscode.window.createOutputChannel(outputChannelName);
   logger = new Logger(outputChannel, ACTIVE_LOG_LEVEL);
   context.subscriptions.push(outputChannel);
-  logger.info('日志系统已初始化', { level: LogLevel[ACTIVE_LOG_LEVEL], channel: OUTPUT_CHANNEL_NAME });
+  logger.info('日志系统已初始化', { level: LogLevel[ACTIVE_LOG_LEVEL], channel: outputChannelName });
 }
 
 export function showLogs(): void {

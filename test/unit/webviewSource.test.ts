@@ -50,6 +50,51 @@ test('sidebar launcher stays compact and localizes fallback show and hide action
   }
 });
 
+test('all manifest-facing labels use package NLS placeholders', () => {
+  const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
+    displayName: string;
+    description: string;
+    contributes: {
+      commands: Array<{ command: string; title: string }>;
+      configuration: { title: string };
+      viewsContainers: { activitybar: Array<{ title: string }> };
+      views: Record<string, Array<{ name: string }>>;
+    };
+  };
+
+  assert.match(manifest.displayName, /^%[^%]+%$/);
+  assert.match(manifest.description, /^%[^%]+%$/);
+  for (const command of manifest.contributes.commands) {
+    assert.match(command.title, /^%[^%]+%$/, `${command.command} title must use package NLS`);
+  }
+  assert.match(manifest.contributes.configuration.title, /^%[^%]+%$/);
+  for (const container of manifest.contributes.viewsContainers.activitybar) {
+    assert.match(container.title, /^%[^%]+%$/);
+  }
+  for (const view of Object.values(manifest.contributes.views).flat()) {
+    assert.match(view.name, /^%[^%]+%$/);
+  }
+});
+
+test('extension-host prompts, accessibility labels, and Webview fallbacks use runtime i18n', () => {
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const nativeMenuSource = readFileSync(path.resolve(__dirname, '../../../src/webview/NativeTabMenu.ts'), 'utf8');
+
+  assert.match(panelSource, /prompt: this\.localeStrings\.groupNamePrompt/);
+  assert.match(panelSource, /placeHolder: this\.localeStrings\.groupName/);
+  assert.match(panelSource, /this\.localeStrings\.groupNameRequired/);
+  assert.match(panelSource, /format\(this\.localeStrings\.groupNameTooLong, 80\)/);
+  assert.match(panelSource, /format\(this\.localeStrings\.nativeMenuActionFailed, action\.command\)/);
+  assert.match(panelSource, /format\(this\.localeStrings\.overwriteFileConfirm, path\.posix\.basename/);
+  assert.match(panelSource, /this\.localeStrings\.overwriteFileDirtyDetail/);
+  assert.match(panelSource, /aria-label="\$\{i18n\.openEditorTabs\}"/);
+  assert.match(panelSource, /escapeCssString\(this\.localeStrings\.webviewStyleLoadFailed\)/);
+  assert.match(panelSource, /JSON\.stringify\(this\.localeStrings\.webviewScriptLoadFailed\)/);
+  assert.match(panelSource, /defaultManualGroupName\(source, target, this\.localeStrings\.newGroup\)/);
+  assert.doesNotMatch(nativeMenuSource, /startsWith\('zh'\)/);
+  assert.match(nativeMenuSource, /coreCommand\('workbench\.action\.splitEditor', strings\.nativeSplitEditor\)/);
+});
+
 test('extension registers an always-visible status bar toggle and refreshes it with relevant state', () => {
   const extensionSource = readFileSync(path.resolve(__dirname, '../../../src/extension.ts'), 'utf8');
   const statusBarSource = readFileSync(path.resolve(__dirname, '../../../src/statusbar/VerticalTabsStatusBar.ts'), 'utf8');
@@ -102,7 +147,7 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group, header\)/);
  assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
   assert.match(source, /const remove = iconButton\('close', i18n\.closeGroupAndDelete\)/);
- assert.match(source, /remove\.className = 'group-action tab-action'/);
+  assert.match(source, /remove\.className = 'group-action tab-action group-close-action'/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
   assert.match(source, /if \(group\.isManual && group\.id !== '__ungrouped'\)/);
   assert.match(source, /header\.draggable = true/);
@@ -112,10 +157,10 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
-  assert.match(style, /\.group-actions, \.tab-actions \{ align-items: center; display: flex; justify-content: center; \}/);
-  assert.match(style, /\.group-actions \{ flex: 0 0 23px; opacity: 0; padding-right: 3px; pointer-events: none; \}/);
-  assert.match(style, /\.group-header:hover \.group-actions \{ opacity: 1; pointer-events: auto; \}/);
-  assert.match(style, /\.group-header \.tab-action \{ height: 20px; line-height: 20px; min-width: 20px; padding: 0; \}/);
+  assert.match(style, /\.group-actions, \.tab-actions \{[\s\S]*?flex: 0 0 auto;[\s\S]*?min-width: 0;[\s\S]*?padding-right: 0;[\s\S]*?\}/);
+  assert.match(style, /\.group-actions \{ margin-right: 1px; \}/);
+  assert.match(style, /\.group-close-action,[\s\S]*?\.tab-close-action \{ display: none; \}/);
+  assert.match(style, /\.group-header:hover \.group-close-action,[\s\S]*?\.group-header:focus-within \.group-close-action,[\s\S]*?display: inline-flex;/);
 });
 
 test('tab context menus append an optional VS Code action group with secure opaque actions', () => {
@@ -164,7 +209,7 @@ test('tab close buttons reclaim their width until the row is hovered or keyboard
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(source, /result\.className = 'tab-action tab-close-action'/);
-  assert.match(style, /\.tab-actions \{ flex: 0 0 auto; min-width: 0; padding-right: 0; \}/);
+  assert.match(style, /\.group-actions, \.tab-actions \{[\s\S]*?flex: 0 0 auto;[\s\S]*?min-width: 0;[\s\S]*?padding-right: 0;[\s\S]*?\}/);
   assert.match(style, /\.tab-close-action \{ display: none; \}/);
   assert.match(style, /\.tab-row:hover \.tab-close-action,[\s\S]+\.tab-row:focus-within \.tab-close-action \{[\s\S]+display: inline-flex;/);
   assert.match(source, /actionButton\(i18n\.closeOthers, i18n\.closeOthers, 'closeOthers'/);
@@ -183,6 +228,19 @@ test('tab labels have no leading icon slot and pinned state renders on the right
   assert.doesNotMatch(messages, /TabVisualIcon|ProductIconName|readonly icon:/);
   assert.doesNotMatch(style, /\.tab-(?:icon|seti-icon|product-icon|pin-slot)/);
   assert.match(style, /\.tab-text \{[\s\S]+flex-direction: column;[\s\S]+min-width: 0;[\s\S]+?\}/);
+});
+
+test('group pin and close icons share the tab status and action coordinates', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+
+  assert.match(source, /statuses\.className = 'tab-status-list group-status-list'/);
+  assert.match(source, /pin\.classList\.add\('tab-status', 'group-pin-indicator'\)/);
+  assert.match(source, /actions\.append\(statuses, remove\)/);
+  assert.doesNotMatch(source, /main\.append\(pin\)/);
+  assert.match(style, /\.group-actions, \.tab-actions \{[\s\S]*?flex: 0 0 auto;[\s\S]*?padding-right: 0;/);
+  assert.match(style, /\.group-actions \{ margin-right: 1px; \}/);
+  assert.doesNotMatch(style, /\.group-header \.tab-action \{/);
 });
 
 test('tab statuses render in a stable accessible list immediately before the close button', () => {
@@ -236,7 +294,8 @@ test('pinned groups render an indicator, sort first, and reject unsupported host
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /pin\.className = 'group-pin-indicator codicon codicon-pinned'/);
+  assert.match(source, /const pin = codicon\('pinned'\)/);
+  assert.match(source, /pin\.classList\.add\('tab-status', 'group-pin-indicator'\)/);
   assert.match(source, /pin\.setAttribute\('aria-hidden', 'true'\)/);
   assert.doesNotMatch(source, /pin\.textContent = '📌'/);
   assert.match(source, /const disabled = group\.mode === 'vscode'/);
@@ -809,7 +868,7 @@ test('extension inlines styles and restricts icon fonts to local Webview resourc
   assert.match(source, /fs\.readFileSync\(stylePath, 'utf8'\)/);
   assert.match(source, /已内联读取 Webview 样式与 Codicon 字体/);
   assert.match(source, /读取 Webview 样式失败，将使用最小降级样式/);
-  assert.match(source, /Webview 样式加载失败，请查看 Vertical Tabs 输出日志。/);
+  assert.match(source, /escapeCssString\(this\.localeStrings\.webviewStyleLoadFailed\)/);
   assert.match(source, /font-src \$\{this\.panel\.webview\.cspSource\}/);
   assert.match(source, new RegExp(String.raw`style-src 'nonce-\$\{nonce\}'; script-src 'nonce-\$\{nonce\}'`));
   assert.match(source, new RegExp(String.raw`<style nonce="\$\{nonce\}">\$\{styleContent\}<\/style>`));
@@ -1088,7 +1147,7 @@ test('parent-directory file collisions require confirmation and replace related 
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /const destinationExists = await resourceExists\(destinationUri\)/);
-  assert.match(source, /showWarningMessage\([\s\S]+\{ modal: true, detail \}[\s\S]+['"]覆盖['"]/);
+  assert.match(source, /showWarningMessage\([\s\S]+\{ modal: true, detail \}[\s\S]+this\.localeStrings\.overwrite/);
   assert.match(source, /await vscode\.window\.tabGroups\.close\(destinationTabs, true\)/);
   assert.match(source, /workspace\.fs\.rename\(sourceUri, destinationUri, \{ overwrite: destinationExists \}\)/);
   assert.match(source, /await this\.openMovedResource\(sourceInput, tab\.label, destinationUri, replacementViewColumn\)/);

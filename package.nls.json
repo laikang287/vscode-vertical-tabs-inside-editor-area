@@ -1,4 +1,12 @@
 {
+  "verticalTabs.displayName": "Vertical Tabs Inside Editor Area",
+  "verticalTabs.description": "A vertical tab navigator locked inside the editor area. Shows all tabs across VS Code editor groups with grouping, pinning, drag-and-drop, sorting, and multi-language support.",
+  "verticalTabs.title": "Vertical Tabs",
+  "verticalTabs.command.toggle": "Vertical Tabs: Toggle",
+  "verticalTabs.command.focus": "Vertical Tabs: Focus",
+  "verticalTabs.command.previous": "Vertical Tabs: Previous Tab",
+  "verticalTabs.command.next": "Vertical Tabs: Next Tab",
+  "verticalTabs.command.showLogs": "Vertical Tabs: Show Logs",
   "verticalTabs.config.showNativeContextMenuActions": "Show VS Code and installed-extension actions as a second group in a tab's context menu. Vertical Tabs removes duplicate close and pin actions. Changes apply immediately.",
   "verticalTabs.config.alwaysFollowActiveTab": "Always follow the active tab. When enabled, switching the focused editor automatically expands its group and scrolls the tab into view. Disable this to preserve the current list position while browsing tabs manually.",
   "verticalTabs.config.position": "Position of the vertical tab bar inside the editor area. Changes are applied immediately.",

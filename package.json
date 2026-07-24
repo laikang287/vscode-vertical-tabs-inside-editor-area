@@ -1,8 +1,8 @@
 {
   "name": "vertical-tabs-inside-editor-area",
-  "displayName": "Vertical Tabs Inside Editor Area",
-  "description": "A vertical tab navigator locked inside the editor area. Shows all tabs across VS Code editor groups with grouping, pinning, drag-and-drop, sorting, and multi-language support.",
-  "version": "1.0.0",
+  "displayName": "%verticalTabs.displayName%",
+  "description": "%verticalTabs.description%",
+  "version": "1.0.1",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,7 @@
       },
       {
         "command": "verticalTabs.toggle",
-        "title": "Vertical Tabs: Toggle"
+        "title": "%verticalTabs.command.toggle%"
       },
       {
         "command": "verticalTabs.close",
@@ -38,15 +38,15 @@
       },
       {
         "command": "verticalTabs.focus",
-        "title": "Vertical Tabs: Focus"
+        "title": "%verticalTabs.command.focus%"
       },
       {
         "command": "verticalTabs.previous",
-        "title": "Vertical Tabs: Previous Tab"
+        "title": "%verticalTabs.command.previous%"
       },
       {
         "command": "verticalTabs.next",
-        "title": "Vertical Tabs: Next Tab"
+        "title": "%verticalTabs.command.next%"
       },
       {
         "command": "verticalTabs.previousInGroup",
@@ -94,7 +94,7 @@
       },
       {
         "command": "verticalTabs.showLogs",
-        "title": "Vertical Tabs: Show Logs"
+        "title": "%verticalTabs.command.showLogs%"
       }
     ],
     "keybindings": [
@@ -105,7 +105,7 @@
       }
     ],
     "configuration": {
-      "title": "Vertical Tabs",
+      "title": "%verticalTabs.title%",
       "properties": {
         "verticalTabs.position": {
           "type": "string",
@@ -272,7 +272,7 @@
       "activitybar": [
         {
           "id": "vertical-tabs-activitybar",
-          "title": "Vertical Tabs",
+          "title": "%verticalTabs.title%",
           "icon": "media/vertical-tabs.svg"
         }
       ]
@@ -281,7 +281,7 @@
       "vertical-tabs-activitybar": [
         {
           "id": "verticalTabs.launcher",
-          "name": "Vertical Tabs",
+          "name": "%verticalTabs.title%",
           "visibility": "collapsed",
           "initialSize": 1
         }
