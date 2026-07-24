@@ -2300,7 +2300,7 @@ export class VerticalTabsPanel {
       </div>
     </header>
     <p id="description"></p>
-    <section id="groups" aria-label="打开的编辑器标签"></section>
+    <section id="groups" role="tree" tabindex="0" aria-label="打开的编辑器标签"></section>
   </main>
   <script nonce="${nonce}">var __i18n = ${JSON.stringify(i18n)};</script>
   <script nonce="${nonce}">${scriptContent}</script>
