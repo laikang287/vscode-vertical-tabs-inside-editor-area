@@ -45,6 +45,7 @@ const en: LocaleStrings = {
   groupModeFileType: "File type",
   sortModeLabel: "Sorting",
   sortModeNone: "Manual",
+  sortModeMru: "Recently used",
   sortModeModifiedAsc: "Modified (ascending)",
   sortModeModifiedDesc: "Modified (descending)",
   sortModeNameAsc: "Name (ascending)",

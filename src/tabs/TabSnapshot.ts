@@ -30,6 +30,7 @@ export interface SnapshotSourceTab {
   readonly tooltipPath?: string;
   readonly uri?: string;
   readonly mtime?: number;
+  readonly lastActivatedAt?: number;
   readonly targetIdentity: TabTargetIdentity;
   readonly isActivatable?: boolean;
   readonly isVerticalTabsPanel?: boolean;
@@ -92,6 +93,7 @@ export function buildSnapshot(
       resourcePath: tab.path,
       tooltipPath: tab.tooltipPath,
       mtime: tab.mtime,
+      lastActivatedAt: tab.lastActivatedAt,
     }];
   }));
 
@@ -386,18 +388,27 @@ function suffix(segments: readonly string[], suffixLength: number): string {
 
 function sortTabs(tabs: readonly VerticalTabItem[], sortMode: SortMode): readonly VerticalTabItem[] {
   return tabs
-    .map((tab, index) => ({ tab, index, fileSort: fileSortValue(tab, sortMode) }))
+    .map((tab, index) => ({ tab, index, sortValue: tabSortValue(tab, sortMode) }))
     .sort((left, right) => {
       if (left.tab.isPinned !== right.tab.isPinned) return left.tab.isPinned ? -1 : 1;
       if (sortMode === 'none') return left.index - right.index;
-      if (left.fileSort === undefined || right.fileSort === undefined) return left.index - right.index;
-      const compared = left.fileSort.localeCompare(right.fileSort, undefined, { numeric: true, sensitivity: 'base' });
+      if (sortMode === 'mru') {
+        if (left.tab.lastActivatedAt === undefined || right.tab.lastActivatedAt === undefined) {
+          if (left.tab.lastActivatedAt !== undefined) return -1;
+          if (right.tab.lastActivatedAt !== undefined) return 1;
+          return left.index - right.index;
+        }
+        return right.tab.lastActivatedAt - left.tab.lastActivatedAt;
+      }
+      if (left.sortValue === undefined || right.sortValue === undefined) return left.index - right.index;
+      const compared = left.sortValue.localeCompare(right.sortValue, undefined, { numeric: true, sensitivity: 'base' });
       return compared === 0 ? left.index - right.index : compared;
     })
     .map((entry) => entry.tab);
 }
 
-function fileSortValue(tab: VerticalTabItem, sortMode: SortMode): string | undefined {
+function tabSortValue(tab: VerticalTabItem, sortMode: SortMode): string | undefined {
+  if (sortMode === 'none' || sortMode === 'mru') return undefined;
   if (!tab.isFile) return undefined;
   if (sortMode === 'nameAsc') return tab.label;
   if (sortMode === 'nameDesc') return invertString(tab.label);

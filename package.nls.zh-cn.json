@@ -15,6 +15,7 @@
   "verticalTabs.config.defaultGroupMode.fileType": "按文件类型分组。",
   "verticalTabs.config.defaultSortMode": "默认排序方式。默认为手动排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。",
   "verticalTabs.config.defaultSortMode.none": "手动排序，可通过拖拽调整标签顺序。",
+  "verticalTabs.config.defaultSortMode.mru": "按最近一次成功激活标签的时间排序。前台新打开的标签立即参与排序；后台打开或恢复后尚未激活的标签排在已有记录之后，并保持原生顺序。",
   "verticalTabs.config.defaultSortMode.modifiedAsc": "按修改时间升序。",
   "verticalTabs.config.defaultSortMode.modifiedDesc": "按修改时间降序。",
   "verticalTabs.config.defaultSortMode.nameAsc": "按名称升序。",

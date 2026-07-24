@@ -45,6 +45,7 @@ const ptBr: LocaleStrings = {
   groupModeFileType: "Tipo de arquivo",
   sortModeLabel: "Ordenação",
   sortModeNone: "Manual",
+  sortModeMru: "Usados recentemente",
   sortModeModifiedAsc: "Modificação (crescente)",
   sortModeModifiedDesc: "Modificação (decrescente)",
   sortModeNameAsc: "Nome (crescente)",

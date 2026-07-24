@@ -45,6 +45,7 @@ const zhTw: LocaleStrings = {
   groupModeFileType: "按檔案型別",
   sortModeLabel: "排序方式",
   sortModeNone: "手動排序",
+  sortModeMru: "最近使用",
   sortModeModifiedAsc: "修改時間 (升序)",
   sortModeModifiedDesc: "修改時間 (降序)",
   sortModeNameAsc: "名稱 (升序)",

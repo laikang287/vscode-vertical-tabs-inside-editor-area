@@ -45,6 +45,7 @@ const ja: LocaleStrings = {
   groupModeFileType: "ファイルタイプ",
   sortModeLabel: "ソート",
   sortModeNone: "手動",
+  sortModeMru: "最近使用",
   sortModeModifiedAsc: "更新日時 (昇順)",
   sortModeModifiedDesc: "更新日時 (降順)",
   sortModeNameAsc: "名前 (昇順)",

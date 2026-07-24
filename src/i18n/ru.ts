@@ -45,6 +45,7 @@ const ru: LocaleStrings = {
   groupModeFileType: "Тип файла",
   sortModeLabel: "Сортировка",
   sortModeNone: "Вручную",
+  sortModeMru: "Недавно использованные",
   sortModeModifiedAsc: "Изменение (возрастание)",
   sortModeModifiedDesc: "Изменение (убывание)",
   sortModeNameAsc: "Имя (возрастание)",
