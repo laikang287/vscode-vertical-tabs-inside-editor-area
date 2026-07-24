@@ -28,6 +28,9 @@ suite('Vertical Tabs extension', () => {
       'verticalTabs.moveDownInGroup',
       'verticalTabs.moveToPreviousGroup',
       'verticalTabs.moveToNextGroup',
+      'verticalTabs.saveWorkset',
+      'verticalTabs.loadWorkset',
+      'verticalTabs.manageWorksets',
     ]) {
       assert.ok(commands.includes(command), `${command} should be registered.`);
     }

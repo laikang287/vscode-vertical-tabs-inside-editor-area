@@ -1,6 +1,8 @@
 import type { LocaleStrings } from './locale';
+import { ruWorksets } from './worksetStrings';
 
 const ru: LocaleStrings = {
+  ...ruWorksets,
   emptyState: 'Нет отображаемых вкладок редактора.',
   expand: 'Развернуть',
   collapse: 'Свернуть',

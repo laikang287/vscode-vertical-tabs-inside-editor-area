@@ -7,10 +7,19 @@ const target = { revision: 4, groupIndex: 1, tabIndex: 2, identity: { kind: 'tex
 
 test('accepts ready messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'ready', collapsedGroupKeys: ['manual:one:closed'] }),
+    { type: 'ready', collapsedGroupKeys: ['manual:one:closed'] },
+  );
 });
 
 test('accepts refresh requests', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'requestRefresh' }), { type: 'requestRefresh' });
+  assert.deepEqual(parseWebviewMessage({ type: 'manageWorksets' }), { type: 'manageWorksets' });
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'setCollapsedGroups', keys: ['vscode:vscode-0:closed'] }),
+    { type: 'setCollapsedGroups', keys: ['vscode:vscode-0:closed'] },
+  );
 });
 
 test('accepts render acknowledgement messages', () => {

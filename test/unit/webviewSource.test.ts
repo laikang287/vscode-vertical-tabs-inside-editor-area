@@ -364,6 +364,18 @@ test('toolbar exposes labeled grouping and sorting selectors plus icon tree acti
   assert.doesNotMatch(webviewSource, /appendGroupSubmenu\(menu, '排序方式'/);
 });
 
+test('workset toolbar action synchronizes collapse state and delegates management to the extension host', () => {
+  const mainSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+  const extensionSource = readFileSync(path.resolve(__dirname, '../../../src/extension.ts'), 'utf8');
+  assert.match(panelSource, /id="worksets"/);
+  assert.match(extensionSource, /verticalTabs\.saveWorkset/);
+  assert.match(extensionSource, /verticalTabs\.loadWorkset/);
+  assert.match(mainSource, /type: 'manageWorksets'/);
+  assert.match(mainSource, /type: 'setCollapsedGroups', keys/);
+  assert.match(mainSource, /collapsedGroupKeys: Array\.from\(collapsedGroups\)/);
+});
+
 test('MRU sorting tracks verified activations across editor groups without rewriting native tab order', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 

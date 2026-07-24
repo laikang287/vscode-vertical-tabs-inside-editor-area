@@ -56,6 +56,7 @@ export interface SnapshotBuildOptions {
   readonly relativePathDisplay?: RelativePathDisplay;
   readonly displayOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
+  readonly collapsedGroupKeys?: readonly string[];
   readonly localeStrings?: LocaleStrings;
 }
 
@@ -114,6 +115,7 @@ export function buildSnapshot(
     tabs,
     manualGroups,
     displayGroups,
+    collapsedGroupKeys: options.collapsedGroupKeys ?? [],
   };
 }
 

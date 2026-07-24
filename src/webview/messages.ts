@@ -27,13 +27,14 @@ export interface VerticalTabsSnapshot {
   readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
   readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean; readonly nativeContextMenuActionsEnabled: boolean;
+  readonly collapsedGroupKeys?: readonly string[];
 }
 export type NativeContextMenuEntry =
   | { readonly kind: 'separator' }
   | { readonly kind: 'action'; readonly actionId: string; readonly label: string; readonly enabled: boolean }
   | { readonly kind: 'submenu'; readonly label: string; readonly entries: readonly NativeContextMenuEntry[] };
 export type WebviewMessage =
-  | { readonly type: 'ready' } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
+  | { readonly type: 'ready'; readonly collapsedGroupKeys?: readonly string[] } | { readonly type: 'requestRefresh' } | { readonly type: 'closeSaved' }
   | { readonly type: 'selectionChanged'; readonly targets: readonly TabTarget[] }
   | { readonly type: 'renderAck'; readonly revision: number }
   | { readonly type: 'webviewLog'; readonly level: 'debug' | 'warn' | 'error'; readonly message: string; readonly details?: string }
@@ -42,6 +43,8 @@ export type WebviewMessage =
   | { readonly type: 'setToolbarControlsVisible'; readonly visible: boolean }
   | { readonly type: 'setSearchVisible'; readonly visible: boolean }
   | { readonly type: 'setSearchGroups'; readonly enabled: boolean }
+  | { readonly type: 'setCollapsedGroups'; readonly keys: readonly string[] }
+  | { readonly type: 'manageWorksets' }
   | { readonly type: 'railWidth'; readonly width: number } | { readonly type: 'createGroup'; readonly name: string }
   | { readonly type: 'renameGroup'; readonly groupId: string; readonly name: string } | { readonly type: 'deleteGroup' | 'closeGroup'; readonly groupId: string }
   | { readonly type: 'toggleGroup'; readonly groupId: string } | { readonly type: 'assignGroup'; readonly target: TabTarget; readonly groupId?: string }
@@ -66,7 +69,10 @@ const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
-  if (value.type === 'ready' || value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll' || value.type === 'requestCreateGroup') return { type: value.type };
+  if (value.type === 'ready' && (value.collapsedGroupKeys === undefined || isCollapsedGroupKeys(value.collapsedGroupKeys))) {
+    return { type: 'ready', ...(value.collapsedGroupKeys === undefined ? {} : { collapsedGroupKeys: value.collapsedGroupKeys }) };
+  }
+  if (value.type === 'requestRefresh' || value.type === 'closeSaved' || value.type === 'closeAll' || value.type === 'requestCreateGroup' || value.type === 'manageWorksets') return { type: value.type };
   if (value.type === 'selectionChanged' && isTabTargetArray(value.targets)) return { type: 'selectionChanged', targets: value.targets };
   if (value.type === 'renderAck' && isNonNegativeInteger(value.revision)) return { type: 'renderAck', revision: value.revision };
   if (value.type === 'webviewLog' && isWebviewLogLevel(value.level) && isLogMessage(value.message) && (value.details === undefined || isLogDetails(value.details))) {
@@ -77,6 +83,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if (value.type === 'setToolbarControlsVisible' && typeof value.visible === 'boolean') return { type: 'setToolbarControlsVisible', visible: value.visible };
   if (value.type === 'setSearchVisible' && typeof value.visible === 'boolean') return { type: 'setSearchVisible', visible: value.visible };
   if (value.type === 'setSearchGroups' && typeof value.enabled === 'boolean') return { type: 'setSearchGroups', enabled: value.enabled };
+  if (value.type === 'setCollapsedGroups' && isCollapsedGroupKeys(value.keys)) return { type: 'setCollapsedGroups', keys: value.keys };
   if (value.type === 'railWidth' && isRailWidth(value.width)) return { type: 'railWidth', width: value.width };
   if (value.type === 'createGroup' && isName(value.name)) return { type: 'createGroup', name: value.name };
   if ((value.type === 'renameGroup') && isId(value.groupId) && isName(value.name)) return { type: 'renameGroup', groupId: value.groupId, name: value.name };
@@ -146,3 +153,8 @@ function isNonNegativeInteger(value: unknown): value is number { return typeof v
 function isUri(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 4096; }
 function isViewType(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200; }
 function isLabel(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 500; }
+function isCollapsedGroupKeys(value: unknown): value is readonly string[] {
+  return Array.isArray(value)
+    && value.length <= 2000
+    && value.every((item) => typeof item === 'string' && item.length > 0 && item.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(item));
+}
