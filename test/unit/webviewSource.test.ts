@@ -164,22 +164,39 @@ test('automatic-memory settings reset live state and avoid persisted width reads
   assert.match(panelSource, /const savedRatio = shouldRememberState\(\) \? context\.globalState\.get<number>\(WIDTH_RATIO_STORAGE_KEY\) : undefined/);
 });
 
-test('relative path display is configurable and uses a subdued second line', () => {
+test('directory and relative path display is configurable and uses a subdued second line', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
+  const packageNls = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.json'), 'utf8')) as Record<string, string>;
+  const packageNlsZhCn = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.nls.zh-cn.json'), 'utf8')) as Record<string, string>;
   const manifest = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
-    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly string[] }> } };
+    contributes: { configuration: { properties: Record<string, { default: unknown; enum?: readonly string[]; enumItemLabels?: readonly string[] }> } };
   };
   const setting = manifest.contributes.configuration.properties['verticalTabs.relativePathDisplay'];
 
   assert.equal(setting?.default, 'off');
-  assert.deepEqual(setting?.enum, ['off', 'duplicates', 'always']);
+  assert.deepEqual(setting?.enum, ['off', 'duplicatesDirectory', 'duplicates', 'alwaysDirectory', 'always']);
+  assert.deepEqual(setting?.enumItemLabels, [
+    '%verticalTabs.config.relativePathDisplay.label.off%',
+    '%verticalTabs.config.relativePathDisplay.label.duplicatesDirectory%',
+    '%verticalTabs.config.relativePathDisplay.label.duplicates%',
+    '%verticalTabs.config.relativePathDisplay.label.alwaysDirectory%',
+    '%verticalTabs.config.relativePathDisplay.label.always%',
+  ]);
   assert.match(panelSource, /relativePathDisplay: readRelativePathDisplay\(\)/);
+  assert.match(panelSource, /directoryName: inputDirectoryName\(tab\.input\)/);
+  assert.match(panelSource, /function inputDirectoryName/);
   assert.match(panelSource, /function inputWorkspaceRelativePath/);
   assert.match(panelSource, /vscode\.workspace\.getWorkspaceFolder\(uri\)/);
   assert.match(webviewSource, /detail\.className = 'tab-description'/);
   assert.match(style, /\.tab-description \{[^}]*font-size: 10px;[^}]*opacity: \.82;/);
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.off'], '不显示（默认）');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.duplicatesDirectory'], '仅同名文件时显示目录名');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.duplicates'], '仅同名文件时显示相对仓库路径');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.alwaysDirectory'], '始终显示目录名');
+  assert.equal(packageNlsZhCn['verticalTabs.config.relativePathDisplay.label.always'], '始终显示相对仓库的路径');
+  assert.equal(typeof packageNls['verticalTabs.config.relativePathDisplay.label.duplicatesDirectory'], 'string');
 });
 
 test('editor-area position setting supports live left and right placement with a safe fallback', () => {

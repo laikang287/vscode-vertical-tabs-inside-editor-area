@@ -26,6 +26,7 @@ export interface SnapshotSourceTab {
   readonly languageId?: string;
   readonly icon?: TabVisualIcon;
   readonly path?: string;
+  readonly directoryName?: string;
   readonly relativePath?: string;
   readonly tooltipPath?: string;
   readonly uri?: string;
@@ -75,7 +76,7 @@ export function buildSnapshot(
     return [{
       target: { revision, groupIndex, tabIndex, identity: tab.targetIdentity },
       label: tab.label,
-      description: shouldShowRelativePath(tab, relativePathDisplay, labelOccurrences) ? tab.relativePath : undefined,
+      description: tabDescription(tab, relativePathDisplay, labelOccurrences),
       isActive: tab.isActive,
       isFocused: Boolean(tab.isFocused),
       isDirty: tab.isDirty,
@@ -102,20 +103,24 @@ export function buildSnapshot(
 function countVisibleTabLabels(groups: readonly SnapshotSourceGroup[]): ReadonlyMap<string, number> {
   const occurrences = new Map<string, number>();
   for (const tab of groups.flatMap((group) => group.tabs)) {
-    if (tab.isVerticalTabsPanel) continue;
+    if (tab.isVerticalTabsPanel || !isFileTab(tab)) continue;
     const key = normalizeTabLabel(tab.label);
     occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
   }
   return occurrences;
 }
 
-function shouldShowRelativePath(
+function tabDescription(
   tab: SnapshotSourceTab,
   mode: RelativePathDisplay,
   labelOccurrences: ReadonlyMap<string, number>,
-): boolean {
-  if (!tab.relativePath || mode === 'off') return false;
-  return mode === 'always' || (labelOccurrences.get(normalizeTabLabel(tab.label)) ?? 0) > 1;
+): string | undefined {
+  if (mode === 'off' || !isFileTab(tab)) return undefined;
+  const isDuplicate = (labelOccurrences.get(normalizeTabLabel(tab.label)) ?? 0) > 1;
+  if ((mode === 'duplicatesDirectory' || mode === 'duplicates') && !isDuplicate) return undefined;
+  return mode === 'duplicatesDirectory' || mode === 'alwaysDirectory'
+    ? tab.directoryName
+    : tab.relativePath;
 }
 
 function normalizeTabLabel(label: string): string {

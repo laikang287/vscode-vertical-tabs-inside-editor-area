@@ -4,11 +4,11 @@ import { buildSnapshot, moveItemsBefore, sameIdentity, selectCloseTargets, selec
 
 const source: SnapshotSourceGroup[] = [{ tabs: [
   { label: 'Vertical Tabs', isActive: true, isDirty: false, isPinned: false, isPreview: false, inputKind: 'webview', targetIdentity: { kind: 'webview', viewType: 'verticalTabs.editorArea', label: 'Vertical Tabs' }, isVerticalTabsPanel: true },
-  { label: 'index.ts', path: 'src/index.ts', relativePath: 'src/index.ts', languageId: 'typescript', icon: { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' }, isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
-  { label: 'index.ts', path: 'test/index.ts', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
+  { label: 'index.ts', path: 'src/index.ts', directoryName: 'src', relativePath: 'src/index.ts', languageId: 'typescript', icon: { kind: 'seti', fontCharacter: '\uE001', fontColor: '#519aba' }, isActive: true, isDirty: true, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/index.ts' }, manualGroupId: 'work' },
+  { label: 'index.ts', path: 'test/index.ts', directoryName: 'test', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: true, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
 ] }, { tabs: [
   { label: 'Terminal', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'Terminal' } },
-  { label: 'README.md', path: 'README.md', relativePath: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
+  { label: 'README.md', path: 'README.md', directoryName: 'workspace', relativePath: 'README.md', isActive: false, isDirty: false, isPinned: false, isPreview: true, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/README.md' } },
 ] }];
 
 test('defaults the toolbar to the top and preserves an explicit bottom position', () => {
@@ -67,13 +67,29 @@ test('builds a flat snapshot, hides the extension panel, and retains manual memb
   assert.equal(snapshot.manualGroups[0].name, '工作');
 });
 
-test('shows workspace-relative paths according to the configured display mode', () => {
+test('shows directory names or workspace-relative paths according to all five display modes', () => {
+  const duplicateDirectories = buildSnapshot(source, 8, [], { relativePathDisplay: 'duplicatesDirectory' });
+  assert.deepEqual(duplicateDirectories.tabs.map((tab) => tab.description), [
+    'src',
+    'test',
+    undefined,
+    undefined,
+  ]);
+
   const duplicatePaths = buildSnapshot(source, 8, [], { relativePathDisplay: 'duplicates' });
   assert.deepEqual(duplicatePaths.tabs.map((tab) => tab.description), [
     'src/index.ts',
     'test/index.ts',
     undefined,
     undefined,
+  ]);
+
+  const allDirectories = buildSnapshot(source, 9, [], { relativePathDisplay: 'alwaysDirectory' });
+  assert.deepEqual(allDirectories.tabs.map((tab) => tab.description), [
+    'src',
+    'test',
+    undefined,
+    'workspace',
   ]);
 
   const allPaths = buildSnapshot(source, 9, [], { relativePathDisplay: 'always' });
@@ -88,10 +104,29 @@ test('shows workspace-relative paths according to the configured display mode', 
   assert.ok(hiddenPaths.tabs.every((tab) => tab.description === undefined));
 });
 
+test('directory modes support files outside the workspace while relative-path modes remain workspace-only', () => {
+  const outsideSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'outside.ts', path: '/tmp/outside.ts', directoryName: 'tmp', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///tmp/outside.ts' } },
+  ] }];
+
+  assert.equal(buildSnapshot(outsideSource, 25, [], { relativePathDisplay: 'alwaysDirectory' }).tabs[0]?.description, 'tmp');
+  assert.equal(buildSnapshot(outsideSource, 26, [], { relativePathDisplay: 'always' }).tabs[0]?.description, undefined);
+});
+
+test('non-file tabs do not make a file name count as duplicated', () => {
+  const mixedSource: SnapshotSourceGroup[] = [{ tabs: [
+    { label: 'shared', directoryName: 'src', relativePath: 'src/shared', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/shared' } },
+    { label: 'shared', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'terminal', targetIdentity: { kind: 'terminal', label: 'shared' } },
+  ] }];
+
+  const snapshot = buildSnapshot(mixedSource, 27, [], { relativePathDisplay: 'duplicatesDirectory' });
+  assert.deepEqual(snapshot.tabs.map((tab) => tab.description), [undefined, undefined]);
+});
+
 test('detects duplicate tab names without case differences', () => {
   const caseVariantSource: SnapshotSourceGroup[] = [{ tabs: [
-    { label: 'Index.ts', relativePath: 'src/Index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/Index.ts' } },
-    { label: 'index.ts', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
+    { label: 'Index.ts', directoryName: 'src', relativePath: 'src/Index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/src/Index.ts' } },
+    { label: 'index.ts', directoryName: 'test', relativePath: 'test/index.ts', isActive: false, isDirty: false, isPinned: false, isPreview: false, inputKind: 'text', targetIdentity: { kind: 'text', uri: 'file:///workspace/test/index.ts' } },
   ] }];
 
   const snapshot = buildSnapshot(caseVariantSource, 11, [], { relativePathDisplay: 'duplicates' });
