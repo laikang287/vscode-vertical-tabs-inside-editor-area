@@ -108,10 +108,12 @@ source: null
 - 对所有来自 Webview 的消息先进行运行时校验；未知或无效消息不得改变状态。
 - 禁止通过 Webview 读取、模拟或覆盖用户工作区文件。
 
-## README文档
--  `README.zh-CN.md` 文件只能手工编写，AI不可以修改此文档
--  `README.zh-CN.md` 为原本文档，其它语言版本的文档均由  `README.zh-CN.md` 使用AI翻译而来
-- README 顶部必须保留 GitHub 可用的语言导航链接，至少覆盖仓库当前支持的所有 README 语言版本。将 `README.zh-CN.md` 自动翻译为其他语言 README ，其他语言文件中的以下导航块必须保持原样，不得翻译链接文字、路径、标点或标签结构：
+## i18n 与 README 文档
+- 插件内部所有用户可见功能都必须自动支持 i18n。新增或修改功能时，应在同一次改造中同步接入现有 i18n 机制并补齐仓库支持的全部界面语言，不得等待用户另行提出翻译要求。适用范围包括 Webview、扩展宿主提示、命令、菜单、配置项标题与说明、输入框、按钮、警告与错误提示、无障碍标签等；仅供开发者排查的内部诊断日志可单独评估。
+- 文档默认不进行 i18n。除非用户明确手工提出文档翻译要求，否则 AI 不得自动翻译、新增或同步更新其它语言的 README 或文档。
+- `README.zh-CN.md` 文件只能由用户手工编写，AI 不可以修改此文档。
+- `README.zh-CN.md` 为原本文档；仅在用户明确要求翻译文档时，其它语言版本才由 AI 以该文件为规范源进行翻译。
+- README 顶部必须保留 GitHub 可用的语言导航链接，至少覆盖仓库当前支持的所有 README 语言版本。用户明确要求将 `README.zh-CN.md` 翻译为其它语言 README 时，其它语言文件中的以下导航块必须保持原样，不得翻译链接文字、路径、标点或标签结构：
 
 ```
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
