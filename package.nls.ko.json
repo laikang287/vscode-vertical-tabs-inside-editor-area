@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "세로 탭 표시",
+  "verticalTabs.command.close": "세로 탭 숨기기",
+  "verticalTabs.launcher.show": "[표시](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[숨기기](command:verticalTabs.close)"
+}

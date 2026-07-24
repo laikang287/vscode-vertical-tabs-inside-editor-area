@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "Mostrar pestañas verticales",
+  "verticalTabs.command.close": "Ocultar pestañas verticales",
+  "verticalTabs.launcher.show": "[Mostrar](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Ocultar](command:verticalTabs.close)"
+}

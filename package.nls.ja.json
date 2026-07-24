@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "垂直タブを表示",
+  "verticalTabs.command.close": "垂直タブを非表示",
+  "verticalTabs.launcher.show": "[表示](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[非表示](command:verticalTabs.close)"
+}

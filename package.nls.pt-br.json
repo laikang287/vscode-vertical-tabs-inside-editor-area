@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "Mostrar abas verticais",
+  "verticalTabs.command.close": "Ocultar abas verticais",
+  "verticalTabs.launcher.show": "[Mostrar](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Ocultar](command:verticalTabs.close)"
+}

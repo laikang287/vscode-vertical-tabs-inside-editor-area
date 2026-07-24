@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "顯示垂直分頁",
+  "verticalTabs.command.close": "隱藏垂直分頁",
+  "verticalTabs.launcher.show": "[顯示](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[隱藏](command:verticalTabs.close)"
+}

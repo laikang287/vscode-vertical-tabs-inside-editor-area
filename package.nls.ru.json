@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "Показать вертикальные вкладки",
+  "verticalTabs.command.close": "Скрыть вертикальные вкладки",
+  "verticalTabs.launcher.show": "[Показать](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Скрыть](command:verticalTabs.close)"
+}

@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "Afficher les onglets verticaux",
+  "verticalTabs.command.close": "Masquer les onglets verticaux",
+  "verticalTabs.launcher.show": "[Afficher](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Masquer](command:verticalTabs.close)"
+}

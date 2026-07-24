@@ -307,10 +307,12 @@ suite('Vertical Tabs extension', () => {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
       activationEvents: string[];
       contributes: {
-        commands: Array<{ command: string }>;
+        commands: Array<{ command: string; title: string; icon?: string }>;
         keybindings: Array<{ command: string }>;
         configuration: { properties: Record<string, { default: unknown; enum?: readonly unknown[]; scope?: string; markdownDescription?: string }> };
         viewsContainers: { activitybar: Array<{ id: string }> };
+        views: Record<string, Array<{ id: string; visibility?: string; initialSize?: number }>>;
+        menus: { 'view/title': Array<{ command: string; when: string }> };
       };
     };
     assert.ok(manifest.activationEvents.includes('onStartupFinished'));
@@ -327,6 +329,25 @@ suite('Vertical Tabs extension', () => {
     assert.deepEqual(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].enum, ['top', 'bottom']);
     assert.equal(manifest.contributes.configuration.properties['verticalTabs.toolbarPosition'].scope, 'window');
     assert.ok(manifest.contributes.viewsContainers.activitybar.some((view: { id: string }) => view.id === 'vertical-tabs-activitybar'));
+    const launcher = manifest.contributes.views['vertical-tabs-activitybar']?.find((view) => view.id === 'verticalTabs.launcher');
+    assert.equal(launcher?.visibility, 'collapsed');
+    assert.equal(launcher?.initialSize, 1);
+    assert.deepEqual(
+      manifest.contributes.commands.find((entry) => entry.command === 'verticalTabs.open'),
+      { command: 'verticalTabs.open', title: '%verticalTabs.command.open%', icon: '$(eye)' },
+    );
+    assert.deepEqual(
+      manifest.contributes.commands.find((entry) => entry.command === 'verticalTabs.close'),
+      { command: 'verticalTabs.close', title: '%verticalTabs.command.close%', icon: '$(eye-closed)' },
+    );
+    assert.ok(manifest.contributes.menus['view/title'].some((entry) => (
+      entry.command === 'verticalTabs.open'
+      && entry.when === 'view == verticalTabs.launcher && !verticalTabs.visible'
+    )));
+    assert.ok(manifest.contributes.menus['view/title'].some((entry) => (
+      entry.command === 'verticalTabs.close'
+      && entry.when === 'view == verticalTabs.launcher && verticalTabs.visible'
+    )));
     const configurableCommands = [
       'verticalTabs.previousInGroup',
       'verticalTabs.nextInGroup',

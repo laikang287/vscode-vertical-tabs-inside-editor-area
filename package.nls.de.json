@@ -1,0 +1,6 @@
+{
+  "verticalTabs.command.open": "Vertikale Tabs anzeigen",
+  "verticalTabs.command.close": "Vertikale Tabs ausblenden",
+  "verticalTabs.launcher.show": "[Anzeigen](command:verticalTabs.open)",
+  "verticalTabs.launcher.hide": "[Ausblenden](command:verticalTabs.close)"
+}
