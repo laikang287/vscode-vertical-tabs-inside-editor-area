@@ -137,9 +137,10 @@ test('tab context menus append an optional VS Code action group with secure opaq
   assert.match(manifest, /"verticalTabs\.showNativeContextMenuActions"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
 });
 
-test('group names preserve their original capitalization', () => {
+test('group names are centered and preserve their original capitalization', () => {
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
+  assert.match(style, /\.group-name \{[\s\S]*?text-align: center;[\s\S]*?\}/);
   assert.match(style, /\.group-name \{[\s\S]*?text-transform: none;[\s\S]*?\}/);
   assert.doesNotMatch(style, /\.group-name \{[\s\S]*?text-transform: uppercase;[\s\S]*?\}/);
 });
