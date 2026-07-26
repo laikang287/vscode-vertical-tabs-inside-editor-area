@@ -28,3 +28,19 @@ export function clampContextMenuCoordinate(
 ): number {
   return Math.max(margin, Math.min(requested, viewportSize - size - margin));
 }
+
+export function alignContextMenuTopToAnchor(
+  anchorTop: number,
+  menuHeight: number,
+  viewportHeight: number,
+  margin = 4,
+): number {
+  return clampContextMenuCoordinate(anchorTop, menuHeight, viewportHeight, margin);
+}
+
+export function shouldDismissContextMenuOnPointerDown(
+  button: number,
+  isInsideMenu: boolean,
+): boolean {
+  return button === 0 && !isInsideMenu;
+}
