@@ -78,6 +78,38 @@ test('group-name search counts matching groups and includes their tabs', () => {
   assert.deepEqual(result.groups[0]?.group.tabs.map((candidate) => candidate.label), ['alpha.ts', 'beta.ts']);
 });
 
+test('keeps and expands the complete ancestor path for nested matches', () => {
+  const root = group('root', 'Root');
+  const child = { ...group('child', 'Child'), parentId: 'root', depth: 2 };
+  const leaf = { ...group('leaf', 'Leaf', tab('needle.ts', 0)), parentId: 'child', depth: 3 };
+  const result = evaluateTabSearch([root, child, leaf], {
+    query: 'needle',
+    searchGroups: true,
+    searchWorkspaceRelativePaths: false,
+    useRegex: false,
+  });
+
+  assert.deepEqual(result.groups.map(({ group: item }) => item.id), ['root', 'child', 'leaf']);
+  assert.deepEqual(result.groups.map(({ autoExpand }) => autoExpand), [true, true, true]);
+  assert.equal(result.groups[0]?.group.collapsed, true);
+});
+
+test('matching a parent group includes its complete subtree', () => {
+  const root = group('root', 'Matching root');
+  const child = { ...group('child', 'Child', tab('child.ts', 0)), parentId: 'root', depth: 2 };
+  const leaf = { ...group('leaf', 'Leaf', tab('leaf.ts', 0)), parentId: 'child', depth: 3 };
+  const result = evaluateTabSearch([root, child, leaf], {
+    query: 'matching',
+    searchGroups: true,
+    searchWorkspaceRelativePaths: false,
+    useRegex: false,
+  });
+
+  assert.deepEqual(result.groups.map(({ group: item }) => item.id), ['root', 'child', 'leaf']);
+  assert.equal(result.matchedGroupCount, 1);
+  assert.equal(result.matchedTabCount, 2);
+});
+
 test('invalid regular expressions report an error without filtering the tab list', () => {
   const groups = [group('source', 'Source', tab('alpha.ts', 0), tab('beta.ts', 0))];
   const result = evaluateTabSearch(groups, {
@@ -117,6 +149,7 @@ function group(id: string, title: string, ...tabs: VerticalTabItem[]): VerticalT
     showHeader: true,
     isManual: true,
     isPinned: false,
+    depth: 1,
   };
 }
 

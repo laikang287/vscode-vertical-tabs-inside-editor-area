@@ -29,6 +29,7 @@
   "verticalTabs.config.defaultGroupMode.vscode": "Suivre les groupes d’éditeurs VS Code.",
   "verticalTabs.config.defaultGroupMode.manual": "Utiliser le groupement manuel.",
   "verticalTabs.config.defaultGroupMode.parentDir": "Grouper par répertoire parent.",
+  "verticalTabs.config.defaultGroupMode.parentDirTree": "Grouper les onglets ouverts dans une arborescence de répertoires parents.",
   "verticalTabs.config.defaultGroupMode.fileType": "Grouper par type de fichier.",
   "verticalTabs.config.defaultSortMode": "Mode de tri par défaut. Le tri manuel est utilisé par défaut. Toujours utilisé lorsque la mémorisation automatique est désactivée ; utilisé uniquement en l’absence de valeur enregistrée lorsqu’elle est activée.",
   "verticalTabs.config.defaultSortMode.none": "Tri manuel ; les onglets peuvent être réorganisés par glisser-déposer.",

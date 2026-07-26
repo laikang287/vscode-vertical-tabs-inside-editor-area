@@ -29,6 +29,7 @@
   "verticalTabs.config.defaultGroupMode.vscode": "Seguir los grupos de editores de VS Code.",
   "verticalTabs.config.defaultGroupMode.manual": "Usar agrupación manual.",
   "verticalTabs.config.defaultGroupMode.parentDir": "Agrupar por directorio principal.",
+  "verticalTabs.config.defaultGroupMode.parentDirTree": "Agrupar las pestañas abiertas en un árbol de directorios padre.",
   "verticalTabs.config.defaultGroupMode.fileType": "Agrupar por tipo de archivo.",
   "verticalTabs.config.defaultSortMode": "Modo de ordenación predeterminado. El valor predeterminado es la ordenación manual. Se usa siempre cuando la memoria automática está deshabilitada; cuando está habilitada, solo se usa si no existe un valor guardado.",
   "verticalTabs.config.defaultSortMode.none": "Ordenación manual; las pestañas pueden reordenarse arrastrándolas.",

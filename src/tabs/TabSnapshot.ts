@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import { format, type LocaleStrings } from '../i18n';
 import type {
@@ -35,6 +36,13 @@ export interface SnapshotSourceTab {
   readonly isActivatable?: boolean;
   readonly isVerticalTabsPanel?: boolean;
   readonly manualGroupId?: string;
+  readonly directoryTree?: readonly SnapshotDirectoryNode[];
+  readonly isOutsideWorkspace?: boolean;
+}
+
+export interface SnapshotDirectoryNode {
+  readonly uri: string;
+  readonly name: string;
 }
 
 export interface SnapshotSourceGroup {
@@ -243,6 +251,7 @@ function buildDisplayGroups(
 ): VerticalTabDisplayGroup[] {
   if (groupMode === 'manual') return orderDisplayGroups(buildManualGroups(tabs, manualGroups, sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
   if (groupMode === 'parentDir') return orderDisplayGroups(buildAutoGroups(tabs, 'parentDir', sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
+  if (groupMode === 'parentDirTree') return buildParentDirectoryTree(sourceGroups, tabs, sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings);
   if (groupMode === 'fileType') return orderDisplayGroups(buildAutoGroups(tabs, 'fileType', sortMode, displayOrderByGroup, pinnedGroupIds, localeStrings), sortMode);
   return buildVsCodeGroups(sourceGroups, tabs, sortMode, localeStrings);
 }
@@ -253,14 +262,15 @@ function buildVsCodeGroups(sourceGroups: readonly SnapshotSourceGroup[], tabs: r
     const groupTabs = tabs.filter((tab) => tab.target.groupIndex === sourceIndex);
     if (groupTabs.length === 0) continue;
     groups.push({
-     id: `vscode-${sourceIndex}`,
+      id: `vscode-${sourceIndex}`,
       title: format(localeStrings?.editorGroup ?? sourceGroups[sourceIndex]?.label ?? 'Editor Group {0}', groups.length + 1),
-     collapsed: false,
+      collapsed: false,
       mode: 'vscode',
       tabs: sortTabs(groupTabs, sortMode),
       showHeader: true,
       isManual: false,
       isPinned: false,
+      depth: 1,
     });
   }
   const flattenOnlyUserGroup = sourceGroups.length === 2 && groups.length === 1 && sourceGroups.some(isExtensionOnlyGroup);
@@ -285,17 +295,46 @@ function buildManualGroups(
   const knownGroups = new Set(manualGroups.map((group) => group.id));
   const ungrouped = orderDisplayTabs(tabs.filter((tab) => !tab.manualGroupId || !knownGroups.has(tab.manualGroupId)), displayOrderKey('manual', '__ungrouped'), displayOrderByGroup);
   const displayGroups: VerticalTabDisplayGroup[] = [];
+  const modifiedTimeByGroup = new Map(manualGroups.map((group) => {
+    const groupIds = manualGroupTreeIds(manualGroups, group.id);
+    return [group.id, latestTabMtime(tabs.filter((tab) => tab.manualGroupId && groupIds.has(tab.manualGroupId)))] as const;
+  }));
   displayGroups.push({
-      id: '__ungrouped',
-      title: localeStrings?.ungrouped ?? 'Ungrouped',
-      collapsed: false,
-      mode: 'manual',
-      tabs: sortTabs(ungrouped, sortMode),
-      showHeader: false,
-      isManual: true,
-      isPinned: false,
+    id: '__ungrouped',
+    title: localeStrings?.ungrouped ?? 'Ungrouped',
+    collapsed: false,
+    mode: 'manual',
+    tabs: sortTabs(ungrouped, sortMode),
+    showHeader: false,
+    isManual: true,
+    isPinned: false,
+    depth: 0,
   });
+  const appendLevel = (parentId: string | undefined, depth: number): void => {
+    const siblings: VerticalTabDisplayGroup[] = [];
+    for (const group of manualGroups.filter((candidate) => candidate.parentId === parentId)) {
+      const groupTabs = orderDisplayTabs(tabs.filter((tab) => tab.manualGroupId === group.id), displayOrderKey('manual', group.id), displayOrderByGroup);
+      siblings.push({
+        id: group.id,
+        title: group.name,
+        collapsed: group.collapsed,
+        mode: 'manual',
+        tabs: sortTabs(groupTabs, sortMode),
+        showHeader: true,
+        isManual: true,
+        isPinned: pinnedGroupIds?.has(group.id) ?? false,
+        parentId,
+        depth,
+      });
+    }
+    for (const sibling of orderDisplayGroups(siblings, sortMode, modifiedTimeByGroup)) {
+      displayGroups.push(sibling);
+      appendLevel(sibling.id, depth + 1);
+    }
+  };
+  appendLevel(undefined, 1);
   for (const group of manualGroups) {
+    if (displayGroups.some((candidate) => candidate.id === group.id)) continue;
     const groupTabs = orderDisplayTabs(tabs.filter((tab) => tab.manualGroupId === group.id), displayOrderKey('manual', group.id), displayOrderByGroup);
     displayGroups.push({
       id: group.id,
@@ -306,9 +345,24 @@ function buildManualGroups(
       showHeader: true,
       isManual: true,
       isPinned: pinnedGroupIds?.has(group.id) ?? false,
+      depth: 1,
     });
   }
   return displayGroups;
+}
+
+function manualGroupTreeIds(groups: readonly ManualTabGroup[], groupId: string): Set<string> {
+  const ids = new Set([groupId]);
+  const queue = [groupId];
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    for (const group of groups) {
+      if (group.parentId !== parentId || ids.has(group.id)) continue;
+      ids.add(group.id);
+      queue.push(group.id);
+    }
+  }
+  return ids;
 }
 
 function buildAutoGroups(
@@ -348,13 +402,127 @@ function buildAutoGroups(
       showHeader: true,
       isManual: false,
       isPinned: pinnedGroupIds?.has(id) ?? false,
+      depth: 1,
     };
   });
 }
 
-function orderDisplayGroups(groups: VerticalTabDisplayGroup[], sortMode: SortMode): VerticalTabDisplayGroup[] {
+function buildParentDirectoryTree(
+  sourceGroups: readonly SnapshotSourceGroup[],
+  tabs: readonly VerticalTabItem[],
+  sortMode: SortMode,
+  displayOrderByGroup: ReadonlyMap<string, readonly string[]> | undefined,
+  pinnedGroupIds: ReadonlySet<string> | undefined,
+  localeStrings?: LocaleStrings,
+): VerticalTabDisplayGroup[] {
+  interface MutableDirectoryNode {
+    readonly id: string;
+    readonly title: string;
+    readonly parentId?: string;
+    readonly depth: number;
+    readonly directoryUri?: string;
+    readonly tabs: VerticalTabItem[];
+  }
+  const nodes = new Map<string, MutableDirectoryNode>();
+  const insertionOrder: string[] = [];
+  const ensureNode = (
+    id: string,
+    title: string,
+    parentId: string | undefined,
+    depth: number,
+    directoryUri?: string,
+  ): MutableDirectoryNode => {
+    const existing = nodes.get(id);
+    if (existing) return existing;
+    const created = { id, title, parentId, depth, directoryUri, tabs: [] };
+    nodes.set(id, created);
+    insertionOrder.push(id);
+    return created;
+  };
+
+  for (const tab of tabs) {
+    const source = sourceGroups[tab.target.groupIndex]?.tabs[tab.target.tabIndex];
+    const chain = source?.directoryTree;
+    if (source?.isOutsideWorkspace && chain?.[0]) {
+      const outsideRoot = ensureNode('__outside-workspace', localeStrings?.outsideWorkspace ?? 'Outside workspace', undefined, 1);
+      const directory = chain[0];
+      const directoryId = parentDirectoryTreeId(directory.uri);
+      ensureNode(directoryId, directory.name, outsideRoot.id, 2, directory.uri).tabs.push(tab);
+      continue;
+    }
+    if (chain && chain.length > 0) {
+      let parentId: string | undefined;
+      for (let index = 0; index < chain.length; index += 1) {
+        const directory = chain[index]!;
+        const id = parentDirectoryTreeId(directory.uri);
+        ensureNode(id, directory.name, parentId, index + 1, directory.uri);
+        parentId = id;
+      }
+      nodes.get(parentId!)!.tabs.push(tab);
+      continue;
+    }
+    ensureNode('__other', localeStrings?.other ?? 'Other', undefined, 1).tabs.push(tab);
+  }
+
+  const groups = insertionOrder.map((id): VerticalTabDisplayGroup => {
+    const node = nodes.get(id)!;
+    const orderedTabs = orderDisplayTabs(node.tabs, displayOrderKey('parentDirTree', node.id), displayOrderByGroup);
+    return {
+      id: node.id,
+      title: node.title,
+      collapsed: false,
+      mode: 'parentDirTree',
+      tabs: sortTabs(orderedTabs, sortMode),
+      showHeader: true,
+      isManual: false,
+      isPinned: pinnedGroupIds?.has(node.id) ?? false,
+      parentId: node.parentId,
+      depth: node.depth,
+      directoryUri: node.directoryUri,
+    };
+  });
+  const modifiedTimeByGroup = new Map<string, number>();
+  const collectModifiedTime = (groupId: string): number => {
+    const cached = modifiedTimeByGroup.get(groupId);
+    if (cached !== undefined) return cached;
+    const group = groups.find((candidate) => candidate.id === groupId);
+    if (!group) return 0;
+    const result = Math.max(
+      latestTabMtime(group.tabs),
+      ...groups.filter((candidate) => candidate.parentId === groupId).map((child) => collectModifiedTime(child.id)),
+    );
+    modifiedTimeByGroup.set(groupId, result);
+    return result;
+  };
+  for (const group of groups) collectModifiedTime(group.id);
+
+  const flattened: VerticalTabDisplayGroup[] = [];
+  const appendLevel = (parentId: string | undefined): void => {
+    const siblings = orderDisplayGroups(
+      groups.filter((group) => group.parentId === parentId),
+      sortMode,
+      modifiedTimeByGroup,
+    );
+    for (const sibling of siblings) {
+      flattened.push(sibling);
+      appendLevel(sibling.id);
+    }
+  };
+  appendLevel(undefined);
+  return flattened;
+}
+
+function parentDirectoryTreeId(uri: string): string {
+  return `dir-tree-${crypto.createHash('sha256').update(uri).digest('base64url').slice(0, 24)}`;
+}
+
+function orderDisplayGroups(
+  groups: VerticalTabDisplayGroup[],
+  sortMode: SortMode,
+  modifiedTimeByGroup?: ReadonlyMap<string, number>,
+): VerticalTabDisplayGroup[] {
   return groups
-    .map((group, index) => ({ group, index, sortKey: groupSortKey(group, sortMode) }))
+    .map((group, index) => ({ group, index, sortKey: groupSortKey(group, sortMode, modifiedTimeByGroup?.get(group.id)) }))
     .sort((left, right) => {
       if (isManualRootDisplayGroup(left.group) !== isManualRootDisplayGroup(right.group)) return isManualRootDisplayGroup(left.group) ? -1 : 1;
       if (left.group.isPinned !== right.group.isPinned) return left.group.isPinned ? -1 : 1;
@@ -370,19 +538,23 @@ function orderDisplayGroups(groups: VerticalTabDisplayGroup[], sortMode: SortMod
     .map((entry) => entry.group);
 }
 
-function groupSortKey(group: VerticalTabDisplayGroup, sortMode: SortMode): string | undefined {
+function groupSortKey(group: VerticalTabDisplayGroup, sortMode: SortMode, descendantMtime?: number): string | undefined {
   if (sortMode === 'nameAsc' || sortMode === 'nameDesc') {
     return group.title;
   }
   if (sortMode === 'modifiedAsc' || sortMode === 'modifiedDesc') {
-    const latestMtime = group.tabs.reduce((max, tab) => {
-      if (!tab.isFile || tab.mtime === undefined) return max;
-      return Math.max(max, tab.mtime);
-    }, 0);
+    const latestMtime = descendantMtime ?? latestTabMtime(group.tabs);
     if (latestMtime === 0) return undefined;
     return latestMtime.toString().padStart(16, '0');
   }
   return undefined;
+}
+
+function latestTabMtime(tabs: readonly VerticalTabItem[]): number {
+  return tabs.reduce((max, tab) => {
+    if (!tab.isFile || tab.mtime === undefined) return max;
+    return Math.max(max, tab.mtime);
+  }, 0);
 }
 
 function isManualRootDisplayGroup(group: VerticalTabDisplayGroup): boolean {

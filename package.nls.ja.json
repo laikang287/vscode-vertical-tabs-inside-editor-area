@@ -29,6 +29,7 @@
   "verticalTabs.config.defaultGroupMode.vscode": "VS Code のエディター グループに従います。",
   "verticalTabs.config.defaultGroupMode.manual": "手動グループ化を使用します。",
   "verticalTabs.config.defaultGroupMode.parentDir": "親ディレクトリでグループ化します。",
+  "verticalTabs.config.defaultGroupMode.parentDirTree": "開いているタブを親ディレクトリツリーでグループ化します。",
   "verticalTabs.config.defaultGroupMode.fileType": "ファイルの種類でグループ化します。",
   "verticalTabs.config.defaultSortMode": "既定の並べ替えモードです。既定は手動並べ替えです。自動記憶が無効な場合は常に使用され、有効な場合は保存済みの値がないときだけ使用されます。",
   "verticalTabs.config.defaultSortMode.none": "手動並べ替え。ドラッグしてタブを並べ替えられます。",

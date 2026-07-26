@@ -47,21 +47,49 @@ export function evaluateTabSearch(
   let matchedTabCount = 0;
   let matchedGroupCount = 0;
 
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  const matchedGroupIds = new Set<string>();
+  const includedIds = new Set<string>();
+  const visibleTabsByGroup = new Map<string, readonly VerticalTabItem[]>();
   for (const group of groups) {
     const groupMatches = queryCanFilter && criteria.searchGroups && compiled.test(group.title);
-    if (groupMatches) matchedGroupCount += 1;
-
+    if (groupMatches) {
+      matchedGroupCount += 1;
+      matchedGroupIds.add(group.id);
+    }
     const visibleTabs = queryCanFilter && !groupMatches
       ? group.tabs.filter((tab) => tabMatchesQuery(tab, compiled, criteria.searchWorkspaceRelativePaths))
       : group.tabs;
-    const includeGroup = !affectsList || visibleTabs.length > 0 || groupMatches;
-    if (!includeGroup) continue;
+    visibleTabsByGroup.set(group.id, visibleTabs);
+    if (!affectsList || visibleTabs.length > 0 || groupMatches) includedIds.add(group.id);
+  }
 
+  if (affectsList) {
+    for (const groupId of matchedGroupIds) {
+      for (const candidate of groups) {
+        if (isDescendantOf(candidate, groupId, byId)) {
+          includedIds.add(candidate.id);
+          visibleTabsByGroup.set(candidate.id, candidate.tabs);
+        }
+      }
+    }
+    for (const groupId of Array.from(includedIds)) {
+      let parentId = byId.get(groupId)?.parentId;
+      while (parentId) {
+        includedIds.add(parentId);
+        parentId = byId.get(parentId)?.parentId;
+      }
+    }
+  }
+
+  for (const group of groups) {
+    if (affectsList && !includedIds.has(group.id)) continue;
+    const visibleTabs = visibleTabsByGroup.get(group.id) ?? group.tabs;
     matchedTabCount += visibleTabs.length;
     resultGroups.push({
       group: visibleTabs === group.tabs ? group : { ...group, tabs: visibleTabs },
-      groupMatches,
-      autoExpand: affectsList && visibleTabs.length > 0,
+      groupMatches: matchedGroupIds.has(group.id),
+      autoExpand: affectsList && (visibleTabs.length > 0 || groups.some((candidate) => includedIds.has(candidate.id) && isDescendantOf(candidate, group.id, byId))),
     });
   }
 
@@ -74,6 +102,21 @@ export function evaluateTabSearch(
     queryActive: queryCanFilter,
     ...(compiled.error ? { regexError: compiled.error } : {}),
   };
+}
+
+function isDescendantOf(
+  group: VerticalTabDisplayGroup,
+  ancestorId: string,
+  byId: ReadonlyMap<string, VerticalTabDisplayGroup>,
+): boolean {
+  let parentId = group.parentId;
+  const seen = new Set<string>();
+  while (parentId && !seen.has(parentId)) {
+    if (parentId === ancestorId) return true;
+    seen.add(parentId);
+    parentId = byId.get(parentId)?.parentId;
+  }
+  return false;
 }
 
 export function findTextMatchRanges(value: string, query: string, useRegex: boolean): readonly TextMatchRange[] {
