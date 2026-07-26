@@ -44,6 +44,7 @@ import {
   type TabCommandDirection,
 } from '../tabs/TabCommands';
 import { DeferredTargetCommitter } from '../tabs/DeferredTargetCommitter';
+import { selectTabListFocusCandidate, type TabListFocusSource } from '../tabs/TabListFocusTarget';
 import { TabMruTracker } from '../tabs/TabMruTracker';
 import {
   classifyTabResourceStatus,
@@ -69,7 +70,7 @@ import {
   type WorksetTabInput,
 } from '../worksets/Worksets';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabActivationFocus, type TabInputKind, type TabResourceStatus, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabResourceStatus, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { NativeTabMenuProvider } from './NativeTabMenuProvider';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
@@ -105,6 +106,8 @@ const WEBVIEW_POST_MAX_ATTEMPTS = 8;
 const RENDER_ACK_TIMEOUT_MS = 1200;
 const RENDER_ACK_MAX_ATTEMPTS = 6;
 const SHORTCUT_NAVIGATION_COMMIT_DELAY_MS = 160;
+const TAB_LIST_FOCUS_ACK_TIMEOUT_MS = 250;
+const TAB_LIST_FOCUS_MAX_ATTEMPTS = 4;
 
 interface PreparedRailGroup {
   readonly ratio: number;
@@ -138,6 +141,17 @@ interface ResourceDirectoryWatcher {
   readonly disposables: vscode.Disposable[];
 }
 
+interface PendingTabListFocus {
+  readonly requestId: string;
+  readonly sequence: number;
+  readonly source: TabListFocusSource;
+  readonly preferredTab?: vscode.Tab;
+  readonly completion: Promise<void>;
+  readonly resolveCompletion: () => void;
+  attempts: number;
+  target?: TabTarget;
+}
+
 interface ResolvedWorksetTab {
   readonly stored: StoredWorksetTab;
   readonly input: WorksetTabInput;
@@ -168,6 +182,7 @@ export class VerticalTabsPanel {
   private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   private renderAckTimer: ReturnType<typeof setTimeout> | undefined;
   private minWidthCorrectionTimer: ReturnType<typeof setTimeout> | undefined;
+  private tabListFocusAckTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly shortcutNavigation: DeferredTargetCommitter<TabTarget>;
   private shortcutNavigationAnchor: TabTarget | undefined;
   private shortcutNavigationPreparation: Promise<void> | undefined;
@@ -176,6 +191,8 @@ export class VerticalTabsPanel {
   private appliedSnapshotGeneration = -1;
   private renderAckRevision = 0;
   private renderAckAttempts = 0;
+  private tabListFocusSequence = 0;
+  private pendingTabListFocus: PendingTabListFocus | undefined;
   private disposed = false;
   // Ignore the Webview's initial ResizeObserver report until VS Code has
   // finished creating and sizing the dedicated editor group.
@@ -251,6 +268,7 @@ export class VerticalTabsPanel {
         if (this.shortcutNavigationActivationDepth === 0) {
           this.cancelShortcutNavigation('tabGroupsChanged');
         }
+        this.clearTabListFocusIfInactive();
         this.observeFocusedUserTab();
         this.scheduleRefresh();
         this.scheduleMinimizedWidthCorrection('tabGroupsChanged');
@@ -339,11 +357,25 @@ export class VerticalTabsPanel {
     return VerticalTabsPanel.panels.current !== undefined || hasVerticalTabsPanel();
   }
 
-  static async focus(context: vscode.ExtensionContext): Promise<void> {
+  static async focus(
+    context: vscode.ExtensionContext,
+    requestedSource: TabListFocusSource = 'outside',
+  ): Promise<void> {
     logDebug('请求聚焦垂直标签面板');
+    const existing = VerticalTabsPanel.panels.current;
+    const source: TabListFocusSource = existing?.panel.active ? 'outside' : requestedSource;
+    const preferredTab = existing?.selectTabListFocusTab(source)
+      ?? currentActiveUserTab();
+    const preparedRequest = existing?.prepareTabListFocusRequest(source, preferredTab);
     const instance = await VerticalTabsPanel.open(context);
     await instance?.reveal(false);
-    instance?.postMessage({ type: 'focusTabList' });
+    if (instance) {
+      await instance.requestTabListFocus(
+        source,
+        preferredTab,
+        instance === existing ? preparedRequest : undefined,
+      );
+    }
   }
 
   static async close(): Promise<void> {
@@ -790,6 +822,10 @@ export class VerticalTabsPanel {
     if (this.minWidthCorrectionTimer) {
       clearTimeout(this.minWidthCorrectionTimer);
     }
+    if (this.tabListFocusAckTimer) {
+      clearTimeout(this.tabListFocusAckTimer);
+    }
+    this.clearPendingTabListFocus();
     this.disposeResourceDirectoryWatchers();
     queueMicrotask(() => VerticalTabsPanel.syncVisibilityContext());
     while (this.disposables.length > 0) {
@@ -1033,9 +1069,7 @@ export class VerticalTabsPanel {
     if (this.shortcutNavigationActivationDepth === 0) {
       this.cancelShortcutNavigation('activeEditorChanged');
     }
-    if (!this.panel.active) {
-      this.postMessage({ type: 'blurTabList' });
-    }
+    this.clearTabListFocusIfInactive();
     this.observeFocusedUserTab();
     this.scheduleRefresh();
   }
@@ -1182,6 +1216,7 @@ export class VerticalTabsPanel {
     if (changedState) {
       await this.persistManualState();
     }
+    this.clearTabListFocusIfInactive();
     this.observeFocusedUserTab();
     this.scheduleRefresh();
   }
@@ -1400,6 +1435,11 @@ export class VerticalTabsPanel {
           this.renderAckTimer = undefined;
         }
       }
+      return;
+    }
+
+    if (message.type === 'tabListFocusResult') {
+      this.handleTabListFocusResult(message);
       return;
     }
 
@@ -1712,10 +1752,8 @@ export class VerticalTabsPanel {
 
     if (message.type === 'activateTab') {
       const tab = this.resolveTab(message.target);
-      const focus = message.focus ?? 'editor';
       logDebug('收到标签激活请求', {
         requestId: message.requestId,
-        focus,
         targetRevision: message.target.revision,
         currentRevision: this.currentSnapshot.revision,
         targetGroupIndex: message.target.groupIndex,
@@ -1727,7 +1765,7 @@ export class VerticalTabsPanel {
         const previousSuppression = this.suppressScheduledRefresh;
         this.suppressScheduledRefresh = true;
         try {
-          await this.activateTab(tab, message.requestId, focus);
+          await this.activateTab(tab, message.requestId);
           await this.refresh({ reason: 'navigate' });
         } finally {
           this.suppressScheduledRefresh = previousSuppression;
@@ -3498,70 +3536,55 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async activateTab(
-    tab: vscode.Tab,
-    requestId?: string,
-    focus: TabActivationFocus = 'editor',
-  ): Promise<void> {
-    logDebug('开始激活标签', { requestId, focus, target: describeTab(tab) });
-    try {
-      if (focus === 'editor' && await this.selectExistingTab(tab, requestId)) {
-        this.logActivationOutcome(tab, 'existingNavigation', requestId, focus);
-        return;
-      }
-
-      const options: vscode.TextDocumentShowOptions = {
-        viewColumn: tab.group.viewColumn,
-        preserveFocus: focus === 'rail',
-      };
-      if (tab.input instanceof vscode.TabInputText) {
-        logDebug('使用 showTextDocument 激活文本标签', { requestId, focus, target: describeTab(tab) });
-        await vscode.window.showTextDocument(tab.input.uri, options);
-        this.logActivationOutcome(tab, 'showTextDocument', requestId, focus);
-        return;
-      }
-      if (tab.input instanceof vscode.TabInputTextDiff || tab.input instanceof vscode.TabInputNotebookDiff) {
-        logDebug('使用 vscode.diff 激活 Diff 标签', { requestId, focus, target: describeTab(tab) });
-        await vscode.commands.executeCommand('vscode.diff', tab.input.original, tab.input.modified, tab.label, options);
-        this.logActivationOutcome(tab, 'vscode.diff', requestId, focus);
-        return;
-      }
-      if (tab.input instanceof vscode.TabInputCustom) {
-        logDebug('使用 vscode.openWith 激活 Custom Editor 标签', { requestId, focus, target: describeTab(tab), viewType: tab.input.viewType });
-        await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.viewType, options);
-        this.logActivationOutcome(tab, 'vscode.openWith:custom', requestId, focus);
-        return;
-      }
-      if (tab.input instanceof vscode.TabInputNotebook) {
-        logDebug('使用 vscode.openWith 激活 Notebook 标签', { requestId, focus, target: describeTab(tab), notebookType: tab.input.notebookType });
-        await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
-        this.logActivationOutcome(tab, 'vscode.openWith:notebook', requestId, focus);
-        return;
-      }
-      const builtInWebviewTarget = getActivatableBuiltInWebviewTarget(tab);
-      if (builtInWebviewTarget === 'welcome') {
-        logDebug('使用欢迎页命令激活内置 Webview 标签', { requestId, focus, target: describeTab(tab) });
-        await focusEditorGroup(tab.group.viewColumn);
-        await openWelcomeEditor();
-        this.logActivationOutcome(tab, 'openWelcomeEditor', requestId, focus);
-        return;
-      }
-      if (builtInWebviewTarget === 'settings') {
-        logDebug('使用设置页命令激活内置 Webview 标签', { requestId, focus, target: describeTab(tab) });
-        await focusEditorGroup(tab.group.viewColumn);
-        await vscode.commands.executeCommand('workbench.action.openSettings');
-        this.logActivationOutcome(tab, 'workbench.action.openSettings', requestId, focus);
-        return;
-      }
-      logWarn('标签类型不支持通过公开 API 激活', { requestId, focus, target: describeTab(tab) });
-      this.logActivationOutcome(tab, 'unsupported', requestId, focus);
-    } finally {
-      if (focus === 'rail') {
-        this.lastFocusedUserGroup = tab.group;
-        await this.reveal(false);
-        this.postMessage({ type: 'focusTabList' });
-      }
+  private async activateTab(tab: vscode.Tab, requestId?: string): Promise<void> {
+    logDebug('开始激活标签', { requestId, target: describeTab(tab) });
+    if (await this.selectExistingTab(tab, requestId)) {
+      this.logActivationOutcome(tab, 'existingNavigation', requestId);
+      return;
     }
+
+    const options: vscode.TextDocumentShowOptions = { viewColumn: tab.group.viewColumn, preserveFocus: false };
+    if (tab.input instanceof vscode.TabInputText) {
+      logDebug('使用 showTextDocument 激活文本标签', { requestId, target: describeTab(tab) });
+      await vscode.window.showTextDocument(tab.input.uri, options);
+      this.logActivationOutcome(tab, 'showTextDocument', requestId);
+      return;
+    }
+    if (tab.input instanceof vscode.TabInputTextDiff || tab.input instanceof vscode.TabInputNotebookDiff) {
+      logDebug('使用 vscode.diff 激活 Diff 标签', { requestId, target: describeTab(tab) });
+      await vscode.commands.executeCommand('vscode.diff', tab.input.original, tab.input.modified, tab.label, options);
+      this.logActivationOutcome(tab, 'vscode.diff', requestId);
+      return;
+    }
+    if (tab.input instanceof vscode.TabInputCustom) {
+      logDebug('使用 vscode.openWith 激活 Custom Editor 标签', { requestId, target: describeTab(tab), viewType: tab.input.viewType });
+      await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.viewType, options);
+      this.logActivationOutcome(tab, 'vscode.openWith:custom', requestId);
+      return;
+    }
+    if (tab.input instanceof vscode.TabInputNotebook) {
+      logDebug('使用 vscode.openWith 激活 Notebook 标签', { requestId, target: describeTab(tab), notebookType: tab.input.notebookType });
+      await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
+      this.logActivationOutcome(tab, 'vscode.openWith:notebook', requestId);
+      return;
+    }
+    const builtInWebviewTarget = getActivatableBuiltInWebviewTarget(tab);
+    if (builtInWebviewTarget === 'welcome') {
+      logDebug('使用欢迎页命令激活内置 Webview 标签', { requestId, target: describeTab(tab) });
+      await focusEditorGroup(tab.group.viewColumn);
+      await openWelcomeEditor();
+      this.logActivationOutcome(tab, 'openWelcomeEditor', requestId);
+      return;
+    }
+    if (builtInWebviewTarget === 'settings') {
+      logDebug('使用设置页命令激活内置 Webview 标签', { requestId, target: describeTab(tab) });
+      await focusEditorGroup(tab.group.viewColumn);
+      await vscode.commands.executeCommand('workbench.action.openSettings');
+      this.logActivationOutcome(tab, 'workbench.action.openSettings', requestId);
+      return;
+    }
+    logWarn('标签类型不支持通过公开 API 激活', { requestId, target: describeTab(tab) });
+    this.logActivationOutcome(tab, 'unsupported', requestId);
   }
 
   private async selectExistingTab(tab: vscode.Tab, requestId?: string): Promise<boolean> {
@@ -3603,18 +3626,12 @@ export class VerticalTabsPanel {
     return false;
   }
 
-  private logActivationOutcome(
-    tab: vscode.Tab,
-    method: string,
-    requestId?: string,
-    focus: TabActivationFocus = 'editor',
-  ): void {
+  private logActivationOutcome(tab: vscode.Tab, method: string, requestId?: string): void {
     const target = findTabPosition(tab);
-    const matched = target ? activeTabMatches(target, tab, focus === 'editor') : false;
+    const matched = target ? activeTabMatches(target, tab) : false;
     const details = {
       requestId,
       method,
-      focus,
       expected: describeTab(tab),
       active: describeActiveTab(),
       groups: describeTabGroups(),
@@ -3627,6 +3644,178 @@ export class VerticalTabsPanel {
       logDebug('标签激活完成并通过校验', details);
     } else {
       logWarn('标签激活后校验失败：当前活动标签与目标不一致', details);
+    }
+  }
+
+  private selectTabListFocusTab(source: TabListFocusSource, preferredTab?: vscode.Tab): vscode.Tab | undefined {
+    this.updateLastFocusedUserGroup();
+    const groups = vscode.window.tabGroups.all;
+    return selectTabListFocusCandidate(
+      groups.flatMap((group, groupIndex) => group.tabs.map((tab, tabIndex) => ({
+        item: tab,
+        activatable: !isVerticalTabsPanel(tab) && isActivatableTabForCommands(tab),
+        groupIndex,
+        tabIndex,
+        isActiveInGroup: tab.isActive,
+        isActiveGroup: group.isActive && !group.tabs.some((candidate) => isVerticalTabsPanel(candidate)),
+        isLastFocusedGroup: group === this.lastFocusedUserGroup,
+        lastActivatedAt: this.mruTracker.lastActivatedAt(tab),
+      }))),
+      source,
+      preferredTab,
+    );
+  }
+
+  private prepareTabListFocusRequest(
+    source: TabListFocusSource,
+    preferredTab?: vscode.Tab,
+  ): PendingTabListFocus {
+    this.clearPendingTabListFocus();
+    const sequence = ++this.tabListFocusSequence;
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const request: PendingTabListFocus = {
+      requestId: `tab-list-focus-${sequence}`,
+      sequence,
+      source,
+      preferredTab,
+      completion,
+      resolveCompletion,
+      attempts: 0,
+    };
+    this.pendingTabListFocus = request;
+    return request;
+  }
+
+  private async requestTabListFocus(
+    source: TabListFocusSource,
+    preferredTab?: vscode.Tab,
+    preparedRequest?: PendingTabListFocus,
+  ): Promise<void> {
+    const request = preparedRequest && this.pendingTabListFocus === preparedRequest
+      ? preparedRequest
+      : this.prepareTabListFocusRequest(source, preferredTab);
+    await this.refresh({ reason: 'focusTabList', ensureEmptyLayout: false });
+    if (this.pendingTabListFocus !== request || this.disposed) return;
+    this.sendTabListFocusRequest(request);
+    await request.completion;
+  }
+
+  private sendTabListFocusRequest(request: PendingTabListFocus): void {
+    if (this.pendingTabListFocus !== request || this.disposed) return;
+    const tab = this.selectTabListFocusTab(request.source, request.preferredTab);
+    request.target = tab ? this.snapshotTargetForTab(tab) : undefined;
+    request.attempts += 1;
+    if (tab && !request.target) {
+      void this.retryTabListFocus(request, 'targetMissingAfterRender');
+      return;
+    }
+    this.postMessage({
+      type: 'focusTabList',
+      requestId: request.requestId,
+      sequence: request.sequence,
+      ...(request.target ? { target: request.target } : {}),
+    });
+    if (this.tabListFocusAckTimer) clearTimeout(this.tabListFocusAckTimer);
+    this.tabListFocusAckTimer = setTimeout(() => {
+      this.tabListFocusAckTimer = undefined;
+      void this.retryTabListFocus(request, 'timeout');
+    }, TAB_LIST_FOCUS_ACK_TIMEOUT_MS);
+    logDebug('发送垂直标签精确聚焦请求', {
+      requestId: request.requestId,
+      sequence: request.sequence,
+      attempt: request.attempts,
+      source: request.source,
+      target: request.target,
+    });
+  }
+
+  private async retryTabListFocus(request: PendingTabListFocus, reason: string): Promise<void> {
+    if (this.pendingTabListFocus !== request || this.disposed) return;
+    if (request.attempts >= TAB_LIST_FOCUS_MAX_ATTEMPTS) {
+      logWarn('垂直标签聚焦请求在安全次数内未获确认', {
+        requestId: request.requestId,
+        sequence: request.sequence,
+        attempts: request.attempts,
+        reason,
+        target: request.target,
+      });
+      this.clearPendingTabListFocus(request);
+      if (!this.panel.active) this.sendTabListBlur();
+      return;
+    }
+    await this.refresh({ reason: 'focusTabListRetry', ensureEmptyLayout: false });
+    if (this.pendingTabListFocus === request) this.sendTabListFocusRequest(request);
+  }
+
+  private handleTabListFocusResult(
+    message: Extract<ReturnType<typeof parseWebviewMessage>, { type: 'tabListFocusResult' }>,
+  ): void {
+    const request = this.pendingTabListFocus;
+    if (!request || message.requestId !== request.requestId || message.sequence !== request.sequence) {
+      logDebug('忽略过期的垂直标签聚焦回执', {
+        requestId: message.requestId,
+        sequence: message.sequence,
+        pendingRequestId: request?.requestId,
+        pendingSequence: request?.sequence,
+      });
+      return;
+    }
+    const targetMatches = request.target
+      ? message.target !== undefined
+        && message.target.groupIndex === request.target.groupIndex
+        && message.target.tabIndex === request.target.tabIndex
+        && sameIdentity(message.target.identity, request.target.identity)
+      : message.target === undefined;
+    if (message.focused && targetMatches) {
+      logDebug('垂直标签精确聚焦请求已确认', {
+        requestId: request.requestId,
+        sequence: request.sequence,
+        attempts: request.attempts,
+        target: message.target,
+      });
+      this.clearPendingTabListFocus(request);
+      return;
+    }
+    if (this.tabListFocusAckTimer) {
+      clearTimeout(this.tabListFocusAckTimer);
+      this.tabListFocusAckTimer = undefined;
+    }
+    void this.retryTabListFocus(request, message.focused ? 'targetMismatch' : 'notFocused');
+  }
+
+  private snapshotTargetForTab(tab: vscode.Tab): TabTarget | undefined {
+    const position = findTabPosition(tab);
+    if (!position) return undefined;
+    return this.currentSnapshot.tabs.find((candidate) => (
+      candidate.target.groupIndex === position.groupIndex
+      && sameIdentity(candidate.target.identity, targetIdentity(tab))
+    ))?.target;
+  }
+
+  private clearPendingTabListFocus(request?: PendingTabListFocus): void {
+    if (request && this.pendingTabListFocus !== request) return;
+    if (this.tabListFocusAckTimer) {
+      clearTimeout(this.tabListFocusAckTimer);
+      this.tabListFocusAckTimer = undefined;
+    }
+    const pending = this.pendingTabListFocus;
+    this.pendingTabListFocus = undefined;
+    pending?.resolveCompletion();
+  }
+
+  private sendTabListBlur(): void {
+    if (this.disposed || this.panel.active) return;
+    const sequence = ++this.tabListFocusSequence;
+    this.postMessage({ type: 'blurTabList', sequence });
+    logDebug('通知 Webview 清除垂直标签焦点', { sequence });
+  }
+
+  private clearTabListFocusIfInactive(): void {
+    if (!this.panel.active && !this.pendingTabListFocus) {
+      this.sendTabListBlur();
     }
   }
 
@@ -3965,12 +4154,14 @@ function findTabByIdentity(identity: TabTargetIdentity): vscode.Tab | undefined 
 }
 
 function activeUserTabIdentity(): TabTargetIdentity | undefined {
+  const tab = currentActiveUserTab();
+  return tab ? targetIdentity(tab) : undefined;
+}
+
+function currentActiveUserTab(): vscode.Tab | undefined {
   const group = vscode.window.tabGroups.all.find((candidate) => candidate.isActive);
   const tab = group?.activeTab;
-  if (!tab || isVerticalTabsPanel(tab)) {
-    return undefined;
-  }
-  return targetIdentity(tab);
+  return tab && !isVerticalTabsPanel(tab) ? tab : undefined;
 }
 
 function userEditorGroups(): vscode.TabGroup[] {
@@ -4038,9 +4229,9 @@ function findTabPositionBy(predicate: (tab: vscode.Tab) => boolean): TabPosition
   return undefined;
 }
 
-function activeTabMatches(target: TabPosition, tab: vscode.Tab, requireGroupFocus = true): boolean {
+function activeTabMatches(target: TabPosition, tab: vscode.Tab): boolean {
   const group = vscode.window.tabGroups.all[target.groupIndex];
-  if (!group || group.viewColumn !== target.group.viewColumn || (requireGroupFocus && !group.isActive)) {
+  if (!group || group.viewColumn !== target.group.viewColumn || !group.isActive) {
     return false;
   }
   const activeTab = group.activeTab;

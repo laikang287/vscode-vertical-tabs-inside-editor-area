@@ -1,23 +1,28 @@
 import * as vscode from 'vscode';
 import { initializeLogging, logDebug, logError, logInfo, showLogs } from './logging/extensionLogger';
 import { VerticalTabsStatusBar } from './statusbar/VerticalTabsStatusBar';
+import type { TabListFocusSource } from './tabs/TabListFocusTarget';
 import { VerticalTabsPanel } from './webview/VerticalTabsPanel';
 
 export function activate(context: vscode.ExtensionContext): void {
   initializeLogging(context);
   logInfo('扩展开始激活', { extensionId: context.extension.id, version: context.extension.packageJSON.version });
 
-  const openCommand = registerLoggedCommand('verticalTabs.open', () => VerticalTabsPanel.focus(context));
+  const openCommand = registerLoggedCommand('verticalTabs.open', async () => {
+    await VerticalTabsPanel.open(context);
+  });
   const toggleCommand = registerLoggedCommand('verticalTabs.toggle', async () => {
     if (VerticalTabsPanel.isOpen()) {
       await VerticalTabsPanel.close();
     } else {
-      await VerticalTabsPanel.focus(context);
+      await VerticalTabsPanel.open(context);
     }
   });
   const closeCommand = registerLoggedCommand('verticalTabs.close', () => VerticalTabsPanel.close());
 
-  const focusCommand = registerLoggedCommand('verticalTabs.focus', () => VerticalTabsPanel.focus(context));
+  const focusCommand = registerLoggedCommand('verticalTabs.focus', (argument) => (
+    VerticalTabsPanel.focus(context, tabListFocusSourceFromCommandArgument(argument))
+  ));
   const previousCommand = registerLoggedCommand('verticalTabs.previous', () => VerticalTabsPanel.navigate(context, -1, 'all'));
   const nextCommand = registerLoggedCommand('verticalTabs.next', () => VerticalTabsPanel.navigate(context, 1, 'all'));
   const previousInGroupCommand = registerLoggedCommand('verticalTabs.previousInGroup', () => VerticalTabsPanel.navigate(context, -1, 'group'));
@@ -70,17 +75,24 @@ export function deactivate(): void {
   VerticalTabsPanel.dispose();
 }
 
-function registerLoggedCommand(command: string, action: () => Promise<void>): vscode.Disposable {
-  return vscode.commands.registerCommand(command, async () => {
+function registerLoggedCommand(command: string, action: (...args: unknown[]) => Promise<void>): vscode.Disposable {
+  return vscode.commands.registerCommand(command, async (...args: unknown[]) => {
     logDebug('执行命令', { command });
     try {
-      await action();
+      await action(...args);
       logDebug('命令执行完成', { command });
     } catch (error) {
       logError('命令执行失败', { command, error });
       throw error;
     }
   });
+}
+
+function tabListFocusSourceFromCommandArgument(value: unknown): TabListFocusSource {
+  if (typeof value === 'object' && value !== null && 'source' in value && value.source === 'editor') {
+    return 'editor';
+  }
+  return 'outside';
 }
 
 class EmptyLauncherProvider implements vscode.TreeDataProvider<never>, vscode.Disposable {
