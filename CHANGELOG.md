@@ -1,7 +1,21 @@
 # Changelog
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+## [1.0.1] - 2026-07-27
 
+### Feature Updates
+- <mark>Improved keyboard navigation for tabs</mark>
+	- Added `verticalTabs.focus` (default shortcut: `Ctrl+Shift+V`) to activate focus on the vertical tab bar
+	- When the focus is on the vertical tab bar, use the Up/Down arrow keys, `Home`, and `End` to navigate between tabs
+	- Usage scenario:
+		- When you want to switch to a tab that is far away in the list, press `Ctrl+Shift+V`, then use the arrow keys, `Home`, or `End` to quickly move to the desired tab, and press `Space` to open it
+	- Note: The default shortcut `Ctrl+Shift+V` may conflict with shortcuts from other applications, such as YoudaoDict
+
+- Moved the status bar icon from the right side to the left side. Clicking this icon can show or hide the vertical tab bar
+- Added the "Move Group" option to the right-click context menu
+
+### Bug Fixes
+- Fixed some known issues (mostly minor issues, not listed individually)
 ## [1.0.0] - 2026-07-23
 
 <mark>This is a major update. Due to the large number of changes, consider reverting to version 0.2.1 if you encounter bugs.</mark>

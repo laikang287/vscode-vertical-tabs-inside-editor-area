@@ -1,4 +1,3 @@
-
 # 编辑器区域垂直标签页
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
@@ -74,14 +73,13 @@ VS Code 默认使用横向标签栏。打开大量文件后，标签名称容易
 
 扩展随后会使用 VS Code 的编辑器组锁定功能锁定该编辑器组，避免后续打开的新文件进入垂直标签栏所在的编辑器组。
 
-
 ## 说明
 
 1. 本项目在开发过程中使用了 AI 编程工具辅助完成代码编写、测试和文档整理
 2. 文档以 README.zh-CN为准，其余语言版本由AI翻译
 3. 简体中文文档是本项目的主要维护版本
 4. 这个插件是用一种间接的方式来实现的，属于投机取巧，最好的方案还是官方自己能够支持，希望大家到vscode的相关议题点赞，希望官方重视这个议题
-	 [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
+		[Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 
 ## 许可证
 
@@ -92,3 +90,10 @@ MIT License - 详见 [LICENSE](LICENSE)
 - github找到 vscode-vertical-tabs-inside-editor-area 仓库 releases 目录下找到最新版的.vsix，下载
 	- github 仓库地址 [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
 - 打开vscode——活动栏找到扩展——点击侧边栏右上角的三点查看，选择 从VISX 安装
+
+## 已知问题
+
+1. 更新、安装其它插件时，垂直标签页有时会无法点击标签页中的标签，重启vscode即可
+
+示例1：更新本插件有时也会触发此问题
+示例2：安装、更新 VIM(VSCoceVim项目)插件 会触发此问题

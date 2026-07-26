@@ -2,6 +2,20 @@
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 
+## [1.0.1] - 2026-07-27
+### 功能更新
+-  <mark>键盘移动标签的功能功能完善</mark>
+	- verticalTabs.focus(默认快捷键ctrl+shift+v) 可激活垂直菜单栏标签的焦点
+	- 焦点在垂直菜单栏标签时，使用上下箭头、Home、End移动
+	- 使用场景
+		- 当你想用键盘切换到一个远一点的标签时，可以按 ctrl+shift+v ，然后使用上下箭头、Home、End按键快速移动到你所需的标签，按空格进入
+	- 注： 默认快捷键ctrl+shift+v可能与你其它软件的快捷键冲突，比如 YoudaoDict
+- 状态栏中的图标从右边改到左边，点击此图标可显示、隐藏标签页
+- 右键菜单加上移动分组功能
+- 
+
+### 问题修复
+- 修复一些已知问题（一堆小问题，懒得列了）
 ## [1.0.0] - 2026-07-23
 
 <mark>版本大更新，由于更新的内容太多，如遇到bug，可考虑退回0.2.1版本</mark>
