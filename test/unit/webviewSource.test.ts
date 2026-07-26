@@ -1043,7 +1043,7 @@ test('focus shortcut targets an exact tab and uses an acknowledged race-safe foc
   assert.match(panelSource, /TAB_LIST_FOCUS_ACK_TIMEOUT_MS/);
   assert.match(panelSource, /TAB_LIST_FOCUS_MAX_ATTEMPTS/);
   assert.match(panelSource, /message\.type === 'tabListFocusResult'/);
-  assert.match(panelSource, /if \(!this\.panel\.active && !this\.pendingTabListFocus\) \{\s*this\.sendTabListBlur\(\);/);
+  assert.match(panelSource, /if \(this\.panel\.active\) return;\s*this\.clearPendingTabListFocus\(\);\s*this\.sendTabListBlur\(\);/);
   assert.match(panelSource, /await request\.completion/);
   assert.match(panelSource, /type: 'blurTabList', sequence/);
   assert.match(source, /event\.data\.type === 'blurTabList'/);

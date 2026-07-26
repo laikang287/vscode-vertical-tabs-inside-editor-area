@@ -836,6 +836,9 @@ export class VerticalTabsPanel {
         });
         return false;
       }
+      if (!await this.stabilizeExclusiveRailDestinationFocus(destination, movedIdentity, source)) {
+        return false;
+      }
 
       this.lastFocusedUserGroup = destination;
       logInfo('已将误入标签移出垂直标签专用组', {
@@ -850,6 +853,72 @@ export class VerticalTabsPanel {
       source,
       attempts: GROUP_PUBLISH_WAIT_ATTEMPTS,
       tabGroups: describeTabGroups(),
+    });
+    return false;
+  }
+
+  private async stabilizeExclusiveRailDestinationFocus(
+    destination: vscode.TabGroup,
+    movedIdentity: TabTargetIdentity,
+    source: string,
+  ): Promise<boolean> {
+    let stableChecks = 0;
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+      if (!vscode.window.tabGroups.all.includes(destination)) {
+        logWarn('恢复垂直标签专用组失败：等待焦点稳定时目标编辑器组已失效', {
+          source,
+          attempt,
+          target: movedIdentity,
+        });
+        return false;
+      }
+
+      const movedTab = destination.tabs.find((tab) => sameIdentity(targetIdentity(tab), movedIdentity));
+      const movedPosition = movedTab ? findTabPosition(movedTab) : undefined;
+      if (!movedTab || !movedPosition) {
+        logWarn('恢复垂直标签专用组失败：等待焦点稳定时找不到已搬移标签', {
+          source,
+          attempt,
+          target: movedIdentity,
+        });
+        return false;
+      }
+
+      if (activeTabMatches(movedPosition, movedTab)) {
+        stableChecks += 1;
+        if (stableChecks >= 10) {
+          return true;
+        }
+        continue;
+      }
+
+      stableChecks = 0;
+      const ownGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+      if (!ownGroup?.isActive) {
+        logDebug('等待内置标签搬移焦点稳定时用户已切换到其它普通编辑器组，不再抢回焦点', {
+          source,
+          attempt,
+          target: movedIdentity,
+          active: describeActiveTab(),
+        });
+        return true;
+      }
+      if (!await this.selectExistingTab(movedTab, `exclusiveRailDestinationSettle:${source}`)) {
+        logWarn('恢复垂直标签专用组失败：VS Code 延迟切回专用组后无法重新聚焦已搬移标签', {
+          source,
+          attempt,
+          target: movedIdentity,
+          active: describeActiveTab(),
+        });
+        return false;
+      }
+    }
+
+    logWarn('恢复垂直标签专用组失败：已搬移标签的活动状态未能稳定', {
+      source,
+      target: movedIdentity,
+      active: describeActiveTab(),
     });
     return false;
   }
@@ -4092,9 +4161,9 @@ export class VerticalTabsPanel {
   }
 
   private clearTabListFocusIfInactive(): void {
-    if (!this.panel.active && !this.pendingTabListFocus) {
-      this.sendTabListBlur();
-    }
+    if (this.panel.active) return;
+    this.clearPendingTabListFocus();
+    this.sendTabListBlur();
   }
 
   private postMessage(message: ExtensionMessage, attempt = 1): void {
