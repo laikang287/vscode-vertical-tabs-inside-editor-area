@@ -371,6 +371,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
 .tab-status-list {
   align-items: center;
   display: flex;
+  flex-direction: row-reverse;
   flex: 0 0 auto;
   gap: var(--vertical-tab-status-gap);
 }
@@ -415,14 +416,21 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   padding: 0;
 }
 .group-close-action,
-.tab-close-action { display: none; }
+.tab-close-action {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
 .group-header:hover .group-close-action,
 .group-header:focus-within .group-close-action,
 .tab-row:hover .tab-close-action,
 .tab-row:focus-within .tab-close-action {
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 body.vscode-high-contrast .group-header,

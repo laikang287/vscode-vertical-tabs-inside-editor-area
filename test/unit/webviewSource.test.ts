@@ -159,8 +159,8 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(source, /main\.className = 'group-main'/);
   assert.match(style, /\.group-actions, \.tab-actions \{[\s\S]*?flex: 0 0 auto;[\s\S]*?min-width: 0;[\s\S]*?padding-right: 0;[\s\S]*?\}/);
   assert.match(style, /\.group-actions \{ margin-right: 1px; \}/);
-  assert.match(style, /\.group-close-action,[\s\S]*?\.tab-close-action \{ display: none; \}/);
-  assert.match(style, /\.group-header:hover \.group-close-action,[\s\S]*?\.group-header:focus-within \.group-close-action,[\s\S]*?display: inline-flex;/);
+  assert.match(style, /\.group-close-action,[\s\S]*?\.tab-close-action \{[\s\S]*?display: inline-flex;[\s\S]*?opacity: 0;[\s\S]*?pointer-events: none;[\s\S]*?visibility: hidden;/);
+  assert.match(style, /\.group-header:hover \.group-close-action,[\s\S]*?\.group-header:focus-within \.group-close-action,[\s\S]*?visibility: visible;/);
 });
 
 test('tab context menus append an optional VS Code action group with secure opaque actions', () => {
@@ -241,14 +241,14 @@ test('group headers use theme-aware accent text and separators without backgroun
   assert.match(style, /\.tab-group\.has-focused-tab > \.group-header \{\s*border-left: 2px solid var\(--vscode-focusBorder\);/);
 });
 
-test('tab close buttons reclaim their width until the row is hovered or keyboard-focused', () => {
+test('tab close buttons keep a fixed slot while hidden until the row is hovered or keyboard-focused', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(source, /result\.className = 'tab-action tab-close-action'/);
   assert.match(style, /\.group-actions, \.tab-actions \{[\s\S]*?flex: 0 0 auto;[\s\S]*?min-width: 0;[\s\S]*?padding-right: 0;[\s\S]*?\}/);
-  assert.match(style, /\.tab-close-action \{ display: none; \}/);
-  assert.match(style, /\.tab-row:hover \.tab-close-action,[\s\S]+\.tab-row:focus-within \.tab-close-action \{[\s\S]+display: inline-flex;/);
+  assert.match(style, /\.tab-close-action \{[\s\S]*?display: inline-flex;[\s\S]*?visibility: hidden;/);
+  assert.match(style, /\.tab-row:hover \.tab-close-action,[\s\S]+\.tab-row:focus-within \.tab-close-action \{[\s\S]+visibility: visible;/);
   assert.match(source, /actionButton\(i18n\.closeOthers, i18n\.closeOthers, 'closeOthers'/);
   assert.match(source, /actionButton\(i18n\.closeBelow, i18n\.closeBelow, 'closeBelow'/);
   assert.doesNotMatch(source, /关闭其它标签|关闭下侧标签/);
@@ -308,7 +308,7 @@ test('tab statuses render in a stable accessible list immediately before the clo
     assert.ok(index > lastIndex, `${state} should render after the preceding status`);
     lastIndex = index;
   }
-  assert.match(style, /\.tab-status-list \{[\s\S]+gap: var\(--vertical-tab-status-gap\)/);
+  assert.match(style, /\.tab-status-list \{[\s\S]+flex-direction: row-reverse;[\s\S]+gap: var\(--vertical-tab-status-gap\)/);
   assert.match(style, /\.tab-status \{[\s\S]+user-select: none;/);
   assert.doesNotMatch(style, /\.tab-status \{[^}]+pointer-events: none;/);
   assert.match(source, /function codicon[\s\S]+icon\.setAttribute\('aria-hidden', 'true'\)/);
