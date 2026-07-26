@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "%verticalTabs.displayName%",
   "description": "%verticalTabs.description%",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -170,12 +170,14 @@
             "vscode",
             "manual",
             "parentDir",
+            "parentDirTree",
             "fileType"
           ],
           "enumDescriptions": [
             "%verticalTabs.config.defaultGroupMode.vscode%",
             "%verticalTabs.config.defaultGroupMode.manual%",
             "%verticalTabs.config.defaultGroupMode.parentDir%",
+            "%verticalTabs.config.defaultGroupMode.parentDirTree%",
             "%verticalTabs.config.defaultGroupMode.fileType%"
           ],
           "scope": "window",

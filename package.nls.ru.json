@@ -30,6 +30,7 @@
   "verticalTabs.config.defaultGroupMode.vscode": "Следовать за группами редакторов VS Code.",
   "verticalTabs.config.defaultGroupMode.manual": "Использовать ручную группировку.",
   "verticalTabs.config.defaultGroupMode.parentDir": "Группировать по родительскому каталогу.",
+  "verticalTabs.config.defaultGroupMode.parentDirTree": "Группировать открытые вкладки в дереве родительских каталогов.",
   "verticalTabs.config.defaultGroupMode.fileType": "Группировать по типу файла.",
   "verticalTabs.config.defaultSortMode": "Режим сортировки по умолчанию. По умолчанию используется ручная сортировка. Всегда применяется при отключённом автоматическом запоминании; при включённом — только если сохранённого значения нет.",
   "verticalTabs.config.defaultSortMode.none": "Ручная сортировка; вкладки можно переупорядочивать перетаскиванием.",

@@ -6,12 +6,12 @@ import {
   sortWorksets,
   worksetInputKey,
   worksetNamesEqual,
-  type StoredWorksetV1,
+  type StoredWorkset,
 } from '../../src/worksets/Worksets';
 
-function storedWorkset(overrides: Partial<StoredWorksetV1> = {}): StoredWorksetV1 {
+function storedWorkset(overrides: Partial<StoredWorkset> = {}): StoredWorkset {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: 'workset-1',
     name: 'Feature A',
     createdAt: 10,
@@ -43,9 +43,21 @@ function storedWorkset(overrides: Partial<StoredWorksetV1> = {}): StoredWorksetV
 test('validates versioned worksets and rejects malformed nested tab data', () => {
   const valid = storedWorkset();
   assert.deepEqual(parseStoredWorksets([valid]), [valid]);
-  assert.deepEqual(parseStoredWorksets([{ ...valid, schemaVersion: 2 }]), []);
+  assert.deepEqual(parseStoredWorksets([{ ...valid, schemaVersion: 3 }]), []);
   assert.deepEqual(parseStoredWorksets([{ ...valid, tabs: [{ ...valid.tabs[0], groupIndex: -1 }] }]), []);
   assert.deepEqual(parseStoredWorksets([{ ...valid, collapsedGroupKeys: ['bad\u0000key'] }]), []);
+});
+
+test('migrates version 1 worksets to version 2 with top-level manual groups', () => {
+  const current = storedWorkset();
+  const legacy = {
+    ...current,
+    schemaVersion: 1,
+    manualGroups: [{ id: 'group-1', name: 'Source', collapsed: true, parentId: 'ignored-in-v1' }],
+  };
+  const parsed = parseStoredWorksets([legacy]);
+  assert.equal(parsed[0]?.schemaVersion, 2);
+  assert.deepEqual(parsed[0]?.manualGroups, [{ id: 'group-1', name: 'Source', collapsed: true }]);
 });
 
 test('selects replacement tabs as a multiset while protecting dirty and pinned extras', () => {

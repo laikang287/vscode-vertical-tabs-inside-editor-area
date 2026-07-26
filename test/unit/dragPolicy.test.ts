@@ -16,8 +16,10 @@ test('automatic sorting permits group changes but not reordering', () => {
 
 test('parent-directory grouping moves files between directories and preserves manual ordering', () => {
   assert.equal(tabDragCapability('parentDir', 'none'), 'moveDirectoryAndReorder');
+  assert.equal(tabDragCapability('parentDirTree', 'none'), 'moveDirectoryAndReorder');
   for (const sortMode of ['mru', 'modifiedAsc', 'modifiedDesc', 'nameAsc', 'nameDesc'] as const) {
     assert.equal(tabDragCapability('parentDir', sortMode), 'moveDirectory');
+    assert.equal(tabDragCapability('parentDirTree', sortMode), 'moveDirectory');
   }
 });
 

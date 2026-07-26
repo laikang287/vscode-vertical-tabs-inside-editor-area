@@ -145,7 +145,7 @@ test('every visible group header has a close icon and manual rename stays in the
 
   assert.doesNotMatch(source, /button\('重命名', '重命名分组'\)[\s\S]+header\.append\(rename/);
   assert.match(source, /showContextMenu\(event\.clientX, event\.clientY, undefined, group, header\)/);
- assert.match(source, /menu\.append\(renameGroupButton\(group\)\)/);
+  assert.match(source, /menu\.append\(renameGroupButton\(group\), createSubgroupButton\(group\), groupMoveSubmenu\(group\)\)/);
   assert.match(source, /const remove = iconButton\('close', i18n\.closeGroupAndDelete\)/);
   assert.match(source, /remove\.className = 'group-action tab-action group-close-action'/);
   assert.match(source, /vscode\.postMessage\(\{ type: 'closeGroup', groupId: group\.id \}\)/);
@@ -154,7 +154,8 @@ test('every visible group header has a close icon and manual rename stays in the
   assert.match(source, /draggedGroupId = group\.id/);
   assert.match(panelSource, /message\.type === 'deleteGroup' \|\| message\.type === 'closeGroup'/);
   assert.match(panelSource, /vscode\.window\.tabGroups\.close\(sourceGroup, true\)/);
-  assert.match(panelSource, /this\.manualGroups\.splice\(manualGroupIndex, 1\)/);
+  assert.match(panelSource, /this\.manualGroups\.splice\(0, this\.manualGroups\.length, \.\.\.this\.manualGroups\.filter\(\(group\) => !manualIds\.has\(group\.id\)\)\)/);
+  assert.match(panelSource, /else if \(manualGroupIndex < 0 && !hasRemainingTabs\)/);
   assert.match(source, /const main = document\.createElement\('div'\)/);
   assert.match(source, /main\.className = 'group-main'/);
   assert.match(style, /\.group-actions, \.tab-actions \{[\s\S]*?flex: 0 0 auto;[\s\S]*?min-width: 0;[\s\S]*?padding-right: 0;[\s\S]*?\}/);
@@ -304,7 +305,7 @@ test('compact tab spacing prioritizes label and path width without shrinking the
   assert.match(style, /--vertical-tab-status-gap: 2px;/);
   assert.match(style, /--vertical-tab-inline-padding: 6px;/);
   assert.doesNotMatch(style, /vertical-tab-tree-indent|\.tab-row\.tree-level-1/);
-  assert.match(style, /\.tab-main \{[\s\S]+padding: 2px 0 2px var\(--vertical-tab-inline-padding\);/);
+  assert.match(style, /\.tab-main \{[\s\S]+padding: 2px 0 2px calc\(var\(--vertical-tab-inline-padding\) \+ var\(--tree-indent, 0px\)\);/);
   assert.match(style, /\.tab-label \{ flex: 1 1 auto; min-width: 0;[\s\S]+text-overflow: ellipsis;/);
   assert.match(style, /\.tab-action \{[\s\S]+height: var\(--vertical-tab-action-size\);[\s\S]+min-width: var\(--vertical-tab-action-size\);/);
 });
@@ -373,8 +374,27 @@ test('active tab following is configurable and expands then reveals the focused 
   assert.match(panelSource, /get<boolean>\('alwaysFollowActiveTab', true\)/);
   assert.match(webviewSource, /snapshot\.tabs\.find\(\(tab\) => tab\.isFocused\)/);
   assert.match(webviewSource, /activeTabFollowTracker\.shouldFollow\(focusedTab\?\.target, snapshot\.alwaysFollowActiveTab\)/);
-  assert.match(webviewSource, /setDisplayGroupCollapsed\(focusedGroup, false, false\)/);
+  assert.match(webviewSource, /setDisplayGroupCollapsed\(currentGroup, false, false\)/);
   assert.match(webviewSource, /scrollIntoView\(\{ block: 'nearest', inline: 'nearest' \}\)/);
+});
+
+test('nested groups render recursively with true ARIA levels and capped visual indentation', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  assert.match(source, /candidate\.group\.parentId === undefined/);
+  assert.match(source, /candidate\.group\.parentId === group\.id/);
+  assert.match(source, /header\.setAttribute\('aria-level', String\(Math\.max\(1, group\.depth\)\)\)/);
+  assert.match(source, /activate\.setAttribute\('aria-level', String\(level\)\)/);
+  assert.match(source, /Math\.min\(Math\.max\(0, group\.depth - 1\), 6\)/);
+  assert.match(source, /Math\.min\(Math\.max\(0, level - 1\), 6\)/);
+});
+
+test('manual group dragging distinguishes nesting, sibling edges, and the root target', () => {
+  const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  assert.match(source, /ratio >= 0\.25 && ratio <= 0\.75/);
+  assert.match(source, /group\.depth \+ subtreeHeight > 3/);
+  assert.match(source, /return \{ parentGroupId: group\.id, nest: true, after: false \}/);
+  assert.match(source, /if \(rootTarget\) return \{ nest: false, after: false \}/);
+  assert.match(source, /beforeGroupId: group\.id, nest: false, after: false/);
 });
 
 test('automatic-memory settings reset live state and avoid persisted width reads while disabled', () => {
@@ -483,10 +503,23 @@ test('shortcut navigation previews immediately and commits only the latest targe
   const navigateMethod = panelSource.match(/private async navigate\([\s\S]+?\n  \}\n\n  private async ensureShortcutNavigationSnapshot/)?.[0] ?? '';
 
   assert.match(panelSource, /const SHORTCUT_NAVIGATION_COMMIT_DELAY_MS = 160/);
+  assert.match(navigateMethod, /this\.shortcutNavigationOrigin \?\?= anchor/);
   assert.match(navigateMethod, /this\.shortcutNavigation\.queue\(target\)/);
   assert.doesNotMatch(navigateMethod, /this\.refresh\(/);
   assert.match(panelSource, /private async commitShortcutNavigation\(target: TabTarget\)/);
   assert.match(panelSource, /await this\.activateTab\(tab\);\s*await this\.refresh\(\{ reason: 'navigate' \}\)/);
+  assert.match(
+    panelSource,
+    /this\.shortcutNavigationActivationDepth === 0 && !this\.shortcutNavigationOriginRemainsActive\(\)/,
+  );
+  const guardedCancellationCount = panelSource.match(
+    /this\.shortcutNavigationActivationDepth === 0 && !this\.shortcutNavigationOriginRemainsActive\(\)/g,
+  )?.length ?? 0;
+  assert.equal(guardedCancellationCount, 3);
+  assert.match(
+    panelSource,
+    /private shortcutNavigationOriginRemainsActive\(\): boolean \{[\s\S]+tab\.group\.activeTab === tab/,
+  );
   assert.match(messagesSource, /type: 'previewTabNavigation'/);
   assert.match(messagesSource, /type: 'clearTabNavigationPreview'/);
   assert.match(webviewSource, /previewKeyboardNavigation\(event\.data\.target\)/);

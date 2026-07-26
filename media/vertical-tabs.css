@@ -225,7 +225,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   cursor: pointer;
   display: flex;
   height: 22px;
-  padding: 0 0 0 8px;
+  padding: 0 0 0 calc(8px + var(--tree-indent, 0px));
 }
 .group-header:hover {
   background: var(--vscode-list-hoverBackground);
@@ -348,7 +348,7 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   display: flex;
   flex: 1;
   min-width: 0;
-  padding: 2px 0 2px var(--vertical-tab-inline-padding);
+  padding: 2px 0 2px calc(var(--vertical-tab-inline-padding) + var(--tree-indent, 0px));
   text-align: left;
 }
 .tab-row.has-description .tab-main { padding-bottom: 3px; padding-top: 3px; }
