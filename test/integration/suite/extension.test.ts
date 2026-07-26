@@ -106,6 +106,111 @@ suite('Vertical Tabs extension', () => {
     );
   });
 
+  test('moves built-in editors opened from the vertical-tabs group to the last focused user group', async function () {
+    this.timeout(45_000);
+    const configuration = vscode.workspace.getConfiguration('verticalTabs');
+
+    try {
+      for (const position of ['left', 'right'] as const) {
+        await vscode.commands.executeCommand('verticalTabs.close');
+        await waitFor(() => verticalTabs().length === 0);
+        await closeNonVerticalTabs();
+        await configuration.update('position', position, vscode.ConfigurationTarget.Global);
+
+        const firstDocument = await vscode.workspace.openTextDocument({ content: `${position} built-in destination first` });
+        await vscode.window.showTextDocument(firstDocument, { preserveFocus: false, preview: false });
+        await vscode.commands.executeCommand('workbench.action.newGroupRight');
+        const secondDocument = await vscode.workspace.openTextDocument({ content: `${position} built-in destination second` });
+        await vscode.window.showTextDocument(secondDocument, { preserveFocus: false, preview: false });
+        await waitFor(() => vscode.window.tabGroups.all.length === 2);
+
+        const preferredDocument = position === 'left' ? secondDocument : firstDocument;
+        const preferredTab = destinationDocumentTab(preferredDocument);
+        assert.ok(preferredTab, `The ${position} preferred destination document should be open.`);
+        await vscode.window.showTextDocument(preferredDocument, {
+          viewColumn: preferredTab.group.viewColumn,
+          preserveFocus: false,
+          preview: false,
+        });
+
+        await vscode.commands.executeCommand('verticalTabs.open');
+        await waitFor(() => verticalTabs().length === 1 && isRailAtEdge(position));
+        await waitFor(() => verticalTabs()[0]?.group.tabs.length === 1);
+        await vscode.window.showTextDocument(preferredDocument, {
+          viewColumn: destinationDocumentTab(preferredDocument)?.group.viewColumn,
+          preserveFocus: false,
+          preview: false,
+        });
+
+        for (const command of ['workbench.action.openGlobalKeybindings', 'workbench.action.openSettings']) {
+          await vscode.commands.executeCommand('verticalTabs.focus');
+          const openedTab = await executeAndCaptureOpenedTab(command);
+          await waitFor(() => {
+            const moved = nonVerticalTabs().find(({ tab }) => tab.label === openedTab.label);
+            const currentPreferredGroup = destinationDocumentTab(preferredDocument)?.group;
+            if (!moved) return false;
+            return moved.group === currentPreferredGroup
+              && moved.group.isActive
+              && moved.group.activeTab?.label === openedTab.label
+              && verticalTabs()[0]?.group.tabs.length === 1;
+          });
+
+          const moved = nonVerticalTabs().find(({ tab }) => tab.label === openedTab.label);
+          const currentPreferredGroup = destinationDocumentTab(preferredDocument)?.group;
+          if (!moved) {
+            throw new Error(`${command} should remain open after being moved out of the ${position} rail.`);
+          }
+          assert.equal(moved.group, currentPreferredGroup, `${command} should move to the last focused user group.`);
+          assert.ok(moved.group.isActive, `${command} should keep its destination group focused.`);
+          assert.equal(moved.group.activeTab?.label, openedTab.label, `${command} should remain the active editor after the move.`);
+          assert.equal(verticalTabs()[0]?.group.tabs.length, 1, `The ${position} rail should remain exclusive after ${command}.`);
+        }
+
+        if (position === 'left') {
+          await vscode.commands.executeCommand('verticalTabs.focus');
+          const stalePreferredGroup = destinationDocumentTab(preferredDocument)?.group;
+          const fallbackDocument = firstDocument;
+          assert.ok(stalePreferredGroup, 'The last focused user group should exist before testing the stale-group fallback.');
+          const staleViewColumn = stalePreferredGroup.viewColumn;
+          const closedTabs = await vscode.window.tabGroups.close([...stalePreferredGroup.tabs], true);
+          assert.ok(closedTabs, 'The last focused user group tabs should close before testing the stale-group fallback.');
+          await waitFor(() => destinationDocumentTab(preferredDocument) === undefined);
+          const remainingStaleGroup = vscode.window.tabGroups.all.find((group) => (
+            group.viewColumn === staleViewColumn && !group.tabs.some((tab) => isVerticalTabsTab(tab))
+          ));
+          if (remainingStaleGroup) {
+            const closedGroup = await vscode.window.tabGroups.close(remainingStaleGroup, true);
+            assert.ok(closedGroup, 'The empty last focused user group should close before testing the fallback.');
+          }
+          await waitFor(() => vscode.window.tabGroups.all.length === 2);
+
+          const fallbackGroup = destinationDocumentTab(fallbackDocument)?.group;
+          assert.ok(fallbackGroup, 'Another user group should remain available for the stale-group fallback.');
+          const openedTab = await executeAndCaptureOpenedTab('workbench.action.openGlobalKeybindings');
+          await waitFor(() => {
+            const moved = nonVerticalTabs().find(({ tab }) => tab.label === openedTab.label);
+            if (!moved) return false;
+            return moved.group === destinationDocumentTab(fallbackDocument)?.group
+              && moved.group.isActive
+              && moved.group.activeTab?.label === openedTab.label
+              && verticalTabs()[0]?.group.tabs.length === 1;
+          });
+          assert.equal(
+            nonVerticalTabs().find(({ tab }) => tab.label === openedTab.label)?.group,
+            destinationDocumentTab(fallbackDocument)?.group,
+            'A stale last-focused group should fall back to the remaining user group.',
+          );
+        }
+      }
+    } finally {
+      await configuration.update('position', 'left', vscode.ConfigurationTarget.Global);
+      if (verticalTabs().length > 0) {
+        await waitFor(() => isRailAtEdge('left'));
+        await waitFor(() => verticalTabs()[0]?.group.tabs.length === 1);
+      }
+    }
+  });
+
   test('takes rail space only from the editor group that was originally left-most', async function () {
     this.timeout(15_000);
     await vscode.commands.executeCommand('verticalTabs.close');
@@ -737,6 +842,25 @@ async function waitFor(predicate: () => boolean): Promise<void> {
     activeLabel: group.activeTab?.label,
     labels: group.tabs.map((tab) => tab.label),
   })))}`);
+}
+
+async function executeAndCaptureOpenedTab(command: string): Promise<vscode.Tab> {
+  let openedTab: vscode.Tab | undefined;
+  const listener = vscode.window.tabGroups.onDidChangeTabs((event) => {
+    openedTab ??= event.opened.find((tab) => !isVerticalTabsTab(tab));
+  });
+  try {
+    await vscode.commands.executeCommand(command);
+    for (let attempt = 0; attempt < 250; attempt += 1) {
+      if (openedTab) {
+        return openedTab;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+    assert.fail(`Timed out waiting for ${command} to open an editor tab.`);
+  } finally {
+    listener.dispose();
+  }
 }
 
 async function waitForEditorLayout(predicate: (layout: EditorLayout) => boolean): Promise<EditorLayout> {

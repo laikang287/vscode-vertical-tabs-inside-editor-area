@@ -204,6 +204,7 @@ export class VerticalTabsPanel {
   private lastObservedRailWidth: number | undefined;
   private closeLayoutRestore: CloseLayoutRestore | undefined;
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
+  private exclusiveRailOperations: Promise<void> = Promise.resolve();
   private suppressScheduledRefresh = false;
   private suppressMruTracking = false;
   private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, nativeContextMenuActionsEnabled: true, compactContextSubmenusEnabled: true, tabs: [], manualGroups: [], displayGroups: [] };
@@ -258,6 +259,7 @@ export class VerticalTabsPanel {
     this.localeStrings = this.resolveUiLocale();
     this.panel.title = this.localeStrings.verticalTabsStatusBarName;
     this.railPosition = readRailPosition();
+    this.updateLastFocusedUserGroup();
     logInfo('垂直标签面板实例已创建', { viewColumn: panel.viewColumn, position: this.railPosition });
     this.disposables.push(
       this.nativeTabMenuProvider,
@@ -269,6 +271,8 @@ export class VerticalTabsPanel {
         void this.handleTabChange(event).catch((error) => logError('处理 VS Code 标签变化失败', error));
       }),
       vscode.window.tabGroups.onDidChangeTabGroups(() => {
+        void this.enqueueExclusiveRailRepair('tabGroupsChanged')
+          .catch((error) => logError('编辑器组变化后恢复垂直标签专用组失败', error));
         if (this.shortcutNavigationActivationDepth === 0 && !this.shortcutNavigationOriginRemainsActive()) {
           this.cancelShortcutNavigation('tabGroupsChanged');
         }
@@ -566,6 +570,9 @@ export class VerticalTabsPanel {
     if (!moveResult.success) {
       return false;
     }
+    if (!await this.enqueueExclusiveRailRepair('ensureRail')) {
+      return false;
+    }
 
     const finalGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
     if (!isGroupAtRailPosition(finalGroup, this.railPosition)) {
@@ -736,6 +743,171 @@ export class VerticalTabsPanel {
 
   private hasVisibleUserTabs(): boolean {
     return vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => !isVerticalTabsPanel(tab)));
+  }
+
+  private enqueueExclusiveRailRepair(source: string): Promise<boolean> {
+    const result = this.exclusiveRailOperations.then(
+      () => this.repairExclusiveRail(source),
+      () => this.repairExclusiveRail(source),
+    );
+    this.exclusiveRailOperations = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  private async repairExclusiveRail(source: string): Promise<boolean> {
+    if (this.disposed || VerticalTabsPanel.panels.current !== this) {
+      return false;
+    }
+
+    for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
+      const ownGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+      if (!ownGroup) {
+        logDebug('跳过垂直标签专用组修复：尚未发布插件所属编辑器组', { source });
+        return false;
+      }
+      const unexpectedTabs = ownGroup.tabs.filter((tab) => !isVerticalTabsPanel(tab));
+      if (unexpectedTabs.length === 0) {
+        return ownGroup.tabs.some((tab) => isVerticalTabsPanel(tab));
+      }
+
+      const destination = await this.ensureExclusiveRailDestination(ownGroup);
+      if (!destination) {
+        logWarn('无法恢复垂直标签专用组：没有可用的普通编辑器组', {
+          source,
+          attempt,
+          tabGroups: describeTabGroups(),
+        });
+        return false;
+      }
+
+      const unexpectedTab = ownGroup.activeTab && !isVerticalTabsPanel(ownGroup.activeTab)
+        ? ownGroup.activeTab
+        : unexpectedTabs[0];
+      const unexpectedCountBefore = unexpectedTabs.length;
+      if (!await this.selectExistingTab(unexpectedTab, `exclusiveRail:${source}`)) {
+        logWarn('无法恢复垂直标签专用组：误入标签未能可靠激活', {
+          source,
+          attempt,
+          target: describeTab(unexpectedTab),
+          destination: describeTabGroup(destination, vscode.window.tabGroups.all.indexOf(destination)),
+        });
+        return false;
+      }
+
+      const activeOwnGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+      if (!activeOwnGroup || activeOwnGroup.activeTab === undefined || isVerticalTabsPanel(activeOwnGroup.activeTab)) {
+        logWarn('无法恢复垂直标签专用组：激活后活动标签状态与预期不符', {
+          source,
+          attempt,
+          target: describeTab(unexpectedTab),
+          active: describeActiveTab(),
+        });
+        return false;
+      }
+
+      const movedIdentity = targetIdentity(activeOwnGroup.activeTab);
+      await this.moveActiveEditorToGroup(activeOwnGroup.activeTab, destination);
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+
+      const repairedOwnGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+      const unexpectedCountAfter = repairedOwnGroup?.tabs.filter((tab) => !isVerticalTabsPanel(tab)).length ?? Number.POSITIVE_INFINITY;
+      const movedTab = vscode.window.tabGroups.all.includes(destination)
+        ? destination.tabs.find((tab) => sameIdentity(targetIdentity(tab), movedIdentity))
+        : undefined;
+      if (unexpectedCountAfter >= unexpectedCountBefore || !movedTab) {
+        logWarn('恢复垂直标签专用组失败：误入标签未抵达目标编辑器组', {
+          source,
+          attempt,
+          target: movedIdentity,
+          unexpectedCountBefore,
+          unexpectedCountAfter,
+          destination: describeTabGroup(destination, vscode.window.tabGroups.all.indexOf(destination)),
+          tabGroups: describeTabGroups(),
+        });
+        return false;
+      }
+      if (!await this.selectExistingTab(movedTab, `exclusiveRailDestination:${source}`)) {
+        logWarn('恢复垂直标签专用组失败：无法保持搬移后的标签处于活动状态', {
+          source,
+          attempt,
+          target: movedIdentity,
+          destination: describeTabGroup(destination, vscode.window.tabGroups.all.indexOf(destination)),
+          active: describeActiveTab(),
+        });
+        return false;
+      }
+
+      this.lastFocusedUserGroup = destination;
+      logInfo('已将误入标签移出垂直标签专用组', {
+        source,
+        attempt,
+        target: movedIdentity,
+        destination: describeTabGroup(destination, vscode.window.tabGroups.all.indexOf(destination)),
+      });
+    }
+
+    logWarn('恢复垂直标签专用组超过安全尝试次数', {
+      source,
+      attempts: GROUP_PUBLISH_WAIT_ATTEMPTS,
+      tabGroups: describeTabGroups(),
+    });
+    return false;
+  }
+
+  private async ensureExclusiveRailDestination(ownGroup: vscode.TabGroup): Promise<vscode.TabGroup | undefined> {
+    const existing = this.resolveExclusiveRailDestination(ownGroup);
+    if (existing) {
+      return existing;
+    }
+
+    logDebug('垂直标签专用组没有可用目标组，准备在内侧创建普通编辑器组', {
+      railPosition: this.railPosition,
+      ownViewColumn: ownGroup.viewColumn,
+    });
+    this.panel.reveal(ownGroup.viewColumn, false);
+    await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    await vscode.commands.executeCommand(
+      this.railPosition === 'left'
+        ? 'workbench.action.newGroupRight'
+        : 'workbench.action.newGroupLeft',
+    );
+
+    for (let attempt = 0; attempt < GROUP_PUBLISH_WAIT_ATTEMPTS; attempt += 1) {
+      const currentOwnGroup = vscode.window.tabGroups.all[this.findOwnGroupIndex()];
+      if (currentOwnGroup) {
+        const destination = this.resolveExclusiveRailDestination(currentOwnGroup);
+        if (destination) {
+          this.lastFocusedUserGroup = destination;
+          return destination;
+        }
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, GROUP_WAIT_INTERVAL_MS));
+    }
+    return undefined;
+  }
+
+  private resolveExclusiveRailDestination(ownGroup: vscode.TabGroup): vscode.TabGroup | undefined {
+    const groups = vscode.window.tabGroups.all;
+    const userGroups = groups.filter((group) => group !== ownGroup && !group.tabs.some((tab) => isVerticalTabsPanel(tab)));
+    if (this.lastFocusedUserGroup && userGroups.includes(this.lastFocusedUserGroup)) {
+      return this.lastFocusedUserGroup;
+    }
+
+    const activeUserGroup = userGroups.find((group) => group.isActive);
+    if (activeUserGroup) {
+      return activeUserGroup;
+    }
+
+    return userGroups
+      .slice()
+      .sort((left, right) => {
+        const leftDistance = Math.abs(left.viewColumn - ownGroup.viewColumn);
+        const rightDistance = Math.abs(right.viewColumn - ownGroup.viewColumn);
+        if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+        return this.railPosition === 'left'
+          ? left.viewColumn - right.viewColumn
+          : right.viewColumn - left.viewColumn;
+      })[0];
   }
 
   private async waitForOwnGroup(): Promise<number> {
@@ -1265,6 +1437,7 @@ export class VerticalTabsPanel {
     if (changedState) {
       await this.persistManualState();
     }
+    await this.enqueueExclusiveRailRepair('tabsChanged');
     this.clearTabListFocusIfInactive();
     this.observeFocusedUserTab();
     this.scheduleRefresh();
