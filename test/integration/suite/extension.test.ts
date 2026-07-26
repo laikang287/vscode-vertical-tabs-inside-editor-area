@@ -84,6 +84,28 @@ suite('Vertical Tabs extension', () => {
     assert.equal(verticalTabs()[0].group.viewColumn, vscode.ViewColumn.One, 'Reopening from the launcher should put the rail back on the far left.');
   });
 
+  test('focuses the rail on request and does not steal focus back after returning to the editor', async function () {
+    this.timeout(10_000);
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1);
+
+    const document = await vscode.workspace.openTextDocument({ content: 'focus request acknowledgement verification' });
+    await vscode.window.showTextDocument(document, { preserveFocus: false });
+    await waitFor(() => activeTextDocumentUri() === document.uri.toString());
+
+    await vscode.commands.executeCommand('verticalTabs.focus', { source: 'editor' });
+    await waitFor(() => verticalTabs()[0]?.group.isActive === true);
+
+    await vscode.window.showTextDocument(document, { preserveFocus: false });
+    await waitFor(() => activeTextDocumentUri() === document.uri.toString());
+    await new Promise<void>((resolve) => setTimeout(resolve, 1_100));
+    assert.equal(
+      activeTextDocumentUri(),
+      document.uri.toString(),
+      'An acknowledged or stale focus request must not take focus back from the editor.',
+    );
+  });
+
   test('takes rail space only from the editor group that was originally left-most', async function () {
     this.timeout(15_000);
     await vscode.commands.executeCommand('verticalTabs.close');

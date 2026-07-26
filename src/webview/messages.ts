@@ -9,7 +9,6 @@ export type SortMode = 'none' | 'mru' | 'modifiedAsc' | 'modifiedDesc' | 'nameAs
 export type RelativePathDisplay = 'off' | 'duplicatesDirectory' | 'duplicates' | 'alwaysDirectory' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
-export type TabActivationFocus = 'editor' | 'rail';
 export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
 export type TabResourceStatus = 'readonly' | 'missing' | 'noPermissions' | 'unavailable';
 export interface VerticalTabItem {
@@ -61,15 +60,16 @@ export type WebviewMessage =
   | { readonly type: 'reorderManualGroup'; readonly groupId: string; readonly beforeGroupId?: string }
   | { readonly type: 'requestNativeTabMenu'; readonly requestId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
   | { readonly type: 'runNativeTabMenuAction'; readonly actionId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
-  | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string; readonly focus?: TabActivationFocus }
+  | { readonly type: 'tabListFocusResult'; readonly requestId: string; readonly sequence: number; readonly focused: boolean; readonly target?: TabTarget }
+  | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
 export type ExtensionMessage =
   | { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot }
   | { readonly type: 'nativeTabMenu'; readonly requestId: string; readonly entries: readonly NativeContextMenuEntry[] }
   | { readonly type: 'previewTabNavigation'; readonly target: TabTarget }
   | { readonly type: 'clearTabNavigationPreview' }
-  | { readonly type: 'focusTabList' }
-  | { readonly type: 'blurTabList' };
+  | { readonly type: 'focusTabList'; readonly requestId: string; readonly sequence: number; readonly target?: TabTarget }
+  | { readonly type: 'blurTabList'; readonly sequence: number };
 const MAX_BATCH_TAB_TARGETS = 2000;
 
 export function parseWebviewMessage(value: unknown): WebviewMessage | undefined {
@@ -113,15 +113,27 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if (value.type === 'runNativeTabMenuAction' && isActionId(value.actionId) && isTabTarget(value.target) && isTabTargets(value.targets)) {
     return { type: 'runNativeTabMenuAction', actionId: value.actionId, target: value.target, targets: value.targets };
   }
+  if (value.type === 'tabListFocusResult'
+    && isRequestId(value.requestId)
+    && isNonNegativeInteger(value.sequence)
+    && typeof value.focused === 'boolean'
+    && (value.target === undefined || isTabTarget(value.target))) {
+    return {
+      type: 'tabListFocusResult',
+      requestId: value.requestId,
+      sequence: value.sequence,
+      focused: value.focused,
+      ...(value.target === undefined ? {} : { target: value.target }),
+    };
+  }
   if (value.type === 'activateTab'
+    && value.focus === undefined
     && isTabTarget(value.target)
-    && (value.requestId === undefined || isRequestId(value.requestId))
-    && (value.focus === undefined || isTabActivationFocus(value.focus))) {
+    && (value.requestId === undefined || isRequestId(value.requestId))) {
     return {
       type: 'activateTab',
       target: value.target,
       ...(value.requestId === undefined ? {} : { requestId: value.requestId }),
-      ...(value.focus === undefined ? {} : { focus: value.focus }),
     };
   }
   if ((value.type === 'closeTab' || value.type === 'closeOthers' || value.type === 'closeBelow') && isTabTarget(value.target)) return { type: value.type, target: value.target };
@@ -131,7 +143,6 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
 function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
 function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
-function isTabActivationFocus(value: unknown): value is TabActivationFocus { return value === 'editor' || value === 'rail'; }
 function isRailWidth(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value >= 180 && value <= 10000; }
 function isName(value: unknown): value is string { return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 80; }
 function isId(value: unknown): value is string { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value); }

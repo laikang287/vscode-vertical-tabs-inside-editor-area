@@ -26,6 +26,17 @@ test('accepts render acknowledgement messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'renderAck', revision: 7 }), { type: 'renderAck', revision: 7 });
 });
 
+test('accepts tab-list focus results with strict request correlation', () => {
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'tabListFocusResult', requestId: 'focus-1', sequence: 3, focused: true, target }),
+    { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 3, focused: true, target },
+  );
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'tabListFocusResult', requestId: 'focus-2', sequence: 4, focused: false }),
+    { type: 'tabListFocusResult', requestId: 'focus-2', sequence: 4, focused: false },
+  );
+});
+
 test('accepts bounded webview log messages', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'debug', message: 'started' }), { type: 'webviewLog', level: 'debug', message: 'started' });
   assert.deepEqual(parseWebviewMessage({ type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' }), { type: 'webviewLog', level: 'error', message: 'failed', details: 'stack' });
@@ -34,14 +45,6 @@ test('accepts bounded webview log messages', () => {
 test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target, requestId: 'activate-1' }), { type: 'activateTab', target, requestId: 'activate-1' });
-  assert.deepEqual(
-    parseWebviewMessage({ type: 'activateTab', target, requestId: 'activate-2', focus: 'rail' }),
-    { type: 'activateTab', target, requestId: 'activate-2', focus: 'rail' },
-  );
-  assert.deepEqual(
-    parseWebviewMessage({ type: 'activateTab', target, focus: 'editor' }),
-    { type: 'activateTab', target, focus: 'editor' },
-  );
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeSaved' }), { type: 'closeSaved' });
   assert.deepEqual(parseWebviewMessage({ type: 'railWidth', width: 280 }), { type: 'railWidth', width: 280 });
@@ -94,11 +97,16 @@ test('rejects malformed and unknown messages', () => {
     { type: 'renderAck', revision: -1 },
     { type: 'renderAck', revision: 1.5 },
     { type: 'renderAck', revision: '7' },
+    { type: 'tabListFocusResult', requestId: '', sequence: 1, focused: true },
+    { type: 'tabListFocusResult', requestId: 'focus-1', sequence: -1, focused: true },
+    { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 1.5, focused: true },
+    { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 1, focused: 'yes' },
+    { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 1, focused: true, target: {} },
     { type: 'activateTab' },
     { type: 'activateTab', target, requestId: '' },
     { type: 'activateTab', target, requestId: 42 },
     { type: 'activateTab', target, requestId: 'x'.repeat(81) },
-    { type: 'activateTab', target, focus: 'sidebar' },
+    { type: 'activateTab', target, focus: 'rail' },
     { type: 'activateTab', target, focus: true },
     { type: 'activateTab', target: { revision: -1, groupIndex: 0, tabIndex: 0 } },
     { type: 'activateTab', target: { revision: 1.5, groupIndex: 0, tabIndex: 0 } },

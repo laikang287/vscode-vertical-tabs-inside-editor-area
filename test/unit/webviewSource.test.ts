@@ -663,7 +663,7 @@ test('activation updates the focused editor without clearing shown tabs in other
   assert.match(source, /\.tab-row\.is-focused/);
   assert.match(source, /candidateTarget\?\.groupIndex === target\.groupIndex/);
   assert.match(source, /classList\.add\('is-active', 'is-focused'\)/);
-  assert.match(panelSource, /await this\.activateTab\(tab, message\.requestId, focus\);\s*await this\.refresh\(\{ reason: 'navigate' \}\);/);
+  assert.match(panelSource, /await this\.activateTab\(tab, message\.requestId\);\s*await this\.refresh\(\{ reason: 'navigate' \}\);/);
 });
 
 test('webview retries the initial snapshot request while it is still loading', () => {
@@ -975,7 +975,7 @@ test('tab tree uses one roving tab stop and supports keyboard navigation and con
   assert.match(source, /for \(const item of items\) item\.tabIndex = -1/);
   assert.match(source, /if \(target\) target\.tabIndex = 0/);
   assert.match(source, /groups\?\.addEventListener\('keydown', handleTreeKeyDown\)/);
-  assert.match(source, /event\.key === 'Enter' && item\.classList\.contains\('tab-main'\)/);
+  assert.match(source, /\(event\.key === 'Enter' \|\| event\.key === ' '\) && item\.classList\.contains\('tab-main'\)/);
   assert.match(source, /openKeyboardContextMenu\(event, header, undefined, group\)/);
   assert.match(source, /openKeyboardContextMenu\(event, activate, tab\)/);
   assert.match(source, /isKeyboardContextMenuKey\(event\.key, event\.shiftKey\)/);
@@ -986,46 +986,85 @@ test('tab tree uses one roving tab stop and supports keyboard navigation and con
   assert.match(style, /\.tab-context-action:focus-visible/);
 });
 
-test('tab tree previews adjacent files without surrendering focus and Enter commits editor focus', () => {
+test('tab tree navigation moves focus only and Enter or Space activates once', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const messagesSource = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
 
-  assert.match(source, /new DeferredTargetCommitter<TabTarget>\(160/);
-  assert.match(source, /focusTreeItem\(nextItem\);\s*queueKeyboardNavigationActivation\(nextItem\);/);
-  assert.match(source, /vscode\.postMessage\(\{ type: 'activateTab', target, requestId, focus: 'rail' \}\)/);
-  assert.match(source, /cancelKeyboardNavigationActivation\(\);\s*item\.click\(\);/);
-  assert.match(source, /event\.key === ' ' && item\.classList\.contains\('tab-main'\)/);
+  assert.doesNotMatch(source, /DeferredTargetCommitter/);
+  assert.match(source, /\(event\.key === 'Enter' \|\| event\.key === ' '\) && item\.classList\.contains\('tab-main'\)/);
+  assert.match(source, /event\.preventDefault\(\);\s*item\.click\(\);\s*return;/);
+  assert.match(source, /event\.preventDefault\(\);\s*focusTreeItem\(nextItem\);/);
+  assert.doesNotMatch(source, /queueKeyboardNavigationActivation/);
+  assert.doesNotMatch(source, /focus: 'rail'/);
   assert.match(source, /window\.addEventListener\('blur'[\s\S]+?document\.activeElement\.blur\(\)/);
-  assert.match(source, /event\.data\.type === 'focusTabList'/);
-  assert.match(source, /function applyPendingTreeFocusRequest/);
-  assert.match(source, /\.tab-row\.is-focused \.tab-main/);
-  assert.match(panelSource, /type: 'focusTabList'/);
-  assert.match(panelSource, /preserveFocus: focus === 'rail'/);
-  assert.match(panelSource, /activeTabMatches\(target, tab, focus === 'editor'\)/);
-  assert.match(messagesSource, /export type TabActivationFocus = 'editor' \| 'rail'/);
+  assert.doesNotMatch(panelSource, /TabActivationFocus/);
+  assert.doesNotMatch(messagesSource, /focus\?: TabActivationFocus/);
 });
 
-test('focus shortcut activates the extension and forwards focus into the rendered tab tree', () => {
+test('focus shortcut targets an exact tab and uses an acknowledged race-safe focus protocol', () => {
   const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8')) as {
     readonly activationEvents: readonly string[];
-    readonly contributes: { readonly keybindings: ReadonlyArray<{ readonly command: string; readonly key: string; readonly mac?: string }> };
+    readonly contributes: {
+      readonly keybindings: ReadonlyArray<{
+        readonly command: string;
+        readonly key: string;
+        readonly mac?: string;
+        readonly when?: string;
+        readonly args?: { readonly source?: string };
+      }>;
+    };
   };
+  const extensionSource = readFileSync(path.resolve(__dirname, '../../../src/extension.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const messagesSource = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
 
   assert.ok(packageJson.activationEvents.includes('onCommand:verticalTabs.focus'));
-  assert.ok(packageJson.contributes.keybindings.some((binding) => (
+  const focusBindings = packageJson.contributes.keybindings.filter((binding) => (
     binding.command === 'verticalTabs.focus'
     && binding.key === 'ctrl+alt+v'
     && binding.mac === 'cmd+alt+v'
-  )));
-  assert.match(panelSource, /static async focus[\s\S]+?await instance\?\.reveal\(false\);[\s\S]+?instance\?\.postMessage\(\{ type: 'focusTabList' \}\);/);
-  assert.match(panelSource, /if \(!this\.panel\.active\) \{\s*this\.postMessage\(\{ type: 'blurTabList' \}\);/);
+  ));
+  assert.deepEqual(
+    focusBindings.map((binding) => ({ when: binding.when, source: binding.args?.source })),
+    [
+      { when: 'editorFocus', source: 'editor' },
+      { when: '!editorFocus', source: 'outside' },
+    ],
+  );
+  assert.match(extensionSource, /tabListFocusSourceFromCommandArgument\(argument\)/);
+  assert.match(extensionSource, /value\.source === 'editor'/);
+  assert.match(extensionSource, /return 'outside'/);
+  assert.match(panelSource, /existing\?\.panel\.active \? 'outside' : requestedSource/);
+  assert.match(panelSource, /const preferredTab = existing\?\.selectTabListFocusTab\(source\)[\s\S]+?\?\? currentActiveUserTab\(\)/);
+  assert.match(panelSource, /prepareTabListFocusRequest\(source, preferredTab\)/);
+  assert.match(panelSource, /requestTabListFocus\([\s\S]+?preparedRequest/);
+  assert.match(panelSource, /TAB_LIST_FOCUS_ACK_TIMEOUT_MS/);
+  assert.match(panelSource, /TAB_LIST_FOCUS_MAX_ATTEMPTS/);
+  assert.match(panelSource, /message\.type === 'tabListFocusResult'/);
+  assert.match(panelSource, /if \(!this\.panel\.active && !this\.pendingTabListFocus\) \{\s*this\.sendTabListBlur\(\);/);
+  assert.match(panelSource, /await request\.completion/);
+  assert.match(panelSource, /type: 'blurTabList', sequence/);
   assert.match(source, /event\.data\.type === 'blurTabList'/);
+  assert.match(source, /event\.data\.sequence < latestTreeFocusSequence/);
   assert.match(source, /document\.activeElement\.blur\(\)/);
-  assert.match(messagesSource, /\{ readonly type: 'focusTabList' \}[\s\S]+?\{ readonly type: 'blurTabList' \}/);
+  assert.match(source, /function revealRequestedFocusTarget/);
+  assert.match(source, /clearSearch\(false\)/);
+  assert.match(source, /setDisplayGroupCollapsed\(group, false, false\)/);
+  assert.match(source, /if \(!request\.target\) \{[\s\S]+?groups\.focus\(\{ preventScroll: true \}\)[\s\S]+?focused,[\s\S]+?return;/);
+  assert.match(source, /target\.scrollIntoView\(\{ block: 'nearest' \}\)/);
+  assert.match(source, /type: 'tabListFocusResult'/);
+  assert.match(messagesSource, /\{ readonly type: 'focusTabList'; readonly requestId: string; readonly sequence: number; readonly target\?: TabTarget \}/);
+  assert.match(messagesSource, /\{ readonly type: 'blurTabList'; readonly sequence: number \}/);
+  assert.match(messagesSource, /\{ readonly type: 'tabListFocusResult'; readonly requestId: string; readonly sequence: number; readonly focused: boolean; readonly target\?: TabTarget \}/);
+});
+
+test('show and toggle commands do not reuse the explicit focus command', () => {
+  const extensionSource = readFileSync(path.resolve(__dirname, '../../../src/extension.ts'), 'utf8');
+
+  assert.match(extensionSource, /registerLoggedCommand\('verticalTabs\.open', async \(\) => \{\s*await VerticalTabsPanel\.open\(context\);/);
+  assert.match(extensionSource, /if \(VerticalTabsPanel\.isOpen\(\)\) \{[\s\S]+?VerticalTabsPanel\.close\(\)[\s\S]+?else \{[\s\S]+?VerticalTabsPanel\.open\(context\)/);
 });
 
 test('webview collapses an existing multi-selection on click while retaining block dragging and keyboard activation', () => {
@@ -1133,7 +1172,7 @@ test('extension selects existing tabs without cycling through intermediate tabs'
   assert.doesNotMatch(source, /workbench\.action\.nextEditorInGroup/);
   assert.doesNotMatch(source, /step < target\.group\.tabs\.length/);
   assert.match(source, /避免循环切换中间标签/);
-  assert.match(source, /function activeTabMatches\(target: TabPosition, tab: vscode\.Tab, requireGroupFocus = true\): boolean/);
+  assert.match(source, /function activeTabMatches\(target: TabPosition, tab: vscode\.Tab\): boolean/);
   assert.match(source, /group\.tabs\.indexOf\(activeTab\) === target\.tabIndex/);
   assert.match(source, /sameIdentity\(targetIdentity\(activeTab\), targetIdentity\(tab\)\)/);
 });
@@ -1182,9 +1221,9 @@ test('extension logs activation request diagnostics and validates the final acti
   assert.match(source, /收到标签激活请求/);
   assert.match(source, /requestId: message\.requestId/);
   assert.match(source, /targetRevision: message\.target\.revision/);
-  assert.match(source, /private async activateTab\(\s*tab: vscode\.Tab,\s*requestId\?: string,\s*focus: TabActivationFocus = 'editor',\s*\): Promise<void>/);
+  assert.match(source, /private async activateTab\(tab: vscode\.Tab, requestId\?: string\): Promise<void>/);
   assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab, requestId\?: string\): Promise<boolean>/);
-  assert.match(source, /private logActivationOutcome\(\s*tab: vscode\.Tab,\s*method: string,\s*requestId\?: string,\s*focus: TabActivationFocus = 'editor',\s*\): void/);
+  assert.match(source, /private logActivationOutcome\(tab: vscode\.Tab, method: string, requestId\?: string\): void/);
   assert.match(source, /标签激活完成并通过校验/);
   assert.match(source, /标签激活后校验失败：当前活动标签与目标不一致/);
   assert.match(source, /function describeActiveTab\(\): Record<string, unknown> \| undefined/);

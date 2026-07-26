@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "%verticalTabs.displayName%",
   "description": "%verticalTabs.description%",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -102,7 +102,20 @@
       {
         "command": "verticalTabs.focus",
         "key": "ctrl+alt+v",
-        "mac": "cmd+alt+v"
+        "mac": "cmd+alt+v",
+        "when": "editorFocus",
+        "args": {
+          "source": "editor"
+        }
+      },
+      {
+        "command": "verticalTabs.focus",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "!editorFocus",
+        "args": {
+          "source": "outside"
+        }
       }
     ],
     "configuration": {
