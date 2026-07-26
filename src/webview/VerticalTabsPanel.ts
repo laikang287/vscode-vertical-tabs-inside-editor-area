@@ -185,7 +185,7 @@ export class VerticalTabsPanel {
   private emptyRailLayoutOperation: Promise<boolean> | undefined;
   private suppressScheduledRefresh = false;
   private suppressMruTracking = false;
-  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, nativeContextMenuActionsEnabled: true, tabs: [], manualGroups: [], displayGroups: [] };
+  private currentSnapshot: VerticalTabsSnapshot = { revision: 0, groupMode: 'vscode', sortMode: 'none', toolbarPosition: 'top', rememberState: true, toolbarControlsVisible: true, searchVisible: true, searchGroups: false, alwaysFollowActiveTab: true, nativeContextMenuActionsEnabled: true, compactContextSubmenusEnabled: true, tabs: [], manualGroups: [], displayGroups: [] };
   private commandSelectedTargets: readonly TabTarget[] = [];
   private groupMode: GroupMode;
   private sortMode: SortMode;
@@ -1154,6 +1154,7 @@ export class VerticalTabsPanel {
       searchGroups: this.searchGroups,
       alwaysFollowActiveTab: readAlwaysFollowActiveTab(),
       nativeContextMenuActionsEnabled: readNativeContextMenuActionsEnabled(),
+      compactContextSubmenusEnabled: readCompactContextSubmenusEnabled(),
       relativePathDisplay: readRelativePathDisplay(),
       displayOrderByGroup: this.displayOrderByGroup,
       pinnedGroupIds: this.pinnedGroupIds,
@@ -5179,6 +5180,10 @@ function readAlwaysFollowActiveTab(): boolean {
 
 function readNativeContextMenuActionsEnabled(): boolean {
   return vscode.workspace.getConfiguration('verticalTabs').get<boolean>('showNativeContextMenuActions', true);
+}
+
+function readCompactContextSubmenusEnabled(): boolean {
+  return vscode.workspace.getConfiguration('verticalTabs').get<boolean>('compactContextSubmenus', true);
 }
 
 function isGroupMode(value: unknown): value is GroupMode {

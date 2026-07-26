@@ -15,9 +15,11 @@ test('defaults presentation settings and preserves explicit overrides', () => {
   assert.equal(buildSnapshot(source, 1, []).toolbarPosition, 'top');
   assert.equal(buildSnapshot(source, 1, []).alwaysFollowActiveTab, true);
   assert.equal(buildSnapshot(source, 1, []).nativeContextMenuActionsEnabled, true);
+  assert.equal(buildSnapshot(source, 1, []).compactContextSubmenusEnabled, true);
   assert.equal(buildSnapshot(source, 2, [], { toolbarPosition: 'bottom' }).toolbarPosition, 'bottom');
   assert.equal(buildSnapshot(source, 2, [], { alwaysFollowActiveTab: false }).alwaysFollowActiveTab, false);
   assert.equal(buildSnapshot(source, 2, [], { nativeContextMenuActionsEnabled: false }).nativeContextMenuActionsEnabled, false);
+  assert.equal(buildSnapshot(source, 2, [], { compactContextSubmenusEnabled: false }).compactContextSubmenusEnabled, false);
 });
 
 test('moves single and non-contiguous selected keys to the exact before-target position', () => {

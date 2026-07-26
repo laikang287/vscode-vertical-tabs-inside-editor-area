@@ -8,6 +8,7 @@
   "verticalTabs.command.next": "Onglets verticaux : Onglet suivant",
   "verticalTabs.command.showLogs": "Onglets verticaux : Afficher les journaux",
   "verticalTabs.config.showNativeContextMenuActions": "Afficher les actions de VS Code et des extensions installées dans un second groupe du menu contextuel d’un onglet. Les actions de fermeture et d’épinglage en double sont retirées. Les modifications s’appliquent immédiatement.",
+  "verticalTabs.config.compactContextSubmenus": "Lorsqu’un sous-menu ne tient pas entièrement à côté de son menu parent, il le remplace au même emplacement après un survol d’une seconde. Un clic ou le clavier l’ouvre immédiatement. Les modifications s’appliquent immédiatement.",
   "verticalTabs.config.alwaysFollowActiveTab": "Toujours suivre l’onglet actif. Lorsque cette option est activée, changer d’éditeur ciblé développe automatiquement son groupe et fait défiler l’onglet dans la zone visible. Désactivez-la pour conserver la position actuelle de la liste pendant la navigation manuelle.",
   "verticalTabs.config.position": "Position de la barre d’onglets verticaux dans la zone d’édition. Les modifications s’appliquent immédiatement.",
   "verticalTabs.config.position.left": "Placer la barre d’onglets verticaux sur le bord gauche de la zone d’édition.",

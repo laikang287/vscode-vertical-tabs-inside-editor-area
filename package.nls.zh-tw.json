@@ -8,6 +8,7 @@
   "verticalTabs.command.next": "垂直標籤: 下一個標籤",
   "verticalTabs.command.showLogs": "垂直標籤: 顯示記錄",
   "verticalTabs.config.showNativeContextMenuActions": "在標籤操作功能表的第二個群組中顯示 VS Code 及已安裝延伸模組提供的動作。垂直標籤會移除重複的關閉與固定動作；變更會立即生效。",
+  "verticalTabs.config.compactContextSubmenus": "當子功能表無法在父功能表兩側完整顯示時，暫留一秒後在原位置取代父功能表；按一下或使用鍵盤會立即開啟。變更會立即生效。",
   "verticalTabs.config.alwaysFollowActiveTab": "一律跟隨使用中的標籤。啟用後，切換目前聚焦的編輯器時會自動展開其群組，並將對應標籤捲動到可見區域；停用後可在手動瀏覽標籤清單時保留目前位置。",
   "verticalTabs.config.position": "垂直標籤列在編輯器區域內的位置。變更會立即生效。",
   "verticalTabs.config.position.left": "將垂直標籤列放在編輯器區域最左側。",

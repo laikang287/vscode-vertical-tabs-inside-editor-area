@@ -107,6 +107,7 @@ function displayedSnapshot(
     searchGroups: false,
     alwaysFollowActiveTab: true,
     nativeContextMenuActionsEnabled: true,
+    compactContextSubmenusEnabled: true,
     tabs: nativeTabs,
     manualGroups: [],
     displayGroups,

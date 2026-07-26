@@ -8,6 +8,7 @@
   "verticalTabs.command.next": "Abas verticais: Próxima aba",
   "verticalTabs.command.showLogs": "Abas verticais: Mostrar logs",
   "verticalTabs.config.showNativeContextMenuActions": "Mostrar as ações do VS Code e das extensões instaladas como um segundo grupo no menu de contexto de uma aba. As ações duplicadas de fechar e fixar são removidas. As alterações são aplicadas imediatamente.",
+  "verticalTabs.config.compactContextSubmenus": "Quando um submenu não couber completamente ao lado do menu principal, ele o substituirá na mesma posição após um segundo de foco do ponteiro. Um clique ou o teclado o abre imediatamente. As alterações são aplicadas imediatamente.",
   "verticalTabs.config.alwaysFollowActiveTab": "Sempre acompanhar a aba ativa. Quando habilitado, mudar o editor em foco expande automaticamente seu grupo e rola a aba para a área visível. Desabilite para preservar a posição atual da lista ao navegar manualmente pelas abas.",
   "verticalTabs.config.position": "Posição da barra de abas verticais dentro da área do editor. As alterações são aplicadas imediatamente.",
   "verticalTabs.config.position.left": "Colocar a barra de abas verticais na borda esquerda da área do editor.",

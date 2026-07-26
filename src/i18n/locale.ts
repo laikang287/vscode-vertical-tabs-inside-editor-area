@@ -35,6 +35,12 @@ export interface LocaleStrings {
   readonly groupNameTooLong: string;
   readonly newGroup: string;
   readonly newGroupOnlyManual: string;
+  readonly back: string;
+  readonly moveToGroup: string;
+  readonly moveToManualGroup: string;
+  readonly moveToVscodeGroup: string;
+  readonly moveOutOfGroup: string;
+  readonly moveToNamedGroup: string;
   readonly unknownTab: string;
   readonly previewTab: string;
   readonly pinnedTab: string;

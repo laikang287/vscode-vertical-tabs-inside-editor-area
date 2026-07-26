@@ -26,7 +26,7 @@ export interface VerticalTabDisplayGroup {
 export interface VerticalTabsSnapshot {
   readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
-  readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean; readonly nativeContextMenuActionsEnabled: boolean;
+  readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean; readonly nativeContextMenuActionsEnabled: boolean; readonly compactContextSubmenusEnabled: boolean;
   readonly collapsedGroupKeys?: readonly string[];
 }
 export type NativeContextMenuEntry =
