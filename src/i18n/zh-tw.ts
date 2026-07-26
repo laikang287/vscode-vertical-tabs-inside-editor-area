@@ -104,7 +104,7 @@ const zhTw: LocaleStrings = {
   nativeCopyPath: '複製路徑',
   nativeCopyRelativePath: '複製相對路徑',
   nativeRevealInFileExplorer: '在檔案總管中顯示',
-  nativeCompareWithSelected: '與已選項目比較',
+  nativeCompareSelected: '比較所選檔案',
   nativeMoveTerminalIntoPanel: '將終端機移至面板',
   nativeRenameTerminal: '重新命名終端機',
   nativeChangeTerminalColor: '變更終端機色彩',

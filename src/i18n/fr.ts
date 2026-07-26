@@ -104,7 +104,7 @@ const fr: LocaleStrings = {
   nativeCopyPath: 'Copier le chemin',
   nativeCopyRelativePath: 'Copier le chemin relatif',
   nativeRevealInFileExplorer: 'Afficher dans l’Explorateur de fichiers',
-  nativeCompareWithSelected: 'Comparer avec la sélection',
+  nativeCompareSelected: 'Comparer les fichiers sélectionnés',
   nativeMoveTerminalIntoPanel: 'Déplacer le terminal vers le panneau',
   nativeRenameTerminal: 'Renommer le terminal',
   nativeChangeTerminalColor: 'Modifier la couleur du terminal',

@@ -58,8 +58,8 @@ export type WebviewMessage =
   | { readonly type: 'moveToPreviousGroup' | 'moveToNextGroup' | 'moveToNewGroup'; readonly target: TabTarget }
   | { readonly type: 'moveToGroup'; readonly target: TabTarget; readonly groupIndex: number }
   | { readonly type: 'reorderManualGroup'; readonly groupId: string; readonly beforeGroupId?: string }
-  | { readonly type: 'requestNativeTabMenu'; readonly requestId: string; readonly target: TabTarget }
-  | { readonly type: 'runNativeTabMenuAction'; readonly actionId: string; readonly target: TabTarget }
+  | { readonly type: 'requestNativeTabMenu'; readonly requestId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
+  | { readonly type: 'runNativeTabMenuAction'; readonly actionId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
 export type ExtensionMessage =
@@ -104,11 +104,11 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if ((value.type === 'moveToPreviousGroup' || value.type === 'moveToNextGroup' || value.type === 'moveToNewGroup') && isTabTarget(value.target)) return { type: value.type, target: value.target };
   if (value.type === 'reorderManualGroup' && isId(value.groupId) && (value.beforeGroupId === undefined || isId(value.beforeGroupId))) return { type: 'reorderManualGroup', groupId: value.groupId, ...(value.beforeGroupId === undefined ? {} : { beforeGroupId: value.beforeGroupId }) };
   if (value.type === 'moveToGroup' && isTabTarget(value.target) && isNonNegativeInteger(value.groupIndex)) return { type: 'moveToGroup', target: value.target, groupIndex: value.groupIndex };
-  if (value.type === 'requestNativeTabMenu' && isRequestId(value.requestId) && isTabTarget(value.target)) {
-    return { type: 'requestNativeTabMenu', requestId: value.requestId, target: value.target };
+  if (value.type === 'requestNativeTabMenu' && isRequestId(value.requestId) && isTabTarget(value.target) && isTabTargets(value.targets)) {
+    return { type: 'requestNativeTabMenu', requestId: value.requestId, target: value.target, targets: value.targets };
   }
-  if (value.type === 'runNativeTabMenuAction' && isActionId(value.actionId) && isTabTarget(value.target)) {
-    return { type: 'runNativeTabMenuAction', actionId: value.actionId, target: value.target };
+  if (value.type === 'runNativeTabMenuAction' && isActionId(value.actionId) && isTabTarget(value.target) && isTabTargets(value.targets)) {
+    return { type: 'runNativeTabMenuAction', actionId: value.actionId, target: value.target, targets: value.targets };
   }
   if (value.type === 'activateTab' && isTabTarget(value.target) && (value.requestId === undefined || isRequestId(value.requestId))) {
     return { type: 'activateTab', target: value.target, ...(value.requestId === undefined ? {} : { requestId: value.requestId }) };

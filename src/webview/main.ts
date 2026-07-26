@@ -47,7 +47,7 @@ const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 const searchCollapsedGroups = new Set<string>();
 let contextMenu: HTMLElement | undefined;
 let contextMenuInvoker: HTMLElement | undefined;
-let pendingNativeMenuRequest: { readonly requestId: string; readonly target: TabTarget; readonly menu: HTMLElement; readonly x: number; readonly y: number } | undefined;
+let pendingNativeMenuRequest: { readonly requestId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[]; readonly menu: HTMLElement; readonly x: number; readonly y: number } | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let currentSearchQuery = '';
 let currentSearchGroups = false;
@@ -1208,10 +1208,9 @@ function pruneSelectedTabs(tabs: readonly VerticalTabItem[]): void {
 }
 
 function postSelectionChanged(): void {
-  const targets = latestSnapshot?.displayGroups
-    .flatMap((group) => group.tabs)
-    .filter((tab) => selection.isSelected(tab))
-    .map((tab) => tab.target) ?? [];
+  const targets = selection.orderedTabs(
+    latestSnapshot?.displayGroups.flatMap((group) => group.tabs) ?? [],
+  ).map((tab) => tab.target);
   vscode.postMessage({ type: 'selectionChanged', targets });
 }
 
@@ -1310,8 +1309,9 @@ function showContextMenu(
   focusContextMenuItem(menu, 0);
   if (tab && snapshot?.nativeContextMenuActionsEnabled) {
     const requestId = nextNativeMenuRequestId();
-    pendingNativeMenuRequest = { requestId, target: tab.target, menu, x, y };
-    vscode.postMessage({ type: 'requestNativeTabMenu', requestId, target: tab.target });
+    const targets = selectedTargetsFor(tab);
+    pendingNativeMenuRequest = { requestId, target: tab.target, targets, menu, x, y };
+    vscode.postMessage({ type: 'requestNativeTabMenu', requestId, target: tab.target, targets });
   }
 }
 
@@ -1320,11 +1320,11 @@ function renderNativeContextMenu(requestId: string, entries: readonly NativeCont
   if (!pending || pending.requestId !== requestId || contextMenu !== pending.menu || !pending.menu.isConnected) return;
   pendingNativeMenuRequest = undefined;
   if (!hasNativeMenuAction(entries)) return;
-  pending.menu.append(createContextMenuSeparator(), ...nativeContextMenuElements(entries, pending.target));
+  pending.menu.append(createContextMenuSeparator(), ...nativeContextMenuElements(entries, pending.target, pending.targets));
   positionContextMenu(pending.menu, pending.x, pending.y);
 }
 
-function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], target: TabTarget): HTMLElement[] {
+function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], target: TabTarget, targets: readonly TabTarget[]): HTMLElement[] {
   const elements: HTMLElement[] = [];
   for (const entry of entries) {
     if (entry.kind === 'separator') {
@@ -1334,7 +1334,7 @@ function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], t
       continue;
     }
     if (entry.kind === 'submenu') {
-      const children = nativeContextMenuElements(entry.entries, target);
+      const children = nativeContextMenuElements(entry.entries, target, targets);
       if (!children.some((element) => !element.classList.contains('tab-context-separator'))) continue;
       const wrapper = document.createElement('div');
       wrapper.className = 'tab-context-submenu';
@@ -1370,7 +1370,7 @@ function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], t
     action.disabled = !entry.enabled;
     action.addEventListener('click', () => {
       if (!entry.enabled) return;
-      vscode.postMessage({ type: 'runNativeTabMenuAction', actionId: entry.actionId, target });
+      vscode.postMessage({ type: 'runNativeTabMenuAction', actionId: entry.actionId, target, targets });
       dismissContextMenu();
     });
     elements.push(action);

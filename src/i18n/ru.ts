@@ -104,7 +104,7 @@ const ru: LocaleStrings = {
   nativeCopyPath: 'Копировать путь',
   nativeCopyRelativePath: 'Копировать относительный путь',
   nativeRevealInFileExplorer: 'Показать в проводнике',
-  nativeCompareWithSelected: 'Сравнить с выбранным',
+  nativeCompareSelected: 'Сравнить выбранные файлы',
   nativeMoveTerminalIntoPanel: 'Переместить терминал на панель',
   nativeRenameTerminal: 'Переименовать терминал',
   nativeChangeTerminalColor: 'Изменить цвет терминала',

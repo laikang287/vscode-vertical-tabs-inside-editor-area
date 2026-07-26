@@ -31,7 +31,7 @@ test('evaluates supported when-clause operators and keeps unknown private contex
   assert.equal(evaluateWhenClause('private.extensionState && resourceScheme == file', values), undefined);
 });
 
-test('discovers extension submenus while removing duplicate close and pin groups', () => {
+test('discovers safe extension submenus, disables unknown enablement, and removes duplicate groups', () => {
   const manifest = {
     id: 'publisher.example',
     packageJSON: {
@@ -40,6 +40,7 @@ test('discovers extension submenus while removing duplicate close and pin groups
           { command: 'example.open', title: 'Open Example' },
           { command: 'example.disabled', title: 'Disabled Example', enablement: 'activeEditorIsDirty' },
           { command: 'example.unknown', title: 'Private Context Example', enablement: 'example.privateEnabled' },
+          { command: 'example.hiddenUnknown', title: 'Private Visibility Example' },
           { command: 'example.child', title: 'Child Action' },
           { command: 'workbench.action.closeActiveEditor', title: 'Duplicate Close' },
           { command: 'workbench.action.pinEditor', title: 'Duplicate Pin' },
@@ -49,7 +50,8 @@ test('discovers extension submenus while removing duplicate close and pin groups
           'editor/title/context': [
             { command: 'example.open', group: 'navigation@2', when: 'resourceScheme == file' },
             { command: 'example.disabled', group: '4_tools@1' },
-            { command: 'example.unknown', group: '4_tools@2', when: 'example.privateVisible' },
+            { command: 'example.unknown', group: '4_tools@2' },
+            { command: 'example.hiddenUnknown', group: '4_tools@3', when: 'example.privateVisible' },
             { submenu: 'example.submenu', group: '5_more@1' },
             { command: 'workbench.action.closeActiveEditor', group: '1_close@1' },
             { command: 'workbench.action.pinEditor', group: '3_preview@1' },
@@ -66,6 +68,7 @@ test('discovers extension submenus while removing duplicate close and pin groups
     'example.open',
     'example.disabled',
     'example.unknown',
+    'example.hiddenUnknown',
     'example.child',
     'workbench.action.closeActiveEditor',
     'workbench.action.pinEditor',
@@ -83,9 +86,46 @@ test('discovers extension submenus while removing duplicate close and pin groups
   const disabled = menu.flatMap((entry) => entry.kind === 'action' ? [entry] : []).find((entry) => entry.command === 'example.disabled');
   const unknown = menu.flatMap((entry) => entry.kind === 'action' ? [entry] : []).find((entry) => entry.command === 'example.unknown');
   assert.equal(disabled?.enabled, false);
-  assert.equal(unknown?.enabled, true);
+  assert.equal(unknown?.enabled, false);
+  assert.equal(commands.includes('example.hiddenUnknown'), false);
   assert.equal(menu.some((entry) => entry.kind === 'submenu' && entry.label === 'Example Tools'), true);
   assert.equal(menu.some((entry) => entry.kind === 'separator'), true);
+});
+
+test('keeps only the adapted comparison action for a vertical multi-selection', () => {
+  const available = new Set([
+    'workbench.action.splitEditor',
+    'copyFilePath',
+    'compareSelected',
+  ]);
+
+  const menu = buildNativeTabMenu(
+    [],
+    context({
+      resourceScheme: 'file',
+      verticalTabsTwoComparableSelected: true,
+    }),
+    available,
+    getStrings('en'),
+    { selectionCount: 2 },
+  );
+
+  assert.deepEqual(commandIds(menu), ['compareSelected']);
+});
+
+test('hides comparison unless exactly two comparable vertical tabs are selected', () => {
+  const available = new Set(['compareSelected']);
+
+  assert.deepEqual(
+    commandIds(buildNativeTabMenu(
+      [],
+      context({ resourceScheme: 'file', verticalTabsTwoComparableSelected: false }),
+      available,
+      getStrings('en'),
+      { selectionCount: 1 },
+    )),
+    [],
+  );
 });
 
 test('hides false contributions, unavailable commands, empty submenus, and submenu cycles', () => {

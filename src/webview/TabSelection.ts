@@ -28,8 +28,11 @@ export class TabSelection {
       const targetIndex = visibleTabs.findIndex((candidate) => selectionKey(candidate) === key);
       this.selectedKeys.clear();
       if (anchorIndex >= 0 && targetIndex >= 0) {
-        const [start, end] = anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-        for (const candidate of visibleTabs.slice(start, end + 1)) this.selectedKeys.add(selectionKey(candidate));
+        const step = anchorIndex <= targetIndex ? 1 : -1;
+        for (let index = anchorIndex; ; index += step) {
+          this.selectedKeys.add(selectionKey(visibleTabs[index]!));
+          if (index === targetIndex) break;
+        }
       } else {
         this.selectedKeys.add(key);
         this.anchorKey = key;
@@ -49,8 +52,14 @@ export class TabSelection {
 
   selectedTabs(allTabs: readonly VerticalTabItem[], fallback: VerticalTabItem): readonly VerticalTabItem[] {
     if (!this.isSelected(fallback)) return [fallback];
-    const selected = allTabs.filter((candidate) => this.isSelected(candidate));
+    const selected = this.orderedTabs(allTabs);
     return selected.length > 0 ? selected : [fallback];
+  }
+
+  orderedTabs(allTabs: readonly VerticalTabItem[]): readonly VerticalTabItem[] {
+    const byKey = new Map(allTabs.map((tab) => [selectionKey(tab), tab]));
+    return Array.from(this.selectedKeys, (key) => byKey.get(key))
+      .filter((tab): tab is VerticalTabItem => tab !== undefined);
   }
 
   prune(availableTabs: readonly VerticalTabItem[]): void {

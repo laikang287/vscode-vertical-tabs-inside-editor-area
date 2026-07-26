@@ -31,15 +31,16 @@ export class NativeTabMenuProvider implements vscode.Disposable {
     });
   }
 
-  async createMenu(tab: vscode.Tab, strings: LocaleStrings): Promise<readonly NativeContextMenuEntry[]> {
+  async createMenu(tab: vscode.Tab, selectedTabs: readonly vscode.Tab[], strings: LocaleStrings): Promise<readonly NativeContextMenuEntry[]> {
     this.generation = (this.generation % Number.MAX_SAFE_INTEGER) + 1;
     const generation = this.generation;
     const availableCommands = new Set(await vscode.commands.getCommands(true));
     const resolved = buildNativeTabMenu(
       this.getManifests(),
-      createContext(tab),
+      createContext(tab, selectedTabs),
       availableCommands,
       strings,
+      { selectionCount: selectedTabs.length },
     );
     if (generation !== this.generation) return [];
     this.actions = new Map();
@@ -93,12 +94,15 @@ export class NativeTabMenuProvider implements vscode.Disposable {
   }
 }
 
-function createContext(tab: vscode.Tab): NativeMenuContext {
+function createContext(tab: vscode.Tab, selectedTabs: readonly vscode.Tab[]): NativeMenuContext {
   const uri = inputUri(tab.input);
   const languageId = inputLanguageId(tab.input, uri);
+  const selectedInSameGroup = selectedTabs.length > 0 && selectedTabs.every((selected) => selected.group === tab.group);
+  const allSelectedText = selectedTabs.length === 2 && selectedTabs.every((selected) => selected.input instanceof vscode.TabInputText);
   const values = new Map<string, unknown>([
     ['resource', uri],
     ['resourceUri', uri],
+    ['resourceSet', Boolean(uri)],
     ['resourceScheme', uri?.scheme],
     ['resourceFilename', uri ? path.posix.basename(uri.path) : undefined],
     ['resourceExtname', uri ? path.posix.extname(uri.path) : undefined],
@@ -110,7 +114,12 @@ function createContext(tab: vscode.Tab): NativeMenuContext {
     ['activeEditorIsDirty', tab.isDirty],
     ['activeEditorIsPinned', tab.isPinned],
     ['activeEditorIsPreview', tab.isPreview],
+    ['activeEditorIsNotPreview', !tab.isPreview],
     ['activeEditor', activeEditorId(tab.input)],
+    ['multipleEditorsSelectedInGroup', selectedInSameGroup && selectedTabs.length > 1],
+    ['twoEditorsSelectedInGroup', selectedInSameGroup && selectedTabs.length === 2],
+    ['SelectedEditorsInGroupFileOrUntitledResourceContextKey', selectedInSameGroup && selectedTabs.every((selected) => selected.input instanceof vscode.TabInputText)],
+    ['verticalTabsTwoComparableSelected', allSelectedText],
     ['terminalEditorFocus', tab.input instanceof vscode.TabInputTerminal],
     ['isWeb', vscode.env.uiKind === vscode.UIKind.Web],
     ['remoteName', vscode.env.remoteName ?? ''],

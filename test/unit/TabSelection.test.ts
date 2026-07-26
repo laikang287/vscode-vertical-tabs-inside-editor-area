@@ -43,6 +43,17 @@ test('keeps identical resources in different VS Code groups independently select
   assert.deepEqual(selection.selectedTabs([left, right], right), [left, right]);
 });
 
+test('preserves chronological selection order for comparison, including reverse Shift ranges', () => {
+  const tabs = [tab('a', 0, 0), tab('b', 0, 1), tab('c', 0, 2)];
+  const selection = new TabSelection();
+
+  selection.selectSingle(tabs[2]);
+  selection.update(tabs, tabs[0], { shiftKey: true, toggleKey: false });
+
+  assert.deepEqual(selection.orderedTabs(tabs), [tabs[2], tabs[1], tabs[0]]);
+  assert.deepEqual(selection.selectedTabs(tabs, tabs[0]), [tabs[2], tabs[1], tabs[0]]);
+});
+
 test('prunes closed tabs and a stale range anchor', () => {
   const first = tab('first', 0, 0);
   const second = tab('second', 0, 1);

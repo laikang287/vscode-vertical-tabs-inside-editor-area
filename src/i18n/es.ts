@@ -104,7 +104,7 @@ const es: LocaleStrings = {
   nativeCopyPath: 'Copiar ruta de acceso',
   nativeCopyRelativePath: 'Copiar ruta de acceso relativa',
   nativeRevealInFileExplorer: 'Mostrar en el Explorador de archivos',
-  nativeCompareWithSelected: 'Comparar con la selección',
+  nativeCompareSelected: 'Comparar archivos seleccionados',
   nativeMoveTerminalIntoPanel: 'Mover terminal al panel',
   nativeRenameTerminal: 'Cambiar nombre del terminal',
   nativeChangeTerminalColor: 'Cambiar color del terminal',

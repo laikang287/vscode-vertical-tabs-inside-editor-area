@@ -104,7 +104,7 @@ const ptBr: LocaleStrings = {
   nativeCopyPath: 'Copiar caminho',
   nativeCopyRelativePath: 'Copiar caminho relativo',
   nativeRevealInFileExplorer: 'Revelar no Explorador de Arquivos',
-  nativeCompareWithSelected: 'Comparar com o selecionado',
+  nativeCompareSelected: 'Comparar arquivos selecionados',
   nativeMoveTerminalIntoPanel: 'Mover terminal para o painel',
   nativeRenameTerminal: 'Renomear terminal',
   nativeChangeTerminalColor: 'Alterar cor do terminal',
