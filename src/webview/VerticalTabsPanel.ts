@@ -69,7 +69,7 @@ import {
   type WorksetTabInput,
 } from '../worksets/Worksets';
 import { SingletonPanel } from './SingletonPanel';
-import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabInputKind, type TabResourceStatus, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
+import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabActivationFocus, type TabInputKind, type TabResourceStatus, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { NativeTabMenuProvider } from './NativeTabMenuProvider';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 
@@ -343,6 +343,7 @@ export class VerticalTabsPanel {
     logDebug('请求聚焦垂直标签面板');
     const instance = await VerticalTabsPanel.open(context);
     await instance?.reveal(false);
+    instance?.postMessage({ type: 'focusTabList' });
   }
 
   static async close(): Promise<void> {
@@ -1032,6 +1033,9 @@ export class VerticalTabsPanel {
     if (this.shortcutNavigationActivationDepth === 0) {
       this.cancelShortcutNavigation('activeEditorChanged');
     }
+    if (!this.panel.active) {
+      this.postMessage({ type: 'blurTabList' });
+    }
     this.observeFocusedUserTab();
     this.scheduleRefresh();
   }
@@ -1708,8 +1712,10 @@ export class VerticalTabsPanel {
 
     if (message.type === 'activateTab') {
       const tab = this.resolveTab(message.target);
+      const focus = message.focus ?? 'editor';
       logDebug('收到标签激活请求', {
         requestId: message.requestId,
+        focus,
         targetRevision: message.target.revision,
         currentRevision: this.currentSnapshot.revision,
         targetGroupIndex: message.target.groupIndex,
@@ -1721,7 +1727,7 @@ export class VerticalTabsPanel {
         const previousSuppression = this.suppressScheduledRefresh;
         this.suppressScheduledRefresh = true;
         try {
-          await this.activateTab(tab, message.requestId);
+          await this.activateTab(tab, message.requestId, focus);
           await this.refresh({ reason: 'navigate' });
         } finally {
           this.suppressScheduledRefresh = previousSuppression;
@@ -3492,55 +3498,70 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async activateTab(tab: vscode.Tab, requestId?: string): Promise<void> {
-    logDebug('开始激活标签', { requestId, target: describeTab(tab) });
-    if (await this.selectExistingTab(tab, requestId)) {
-      this.logActivationOutcome(tab, 'existingNavigation', requestId);
-      return;
-    }
+  private async activateTab(
+    tab: vscode.Tab,
+    requestId?: string,
+    focus: TabActivationFocus = 'editor',
+  ): Promise<void> {
+    logDebug('开始激活标签', { requestId, focus, target: describeTab(tab) });
+    try {
+      if (focus === 'editor' && await this.selectExistingTab(tab, requestId)) {
+        this.logActivationOutcome(tab, 'existingNavigation', requestId, focus);
+        return;
+      }
 
-    const options: vscode.TextDocumentShowOptions = { viewColumn: tab.group.viewColumn, preserveFocus: false };
-    if (tab.input instanceof vscode.TabInputText) {
-      logDebug('使用 showTextDocument 激活文本标签', { requestId, target: describeTab(tab) });
-      await vscode.window.showTextDocument(tab.input.uri, options);
-      this.logActivationOutcome(tab, 'showTextDocument', requestId);
-      return;
+      const options: vscode.TextDocumentShowOptions = {
+        viewColumn: tab.group.viewColumn,
+        preserveFocus: focus === 'rail',
+      };
+      if (tab.input instanceof vscode.TabInputText) {
+        logDebug('使用 showTextDocument 激活文本标签', { requestId, focus, target: describeTab(tab) });
+        await vscode.window.showTextDocument(tab.input.uri, options);
+        this.logActivationOutcome(tab, 'showTextDocument', requestId, focus);
+        return;
+      }
+      if (tab.input instanceof vscode.TabInputTextDiff || tab.input instanceof vscode.TabInputNotebookDiff) {
+        logDebug('使用 vscode.diff 激活 Diff 标签', { requestId, focus, target: describeTab(tab) });
+        await vscode.commands.executeCommand('vscode.diff', tab.input.original, tab.input.modified, tab.label, options);
+        this.logActivationOutcome(tab, 'vscode.diff', requestId, focus);
+        return;
+      }
+      if (tab.input instanceof vscode.TabInputCustom) {
+        logDebug('使用 vscode.openWith 激活 Custom Editor 标签', { requestId, focus, target: describeTab(tab), viewType: tab.input.viewType });
+        await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.viewType, options);
+        this.logActivationOutcome(tab, 'vscode.openWith:custom', requestId, focus);
+        return;
+      }
+      if (tab.input instanceof vscode.TabInputNotebook) {
+        logDebug('使用 vscode.openWith 激活 Notebook 标签', { requestId, focus, target: describeTab(tab), notebookType: tab.input.notebookType });
+        await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
+        this.logActivationOutcome(tab, 'vscode.openWith:notebook', requestId, focus);
+        return;
+      }
+      const builtInWebviewTarget = getActivatableBuiltInWebviewTarget(tab);
+      if (builtInWebviewTarget === 'welcome') {
+        logDebug('使用欢迎页命令激活内置 Webview 标签', { requestId, focus, target: describeTab(tab) });
+        await focusEditorGroup(tab.group.viewColumn);
+        await openWelcomeEditor();
+        this.logActivationOutcome(tab, 'openWelcomeEditor', requestId, focus);
+        return;
+      }
+      if (builtInWebviewTarget === 'settings') {
+        logDebug('使用设置页命令激活内置 Webview 标签', { requestId, focus, target: describeTab(tab) });
+        await focusEditorGroup(tab.group.viewColumn);
+        await vscode.commands.executeCommand('workbench.action.openSettings');
+        this.logActivationOutcome(tab, 'workbench.action.openSettings', requestId, focus);
+        return;
+      }
+      logWarn('标签类型不支持通过公开 API 激活', { requestId, focus, target: describeTab(tab) });
+      this.logActivationOutcome(tab, 'unsupported', requestId, focus);
+    } finally {
+      if (focus === 'rail') {
+        this.lastFocusedUserGroup = tab.group;
+        await this.reveal(false);
+        this.postMessage({ type: 'focusTabList' });
+      }
     }
-    if (tab.input instanceof vscode.TabInputTextDiff || tab.input instanceof vscode.TabInputNotebookDiff) {
-      logDebug('使用 vscode.diff 激活 Diff 标签', { requestId, target: describeTab(tab) });
-      await vscode.commands.executeCommand('vscode.diff', tab.input.original, tab.input.modified, tab.label, options);
-      this.logActivationOutcome(tab, 'vscode.diff', requestId);
-      return;
-    }
-    if (tab.input instanceof vscode.TabInputCustom) {
-      logDebug('使用 vscode.openWith 激活 Custom Editor 标签', { requestId, target: describeTab(tab), viewType: tab.input.viewType });
-      await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.viewType, options);
-      this.logActivationOutcome(tab, 'vscode.openWith:custom', requestId);
-      return;
-    }
-    if (tab.input instanceof vscode.TabInputNotebook) {
-      logDebug('使用 vscode.openWith 激活 Notebook 标签', { requestId, target: describeTab(tab), notebookType: tab.input.notebookType });
-      await vscode.commands.executeCommand('vscode.openWith', tab.input.uri, tab.input.notebookType, options);
-      this.logActivationOutcome(tab, 'vscode.openWith:notebook', requestId);
-      return;
-    }
-    const builtInWebviewTarget = getActivatableBuiltInWebviewTarget(tab);
-    if (builtInWebviewTarget === 'welcome') {
-      logDebug('使用欢迎页命令激活内置 Webview 标签', { requestId, target: describeTab(tab) });
-      await focusEditorGroup(tab.group.viewColumn);
-      await openWelcomeEditor();
-      this.logActivationOutcome(tab, 'openWelcomeEditor', requestId);
-      return;
-    }
-    if (builtInWebviewTarget === 'settings') {
-      logDebug('使用设置页命令激活内置 Webview 标签', { requestId, target: describeTab(tab) });
-      await focusEditorGroup(tab.group.viewColumn);
-      await vscode.commands.executeCommand('workbench.action.openSettings');
-      this.logActivationOutcome(tab, 'workbench.action.openSettings', requestId);
-      return;
-    }
-    logWarn('标签类型不支持通过公开 API 激活', { requestId, target: describeTab(tab) });
-    this.logActivationOutcome(tab, 'unsupported', requestId);
   }
 
   private async selectExistingTab(tab: vscode.Tab, requestId?: string): Promise<boolean> {
@@ -3582,12 +3603,18 @@ export class VerticalTabsPanel {
     return false;
   }
 
-  private logActivationOutcome(tab: vscode.Tab, method: string, requestId?: string): void {
+  private logActivationOutcome(
+    tab: vscode.Tab,
+    method: string,
+    requestId?: string,
+    focus: TabActivationFocus = 'editor',
+  ): void {
     const target = findTabPosition(tab);
-    const matched = target ? activeTabMatches(target, tab) : false;
+    const matched = target ? activeTabMatches(target, tab, focus === 'editor') : false;
     const details = {
       requestId,
       method,
+      focus,
       expected: describeTab(tab),
       active: describeActiveTab(),
       groups: describeTabGroups(),
@@ -4011,9 +4038,9 @@ function findTabPositionBy(predicate: (tab: vscode.Tab) => boolean): TabPosition
   return undefined;
 }
 
-function activeTabMatches(target: TabPosition, tab: vscode.Tab): boolean {
+function activeTabMatches(target: TabPosition, tab: vscode.Tab, requireGroupFocus = true): boolean {
   const group = vscode.window.tabGroups.all[target.groupIndex];
-  if (!group || group.viewColumn !== target.group.viewColumn || !group.isActive) {
+  if (!group || group.viewColumn !== target.group.viewColumn || (requireGroupFocus && !group.isActive)) {
     return false;
   }
   const activeTab = group.activeTab;

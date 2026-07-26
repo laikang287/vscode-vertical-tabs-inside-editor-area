@@ -34,6 +34,14 @@ test('accepts bounded webview log messages', () => {
 test('accepts tab actions with a valid snapshot target', () => {
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target }), { type: 'activateTab', target });
   assert.deepEqual(parseWebviewMessage({ type: 'activateTab', target, requestId: 'activate-1' }), { type: 'activateTab', target, requestId: 'activate-1' });
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'activateTab', target, requestId: 'activate-2', focus: 'rail' }),
+    { type: 'activateTab', target, requestId: 'activate-2', focus: 'rail' },
+  );
+  assert.deepEqual(
+    parseWebviewMessage({ type: 'activateTab', target, focus: 'editor' }),
+    { type: 'activateTab', target, focus: 'editor' },
+  );
   assert.deepEqual(parseWebviewMessage({ type: 'closeBelow', target }), { type: 'closeBelow', target });
   assert.deepEqual(parseWebviewMessage({ type: 'closeSaved' }), { type: 'closeSaved' });
   assert.deepEqual(parseWebviewMessage({ type: 'railWidth', width: 280 }), { type: 'railWidth', width: 280 });
@@ -90,6 +98,8 @@ test('rejects malformed and unknown messages', () => {
     { type: 'activateTab', target, requestId: '' },
     { type: 'activateTab', target, requestId: 42 },
     { type: 'activateTab', target, requestId: 'x'.repeat(81) },
+    { type: 'activateTab', target, focus: 'sidebar' },
+    { type: 'activateTab', target, focus: true },
     { type: 'activateTab', target: { revision: -1, groupIndex: 0, tabIndex: 0 } },
     { type: 'activateTab', target: { revision: 1.5, groupIndex: 0, tabIndex: 0 } },
     { type: 'activateTab', target: { revision: 1, groupIndex: 0, tabIndex: 0 } },
