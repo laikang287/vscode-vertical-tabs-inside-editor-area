@@ -40,7 +40,6 @@ export class NativeTabMenuProvider implements vscode.Disposable {
       createContext(tab, selectedTabs),
       availableCommands,
       strings,
-      { selectionCount: selectedTabs.length },
     );
     if (generation !== this.generation) return [];
     this.actions = new Map();

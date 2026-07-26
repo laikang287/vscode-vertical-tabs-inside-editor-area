@@ -12,10 +12,6 @@ export interface NativeMenuManifest {
   readonly packageJSON: unknown;
 }
 
-export interface NativeMenuBuildOptions {
-  readonly selectionCount?: number;
-}
-
 export type ResolvedNativeMenuEntry =
   | { readonly kind: 'separator' }
   | {
@@ -132,10 +128,8 @@ export function buildNativeTabMenu(
   context: NativeMenuContext,
   availableCommands: ReadonlySet<string>,
   strings: NativeMenuStrings = getStrings('en'),
-  options: NativeMenuBuildOptions = {},
 ): readonly ResolvedNativeMenuEntry[] {
   const index = indexManifests([coreMenuManifest(strings), ...manifests]);
-  const selectionCount = options.selectionCount ?? 1;
   let itemCount = 0;
   const build = (menuId: string, ancestors: ReadonlySet<string>, depth: number): readonly ResolvedNativeMenuEntry[] => {
     if (depth > MAX_MENU_DEPTH || ancestors.has(menuId) || itemCount >= MAX_MENU_ITEMS) return [];
@@ -146,19 +140,18 @@ export function buildNativeTabMenu(
     for (const indexed of contributions) {
       if (itemCount >= MAX_MENU_ITEMS) break;
       const contribution = indexed.contribution;
-      if (evaluateWhenClause(contribution.when, context) !== true) continue;
+      if (evaluateWhenClause(contribution.when, context) === false) continue;
       const group = contribution.group ?? '';
       if (isDuplicateGroup(group)) continue;
       let entry: ResolvedNativeMenuEntry | undefined;
       if (contribution.command) {
-        if (selectionCount > 1 && contribution.command !== 'compareSelected') continue;
         if (DUPLICATE_COMMANDS.has(contribution.command) || !availableCommands.has(contribution.command)) continue;
         const command = index.commands.get(contribution.command);
         entry = {
           kind: 'action',
           command: contribution.command,
           label: command?.title ?? contribution.command,
-          enabled: evaluateWhenClause(command?.enablement, context) === true,
+          enabled: evaluateWhenClause(command?.enablement, context) !== false,
           invocation: command?.invocation ?? (EDITOR_SCOPED_COMMANDS.has(contribution.command) ? 'editor' : 'resource'),
         };
       } else if (contribution.submenu) {

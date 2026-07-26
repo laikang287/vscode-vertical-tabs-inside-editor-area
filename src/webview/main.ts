@@ -85,6 +85,7 @@ const EN_DEFAULTS: Record<string, string> = {
   noSearchResults: 'No tabs match the current search.',
   ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root',
   noExtension: 'No extension', editorGroup: 'Editor Group {0}',
+  nativeMenuSourceWarning: 'The actions below come from the horizontal tab menu and may not work',
 };
 
 function resolveI18n(): Record<string, string> {
@@ -1320,7 +1321,10 @@ function renderNativeContextMenu(requestId: string, entries: readonly NativeCont
   if (!pending || pending.requestId !== requestId || contextMenu !== pending.menu || !pending.menu.isConnected) return;
   pendingNativeMenuRequest = undefined;
   if (!hasNativeMenuAction(entries)) return;
-  pending.menu.append(createContextMenuSeparator(), ...nativeContextMenuElements(entries, pending.target, pending.targets));
+  pending.menu.append(
+    createNativeMenuSourceDivider(i18n.nativeMenuSourceWarning),
+    ...nativeContextMenuElements(entries, pending.target, pending.targets),
+  );
   positionContextMenu(pending.menu, pending.x, pending.y);
 }
 
@@ -1389,6 +1393,17 @@ function createContextMenuSeparator(): HTMLDivElement {
   separator.className = 'tab-context-separator';
   separator.setAttribute('role', 'separator');
   return separator;
+}
+
+function createNativeMenuSourceDivider(label: string): HTMLDivElement {
+  const divider = document.createElement('div');
+  divider.className = 'tab-context-source-divider';
+  divider.setAttribute('role', 'separator');
+  divider.setAttribute('aria-label', label);
+  const text = document.createElement('span');
+  text.textContent = label;
+  divider.append(text);
+  return divider;
 }
 
 function positionContextMenu(menu: HTMLElement, x: number, y: number): void {

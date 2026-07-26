@@ -105,6 +105,7 @@ const de: LocaleStrings = {
   nativeCopyRelativePath: 'Relativen Pfad kopieren',
   nativeRevealInFileExplorer: 'Im Datei-Explorer anzeigen',
   nativeCompareSelected: 'Ausgewählte Dateien vergleichen',
+  nativeMenuSourceWarning: 'Die folgenden Aktionen stammen aus dem horizontalen Tab-Menü und funktionieren möglicherweise nicht',
   nativeMoveTerminalIntoPanel: 'Terminal in Panel verschieben',
   nativeRenameTerminal: 'Terminal umbenennen',
   nativeChangeTerminalColor: 'Terminalfarbe ändern',

@@ -105,6 +105,7 @@ const zhCn: LocaleStrings = {
   nativeCopyRelativePath: '复制相对路径',
   nativeRevealInFileExplorer: '在文件资源管理器中显示',
   nativeCompareSelected: '比较所选文件',
+  nativeMenuSourceWarning: '以下操作来自横向标签页菜单，不保证可用',
   nativeMoveTerminalIntoPanel: '将终端移动到面板',
   nativeRenameTerminal: '重命名终端',
   nativeChangeTerminalColor: '更改终端颜色',

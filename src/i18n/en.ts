@@ -103,6 +103,7 @@ const en: LocaleStrings = {
   nativeCopyRelativePath: 'Copy Relative Path',
   nativeRevealInFileExplorer: 'Reveal in File Explorer',
   nativeCompareSelected: 'Compare Selected Files',
+  nativeMenuSourceWarning: 'The actions below come from the horizontal tab menu and may not work',
   nativeMoveTerminalIntoPanel: 'Move Terminal into Panel',
   nativeRenameTerminal: 'Rename Terminal',
   nativeChangeTerminalColor: 'Change Terminal Color',

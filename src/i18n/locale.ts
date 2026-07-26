@@ -101,6 +101,7 @@ export interface LocaleStrings {
   readonly nativeCopyRelativePath: string;
   readonly nativeRevealInFileExplorer: string;
   readonly nativeCompareSelected: string;
+  readonly nativeMenuSourceWarning: string;
   readonly nativeMoveTerminalIntoPanel: string;
   readonly nativeRenameTerminal: string;
   readonly nativeChangeTerminalColor: string;

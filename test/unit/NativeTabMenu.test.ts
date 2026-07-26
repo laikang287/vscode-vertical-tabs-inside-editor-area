@@ -31,7 +31,7 @@ test('evaluates supported when-clause operators and keeps unknown private contex
   assert.equal(evaluateWhenClause('private.extensionState && resourceScheme == file', values), undefined);
 });
 
-test('discovers safe extension submenus, disables unknown enablement, and removes duplicate groups', () => {
+test('discovers extension submenus, keeps unknown contexts usable, and removes duplicate groups', () => {
   const manifest = {
     id: 'publisher.example',
     packageJSON: {
@@ -80,19 +80,19 @@ test('discovers safe extension submenus, disables unknown enablement, and remove
   }), available);
   const commands = commandIds(menu);
 
-  assert.deepEqual(commands, ['example.open', 'example.disabled', 'example.unknown', 'example.child']);
+  assert.deepEqual(commands, ['example.open', 'example.disabled', 'example.unknown', 'example.hiddenUnknown', 'example.child']);
   assert.equal(commands.includes('workbench.action.closeActiveEditor'), false);
   assert.equal(commands.includes('workbench.action.pinEditor'), false);
   const disabled = menu.flatMap((entry) => entry.kind === 'action' ? [entry] : []).find((entry) => entry.command === 'example.disabled');
   const unknown = menu.flatMap((entry) => entry.kind === 'action' ? [entry] : []).find((entry) => entry.command === 'example.unknown');
   assert.equal(disabled?.enabled, false);
-  assert.equal(unknown?.enabled, false);
-  assert.equal(commands.includes('example.hiddenUnknown'), false);
+  assert.equal(unknown?.enabled, true);
+  assert.equal(commands.includes('example.hiddenUnknown'), true);
   assert.equal(menu.some((entry) => entry.kind === 'submenu' && entry.label === 'Example Tools'), true);
   assert.equal(menu.some((entry) => entry.kind === 'separator'), true);
 });
 
-test('keeps only the adapted comparison action for a vertical multi-selection', () => {
+test('keeps regular native actions alongside the adapted comparison action for a vertical multi-selection', () => {
   const available = new Set([
     'workbench.action.splitEditor',
     'copyFilePath',
@@ -107,10 +107,13 @@ test('keeps only the adapted comparison action for a vertical multi-selection', 
     }),
     available,
     getStrings('en'),
-    { selectionCount: 2 },
   );
 
-  assert.deepEqual(commandIds(menu), ['compareSelected']);
+  assert.deepEqual(commandIds(menu), [
+    'workbench.action.splitEditor',
+    'copyFilePath',
+    'compareSelected',
+  ]);
 });
 
 test('hides comparison unless exactly two comparable vertical tabs are selected', () => {
@@ -122,7 +125,6 @@ test('hides comparison unless exactly two comparable vertical tabs are selected'
       context({ resourceScheme: 'file', verticalTabsTwoComparableSelected: false }),
       available,
       getStrings('en'),
-      { selectionCount: 1 },
     )),
     [],
   );

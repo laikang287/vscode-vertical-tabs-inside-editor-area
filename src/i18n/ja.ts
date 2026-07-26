@@ -105,6 +105,7 @@ const ja: LocaleStrings = {
   nativeCopyRelativePath: '相対パスのコピー',
   nativeRevealInFileExplorer: 'エクスプローラーで表示',
   nativeCompareSelected: '選択したファイルを比較',
+  nativeMenuSourceWarning: '以下の操作は横タブのメニューから取得したもので、動作しない場合があります',
   nativeMoveTerminalIntoPanel: 'ターミナルをパネルに移動',
   nativeRenameTerminal: 'ターミナル名の変更',
   nativeChangeTerminalColor: 'ターミナルの色を変更',
