@@ -69,6 +69,7 @@ import {
   type WorksetTabInput,
 } from '../worksets/Worksets';
 import { SingletonPanel } from './SingletonPanel';
+import { LatestRefreshGate } from './SnapshotFreshness';
 import { type ExtensionMessage, type GroupMode, type ManualTabGroup, type RelativePathDisplay, type SortMode, type TabActivationFocus, type TabInputKind, type TabResourceStatus, type TabTarget, type TabTargetIdentity, type ToolbarPosition, type VerticalTabItem, type VerticalTabsSnapshot, parseWebviewMessage } from './messages';
 import { NativeTabMenuProvider } from './NativeTabMenuProvider';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -165,6 +166,8 @@ export class VerticalTabsPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private revision = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly refreshGate = new LatestRefreshGate();
+  private latestRefreshOperation: Promise<void> | undefined;
   private initialHostRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   private renderAckTimer: ReturnType<typeof setTimeout> | undefined;
   private minWidthCorrectionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1051,7 +1054,29 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async refresh(options: { readonly reason: string; readonly ensureEmptyLayout?: boolean }): Promise<void> {
+  private refresh(options: { readonly reason: string; readonly ensureEmptyLayout?: boolean }): Promise<void> {
+    const requestId = this.refreshGate.begin();
+    const operation = this.refreshRequest(options, requestId);
+    this.latestRefreshOperation = operation;
+    return this.awaitLatestRefresh(operation);
+  }
+
+  private async awaitLatestRefresh(initialOperation: Promise<void>): Promise<void> {
+    let operation = initialOperation;
+    while (true) {
+      await operation;
+      const latest = this.latestRefreshOperation;
+      if (!latest || latest === operation) {
+        return;
+      }
+      operation = latest;
+    }
+  }
+
+  private async refreshRequest(
+    options: { readonly reason: string; readonly ensureEmptyLayout?: boolean },
+    requestId: number,
+  ): Promise<void> {
     const started = Date.now();
     const sourceGeneration = this.snapshotGeneration;
     logDebug('开始刷新垂直标签快照', {
@@ -1059,12 +1084,21 @@ export class VerticalTabsPanel {
       arrangingRail: this.arrangingRail,
       groupCount: vscode.window.tabGroups.all.length,
     });
+    let snapshot: VerticalTabsSnapshot;
     try {
-      this.currentSnapshot = await withTimeout(this.createSnapshot(), SNAPSHOT_REFRESH_TIMEOUT_MS);
-      this.appliedSnapshotGeneration = sourceGeneration;
+      snapshot = await withTimeout(this.createSnapshot(), SNAPSHOT_REFRESH_TIMEOUT_MS);
     } catch (error) {
+      if (!this.refreshGate.isCurrent(requestId)) {
+        logTrace('忽略已被更新请求取代的失败标签快照刷新', {
+          reason: options.reason,
+          requestId,
+          durationMs: Date.now() - started,
+        });
+        return;
+      }
       logError('刷新垂直标签快照失败，将发送上一份可用快照避免 Webview 停留在加载态', {
         reason: options.reason,
+        requestId,
         durationMs: Date.now() - started,
         error,
       });
@@ -1072,8 +1106,21 @@ export class VerticalTabsPanel {
       this.scheduleRenderAckWatch(this.currentSnapshot);
       return;
     }
+    if (!this.refreshGate.isCurrent(requestId)) {
+      logTrace('丢弃已被更新请求取代的标签快照', {
+        reason: options.reason,
+        requestId,
+        revision: snapshot.revision,
+        tabCount: snapshot.tabs.length,
+        durationMs: Date.now() - started,
+      });
+      return;
+    }
+    this.currentSnapshot = snapshot;
+    this.appliedSnapshotGeneration = sourceGeneration;
     logDebug('完成刷新垂直标签快照', {
       reason: options.reason,
+      requestId,
       revision: this.currentSnapshot.revision,
       tabCount: this.currentSnapshot.tabs.length,
       displayGroupCount: this.currentSnapshot.displayGroups.length,

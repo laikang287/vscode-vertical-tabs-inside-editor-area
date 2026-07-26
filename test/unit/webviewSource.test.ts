@@ -674,6 +674,18 @@ test('webview reports startup, render, and script failures to the extension log'
   assert.match(source, /等待标签快照超时/);
 });
 
+test('host and webview reject stale snapshots from overlapping refreshes', () => {
+  const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
+  const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
+
+  assert.match(panelSource, /private readonly refreshGate = new LatestRefreshGate\(\)/);
+  assert.match(panelSource, /const requestId = this\.refreshGate\.begin\(\)/);
+  assert.match(panelSource, /return this\.awaitLatestRefresh\(operation\)/);
+  assert.match(panelSource, /if \(!this\.refreshGate\.isCurrent\(requestId\)\)[\s\S]+丢弃已被更新请求取代的标签快照/);
+  assert.match(webviewSource, /shouldAcceptSnapshotRevision\(latestSnapshot\?\.revision, event\.data\.snapshot\.revision\)/);
+  assert.match(webviewSource, /忽略乱序到达的旧标签快照/);
+});
+
 test('extension resource metadata lookup has a timeout without treating timeout as an error state', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
