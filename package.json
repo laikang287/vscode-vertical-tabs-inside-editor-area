@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "%verticalTabs.displayName%",
   "description": "%verticalTabs.description%",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {

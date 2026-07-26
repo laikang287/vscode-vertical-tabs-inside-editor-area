@@ -9,7 +9,7 @@ const STATUS_BAR_PRIORITY = 100;
 export class VerticalTabsStatusBar implements vscode.Disposable {
   private readonly item = vscode.window.createStatusBarItem(
     STATUS_BAR_ID,
-    vscode.StatusBarAlignment.Right,
+    vscode.StatusBarAlignment.Left,
     STATUS_BAR_PRIORITY,
   );
   private readonly disposables: vscode.Disposable[];

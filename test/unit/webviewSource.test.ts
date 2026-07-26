@@ -102,7 +102,7 @@ test('extension registers an always-visible status bar toggle and refreshes it w
   assert.match(extensionSource, /const statusBar = new VerticalTabsStatusBar\(\)/);
   assert.match(extensionSource, /context\.subscriptions\.push\([\s\S]*statusBar,/);
   assert.match(statusBarSource, /createStatusBarItem\(/);
-  assert.match(statusBarSource, /vscode\.StatusBarAlignment\.Right/);
+  assert.match(statusBarSource, /vscode\.StatusBarAlignment\.Left/);
   assert.match(statusBarSource, /this\.item\.command = 'verticalTabs\.toggle'/);
   assert.match(statusBarSource, /VerticalTabsPanel\.onDidChangeVisibility\(\(\) => this\.refresh\(\)\)/);
   assert.match(statusBarSource, /event\.affectsConfiguration\('verticalTabs\.position'\)/);
