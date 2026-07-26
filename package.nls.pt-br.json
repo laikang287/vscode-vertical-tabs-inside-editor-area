@@ -29,7 +29,6 @@
   "verticalTabs.config.defaultGroupMode.vscode": "Acompanhar os grupos de editores do VS Code.",
   "verticalTabs.config.defaultGroupMode.manual": "Usar agrupamento manual.",
   "verticalTabs.config.defaultGroupMode.parentDir": "Agrupar por diretório pai.",
-  "verticalTabs.config.defaultGroupMode.parentDirTree": "Agrupar abas abertas em uma árvore de diretórios pais.",
   "verticalTabs.config.defaultGroupMode.fileType": "Agrupar por tipo de arquivo.",
   "verticalTabs.config.defaultSortMode": "Modo de ordenação padrão. O padrão é a ordenação manual. Sempre usado quando a memória automática está desabilitada; quando habilitada, é usado somente se não houver um valor salvo.",
   "verticalTabs.config.defaultSortMode.none": "Ordenação manual; as abas podem ser reordenadas ao arrastar.",

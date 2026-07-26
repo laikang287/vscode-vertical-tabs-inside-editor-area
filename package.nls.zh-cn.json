@@ -29,7 +29,6 @@
   "verticalTabs.config.defaultGroupMode.vscode": "跟随 VS Code 编辑器组。",
   "verticalTabs.config.defaultGroupMode.manual": "使用手动分组。",
   "verticalTabs.config.defaultGroupMode.parentDir": "按父目录分组。",
-  "verticalTabs.config.defaultGroupMode.parentDirTree": "按父目录树分组打开的标签。",
   "verticalTabs.config.defaultGroupMode.fileType": "按文件类型分组。",
   "verticalTabs.config.defaultSortMode": "默认排序方式。默认为手动排序；关闭自动记忆时始终使用该值，开启自动记忆时仅在没有已记忆值时使用。",
   "verticalTabs.config.defaultSortMode.none": "手动排序，可通过拖拽调整标签顺序。",

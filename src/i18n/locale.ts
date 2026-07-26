@@ -34,10 +34,6 @@ export interface LocaleStrings {
   readonly groupNameRequired: string;
   readonly groupNameTooLong: string;
   readonly newGroup: string;
-  readonly newSubgroup: string;
-  readonly moveGroup: string;
-  readonly moveToTopLevel: string;
-  readonly groupDepthLimit: string;
   readonly newGroupOnlyManual: string;
   readonly unknownTab: string;
   readonly previewTab: string;
@@ -53,14 +49,12 @@ export interface LocaleStrings {
   readonly ungrouped: string;
   readonly other: string;
   readonly workspaceRoot: string;
-  readonly outsideWorkspace: string;
   readonly noExtension: string;
   readonly editorGroup: string;
   readonly groupModeLabel: string;
   readonly groupModeVscode: string;
   readonly groupModeManual: string;
   readonly groupModeParentDir: string;
-  readonly groupModeParentDirTree: string;
   readonly groupModeFileType: string;
   readonly sortModeLabel: string;
   readonly sortModeNone: string;

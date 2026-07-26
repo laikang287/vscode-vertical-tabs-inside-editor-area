@@ -123,7 +123,6 @@ function displayedGroup(id: string, tabs: readonly VerticalTabItem[]): VerticalT
     showHeader: true,
     isManual: true,
     isPinned: false,
-    depth: 1,
   };
 }
 
