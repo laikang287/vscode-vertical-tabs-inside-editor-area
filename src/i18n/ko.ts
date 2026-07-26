@@ -104,7 +104,7 @@ const ko: LocaleStrings = {
   nativeCopyPath: '경로 복사',
   nativeCopyRelativePath: '상대 경로 복사',
   nativeRevealInFileExplorer: '파일 탐색기에서 표시',
-  nativeCompareWithSelected: '선택 항목과 비교',
+  nativeCompareSelected: '선택한 파일 비교',
   nativeMoveTerminalIntoPanel: '터미널을 패널로 이동',
   nativeRenameTerminal: '터미널 이름 바꾸기',
   nativeChangeTerminalColor: '터미널 색 변경',

@@ -12,6 +12,10 @@ export interface NativeMenuManifest {
   readonly packageJSON: unknown;
 }
 
+export interface NativeMenuBuildOptions {
+  readonly selectionCount?: number;
+}
+
 export type ResolvedNativeMenuEntry =
   | { readonly kind: 'separator' }
   | {
@@ -72,7 +76,7 @@ type NativeMenuStrings = Pick<
   | 'nativeCopyPath'
   | 'nativeCopyRelativePath'
   | 'nativeRevealInFileExplorer'
-  | 'nativeCompareWithSelected'
+  | 'nativeCompareSelected'
   | 'nativeMoveTerminalIntoPanel'
   | 'nativeRenameTerminal'
   | 'nativeChangeTerminalColor'
@@ -128,8 +132,10 @@ export function buildNativeTabMenu(
   context: NativeMenuContext,
   availableCommands: ReadonlySet<string>,
   strings: NativeMenuStrings = getStrings('en'),
+  options: NativeMenuBuildOptions = {},
 ): readonly ResolvedNativeMenuEntry[] {
   const index = indexManifests([coreMenuManifest(strings), ...manifests]);
+  const selectionCount = options.selectionCount ?? 1;
   let itemCount = 0;
   const build = (menuId: string, ancestors: ReadonlySet<string>, depth: number): readonly ResolvedNativeMenuEntry[] => {
     if (depth > MAX_MENU_DEPTH || ancestors.has(menuId) || itemCount >= MAX_MENU_ITEMS) return [];
@@ -140,18 +146,19 @@ export function buildNativeTabMenu(
     for (const indexed of contributions) {
       if (itemCount >= MAX_MENU_ITEMS) break;
       const contribution = indexed.contribution;
-      if (evaluateWhenClause(contribution.when, context) === false) continue;
+      if (evaluateWhenClause(contribution.when, context) !== true) continue;
       const group = contribution.group ?? '';
       if (isDuplicateGroup(group)) continue;
       let entry: ResolvedNativeMenuEntry | undefined;
       if (contribution.command) {
+        if (selectionCount > 1 && contribution.command !== 'compareSelected') continue;
         if (DUPLICATE_COMMANDS.has(contribution.command) || !availableCommands.has(contribution.command)) continue;
         const command = index.commands.get(contribution.command);
         entry = {
           kind: 'action',
           command: contribution.command,
           label: command?.title ?? contribution.command,
-          enabled: evaluateWhenClause(command?.enablement, context) !== false,
+          enabled: evaluateWhenClause(command?.enablement, context) === true,
           invocation: command?.invocation ?? (EDITOR_SCOPED_COMMANDS.has(contribution.command) ? 'editor' : 'resource'),
         };
       } else if (contribution.submenu) {
@@ -277,7 +284,7 @@ function coreMenuManifest(strings: NativeMenuStrings): NativeMenuManifest {
     resourceCommand('copyFilePath', strings.nativeCopyPath),
     resourceCommand('copyRelativeFilePath', strings.nativeCopyRelativePath),
     resourceCommand('revealInExplorer', strings.nativeRevealInFileExplorer),
-    resourceCommand('compareSelected', strings.nativeCompareWithSelected),
+    resourceCommand('compareSelected', strings.nativeCompareSelected),
     coreCommand('workbench.action.terminal.moveToTerminalPanel', strings.nativeMoveTerminalIntoPanel),
     coreCommand('workbench.action.terminal.rename', strings.nativeRenameTerminal),
     coreCommand('workbench.action.terminal.changeColor', strings.nativeChangeTerminalColor),
@@ -294,7 +301,7 @@ function coreMenuManifest(strings: NativeMenuStrings): NativeMenuManifest {
     menuCommand('copyFilePath', '7_copy@1', 'resourceScheme != untitled'),
     menuCommand('copyRelativeFilePath', '7_copy@2', 'resourceScheme != untitled'),
     menuCommand('revealInExplorer', '7_copy@3', 'isFileSystemResource'),
-    menuCommand('compareSelected', '8_compare@1', 'resourceScheme == file'),
+    menuCommand('compareSelected', '8_compare@1', 'verticalTabsTwoComparableSelected'),
     menuCommand('workbench.action.terminal.moveToTerminalPanel', '9_terminal@1', 'terminalEditorFocus'),
     menuCommand('workbench.action.terminal.rename', '9_terminal@2', 'terminalEditorFocus'),
     menuCommand('workbench.action.terminal.changeColor', '9_terminal@3', 'terminalEditorFocus'),

@@ -170,14 +170,16 @@ test('tab context menus append an optional VS Code action group with secure opaq
   const manifest = readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf8');
 
   assert.match(webviewSource, /if \(tab && snapshot\?\.nativeContextMenuActionsEnabled\)/);
-  assert.match(webviewSource, /type: 'requestNativeTabMenu', requestId, target: tab\.target/);
+  assert.match(webviewSource, /type: 'requestNativeTabMenu', requestId, target: tab\.target, targets/);
   assert.match(webviewSource, /pending\.menu\.append\(createContextMenuSeparator\(\), \.\.\.nativeContextMenuElements/);
-  assert.match(webviewSource, /type: 'runNativeTabMenuAction', actionId: entry\.actionId, target/);
+  assert.match(webviewSource, /type: 'runNativeTabMenuAction', actionId: entry\.actionId, target, targets/);
   assert.match(webviewSource, /pending\.requestId !== requestId/);
   assert.match(webviewSource, /event\.key === 'ArrowRight'/);
   assert.match(webviewSource, /event\.key === 'ArrowLeft'/);
   assert.match(style, /\.tab-context-separator/);
   assert.match(panelSource, /nativeTabMenuProvider\.resolveAction\(actionId\)/);
+  assert.match(panelSource, /action\.command === 'compareSelected'/);
+  assert.match(panelSource, /'vscode\.diff',[\s\S]+originalInput\.uri,[\s\S]+modifiedInput\.uri/);
   assert.doesNotMatch(webviewSource, /executeCommand/);
   assert.match(manifest, /"verticalTabs\.showNativeContextMenuActions"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
 });

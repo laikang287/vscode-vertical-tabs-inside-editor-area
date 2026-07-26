@@ -1452,15 +1452,16 @@ export class VerticalTabsPanel {
         return;
       }
       const tab = this.resolveTab(message.target);
+      const selectedTabs = tab ? this.resolveNativeMenuTabs(message.targets, tab) : [];
       const entries = tab
-        ? await this.nativeTabMenuProvider.createMenu(tab, this.localeStrings)
+        ? await this.nativeTabMenuProvider.createMenu(tab, selectedTabs, this.localeStrings)
         : [];
       this.postMessage({ type: 'nativeTabMenu', requestId: message.requestId, entries });
       return;
     }
 
     if (message.type === 'runNativeTabMenuAction') {
-      await this.runNativeTabMenuAction(message.actionId, message.target);
+      await this.runNativeTabMenuAction(message.actionId, message.target, message.targets);
       return;
     }
 
@@ -1767,7 +1768,7 @@ export class VerticalTabsPanel {
     await this.refresh({ reason: 'navigate' });
   }
 
-  private async runNativeTabMenuAction(actionId: string, target: TabTarget): Promise<void> {
+  private async runNativeTabMenuAction(actionId: string, target: TabTarget, targets: readonly TabTarget[]): Promise<void> {
     if (!readNativeContextMenuActionsEnabled()) {
       logWarn('拒绝执行已关闭的 VS Code 标签右键菜单操作', { actionId });
       return;
@@ -1780,6 +1781,11 @@ export class VerticalTabsPanel {
     }
     const uri = inputUri(tab.input);
     try {
+      if (action.command === 'compareSelected') {
+        await this.compareSelectedTextTabs(this.resolveNativeMenuTabs(targets, tab));
+        logInfo('已使用垂直标签选择调用文件对比', { command: action.command, selectedTargets: targets.length });
+        return;
+      }
       if (isActivatableTabForCommands(tab)) {
         await this.activateTab(tab, `native-menu-${actionId}`);
       }
@@ -1804,6 +1810,46 @@ export class VerticalTabsPanel {
     } finally {
       await this.refresh({ reason: 'operation' });
     }
+  }
+
+  private resolveNativeMenuTabs(targets: readonly TabTarget[], anchor: vscode.Tab): vscode.Tab[] {
+    const resolved: vscode.Tab[] = [];
+    for (const target of targets) {
+      const tab = this.resolveTab(target);
+      if (tab && !resolved.includes(tab)) resolved.push(tab);
+    }
+    return resolved.includes(anchor) ? resolved : [anchor];
+  }
+
+  private async compareSelectedTextTabs(tabs: readonly vscode.Tab[]): Promise<void> {
+    const original = tabs[0];
+    const modified = tabs[1];
+    const originalInput = original?.input;
+    const modifiedInput = modified?.input;
+    if (tabs.length !== 2
+      || !(originalInput instanceof vscode.TabInputText)
+      || !(modifiedInput instanceof vscode.TabInputText)
+      || !original
+      || !modified) {
+      logWarn('文件对比已取消：垂直标签选择不再包含两个文本文件', {
+        selectedTabs: tabs.map(describeTab),
+      });
+      return;
+    }
+
+    const title = `${original.label} ↔ ${modified.label}`;
+    const options: vscode.TextDocumentShowOptions = {
+      viewColumn: modified.group.viewColumn,
+      preserveFocus: false,
+      preview: false,
+    };
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      originalInput.uri,
+      modifiedInput.uri,
+      title,
+      options,
+    );
   }
 
   private async handleConfigurationChange(event: vscode.ConfigurationChangeEvent): Promise<void> {
