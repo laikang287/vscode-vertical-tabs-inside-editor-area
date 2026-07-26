@@ -523,6 +523,25 @@ suite('Vertical Tabs extension', () => {
     await waitFor(() => verticalTabs().length === 0);
   });
 
+  test('keeps rapidly opened Settings UI and settings.json stable while snapshots refresh', async function () {
+    this.timeout(15_000);
+    await vscode.commands.executeCommand('verticalTabs.open');
+    await waitFor(() => verticalTabs().length === 1);
+    await closeNonVerticalTabs();
+
+    await Promise.all([
+      vscode.commands.executeCommand('workbench.action.openSettings'),
+      vscode.commands.executeCommand('workbench.action.openSettingsJson'),
+    ]);
+    await waitFor(() => matchingSettingsUiTabs().length === 1);
+    await waitFor(() => nonVerticalTabs().some(({ tab }) => isSettingsJsonTab(tab)));
+    await new Promise<void>((resolve) => setTimeout(resolve, 750));
+
+    assert.equal(matchingSettingsUiTabs().length, 1, 'Rapid settings opens should not duplicate the Settings UI tab.');
+    assert.equal(nonVerticalTabs().filter(({ tab }) => isSettingsJsonTab(tab)).length, 1, 'Rapid settings opens should not duplicate settings.json.');
+    await closeNonVerticalTabs();
+  });
+
   test('rapid empty-state open requests restore one welcome editor area', async function () {
     this.timeout(15_000);
     await vscode.commands.executeCommand('verticalTabs.close');
@@ -755,6 +774,15 @@ function isBuiltInEditorTab(tab: vscode.Tab, kind: 'settings' | 'welcome'): bool
     return viewType.includes('settings') || viewType.includes('preferences') || label.includes('settings') || label === '设置';
   }
   return viewType.includes('welcome') || viewType.includes('gettingstarted') || label.includes('welcome') || label.includes('getting started') || label === '欢迎';
+}
+
+function isSettingsJsonTab(tab: vscode.Tab): boolean {
+  return tab.input instanceof vscode.TabInputText
+    && path.basename(tab.input.uri.fsPath).toLowerCase() === 'settings.json';
+}
+
+function matchingSettingsUiTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGroup }> {
+  return matchingBuiltInWebviewTabs('settings').filter(({ tab }) => !isSettingsJsonTab(tab));
 }
 
 function activeTextDocumentUri(): string | undefined {

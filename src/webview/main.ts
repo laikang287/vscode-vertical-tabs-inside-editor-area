@@ -1,5 +1,6 @@
 import type { ExtensionMessage, GroupMode, NativeContextMenuEntry, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
+import { shouldAcceptSnapshotRevision } from './SnapshotFreshness';
 import { TabSelection } from './TabSelection';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
@@ -121,6 +122,14 @@ window.addEventListener('error', (event) => logToExtension('error', '脚本运�
 window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
 window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   if (event.data.type === 'renderTabs') {
+    if (!shouldAcceptSnapshotRevision(latestSnapshot?.revision, event.data.snapshot.revision)) {
+      logToExtension(
+        'debug',
+        '忽略乱序到达的旧标签快照',
+        `currentRevision=${latestSnapshot?.revision}, incomingRevision=${event.data.snapshot.revision}`,
+      );
+      return;
+    }
     logToExtension('debug', '收到标签渲染消息', `revision=${event.data.snapshot.revision}, tabs=${event.data.snapshot.tabs.length}`);
     render(event.data);
     return;
