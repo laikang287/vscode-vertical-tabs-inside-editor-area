@@ -445,9 +445,25 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   display: grid;
   min-width: 150px;
+  max-width: calc(100vw - 8px);
   padding: 3px;
   position: fixed;
   z-index: 10;
+}
+
+.tab-context-menu.is-width-constrained {
+  min-width: 0;
+  width: calc(100vw - 8px);
+}
+
+.tab-context-menu.is-height-constrained,
+.tab-context-submenu-list.is-height-constrained {
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
+}
+
+.tab-context-submenu-list {
+  max-height: calc(100vh - 8px);
 }
 
 .tab-context-action {
@@ -458,6 +474,12 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   padding: 5px 8px;
   text-align: left;
   white-space: nowrap;
+}
+
+.tab-context-menu.is-width-constrained .tab-context-action,
+.tab-context-menu.is-compact .tab-context-action {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .tab-context-action:disabled {
@@ -494,6 +516,7 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
   display: none;
   left: 100%;
+  max-width: calc(100vw - 8px);
   min-width: 150px;
   padding: 3px;
   position: absolute;
@@ -501,7 +524,6 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   z-index: 11;
 }
 
-.tab-context-submenu:hover .tab-context-submenu-list,
 .tab-context-submenu.is-open .tab-context-submenu-list {
   display: grid;
 }
@@ -509,4 +531,37 @@ body.vscode-high-contrast-light .group-header:focus-visible {
 .tab-context-submenu.opens-left > .tab-context-submenu-list {
   left: auto;
   right: 100%;
+}
+
+.tab-context-submenu-list.is-measuring {
+  display: grid;
+  left: 0;
+  position: fixed;
+  top: 0;
+  visibility: hidden;
+}
+
+.tab-context-menu.is-compact > :not(.tab-context-submenu-list.is-compact-panel) {
+  display: none;
+}
+
+.tab-context-menu > .tab-context-submenu-list.is-compact-panel {
+  border: 0;
+  box-shadow: none;
+  display: grid;
+  left: auto;
+  max-height: calc(100vh - 14px);
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0;
+  position: static;
+  right: auto;
+  top: auto;
+  width: 100%;
+}
+
+.tab-context-back {
+  border-bottom: 1px solid var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
+  font-weight: 600;
+  margin-bottom: 3px;
 }

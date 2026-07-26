@@ -180,6 +180,23 @@ test('tab context menus append an optional VS Code action group with secure opaq
   assert.match(panelSource, /nativeTabMenuProvider\.resolveAction\(actionId\)/);
   assert.doesNotMatch(webviewSource, /executeCommand/);
   assert.match(manifest, /"verticalTabs\.showNativeContextMenuActions"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
+  assert.match(manifest, /"verticalTabs\.compactContextSubmenus"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
+  assert.match(panelSource, /compactContextSubmenusEnabled: readCompactContextSubmenusEnabled\(\)/);
+  assert.match(webviewSource, /COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS = 1000/);
+  assert.match(webviewSource, /chooseContextSubmenuLayout/);
+  assert.match(webviewSource, /wrapper\.addEventListener\('mouseenter', \(\) => openContextSubmenu\(trigger, submenu, false\)\)/);
+  assert.match(webviewSource, /trigger\.addEventListener\('click', \(\) => openContextSubmenu\(trigger, submenu, true\)\)/);
+  assert.match(webviewSource, /window\.setTimeout\([\s\S]+COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS/);
+  assert.match(webviewSource, /window\.clearTimeout\(contextSubmenuHoverTimer\)/);
+  assert.match(webviewSource, /enterCompactContextSubmenu/);
+  assert.match(webviewSource, /leaveCompactContextSubmenu/);
+  assert.match(webviewSource, /button\(`‹ \$\{i18n\.back\}`/);
+  assert.match(webviewSource, /if \(contextMenu\) dismissContextMenu\(\)/);
+  assert.match(style, /\.tab-context-menu\.is-compact/);
+  assert.match(style, /\.tab-context-submenu-list\.is-compact-panel/);
+  assert.match(style, /overflow-wrap: anywhere/);
+  assert.match(style, /max-height: calc\(100vh - 8px\)/);
+  assert.doesNotMatch(style, /\.tab-context-submenu:hover \.tab-context-submenu-list/);
 });
 
 test('group names are centered and preserve their original capitalization', () => {
@@ -574,33 +591,31 @@ test('manual group creation is disabled outside manual mode and accepted only in
   assert.match(style, /\.tab-context-action:disabled/);
 });
 
-test('context menu hides manual move-to-group actions', () => {
+test('manual mode context menu moves single or selected tabs to manual groups and the root', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
 
-  assert.doesNotMatch(source, /appendManualGroupActions/);
-  assert.doesNotMatch(source, /移动到手动分组/);
-  assert.doesNotMatch(source, /type: 'assignGroup'/);
+  assert.match(source, /function appendManualGroupActions/);
+  assert.match(source, /snapshot\.groupMode === 'manual'/);
+  assert.match(source, /tabs\.every\(\(tab\) => tab\.manualGroupId === group\.id\)/);
+  assert.match(source, /tabs\.every\(\(tab\) => tab\.manualGroupId === undefined\)/);
+  assert.match(source, /type: 'moveTabs', targets/);
+  assert.match(source, /selectedTabsFor\(tab\)/);
 });
 
-test('vscode mode context menu hides adjacent group moves and move-to-group submenu', () => {
+test('vscode mode context menu moves selected tabs to an existing visible editor group', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.doesNotMatch(source, /messageButton\('移至新组'/);
-  assert.doesNotMatch(source, /appendVsCodeGroupActions/);
-  assert.doesNotMatch(source, /移动到 VS Code 编辑器组/);
+  assert.match(source, /function appendVsCodeGroupActions/);
+  assert.match(source, /snapshot\.groupMode === 'vscode'/);
+  assert.match(source, /group\.mode !== 'vscode'/);
+  assert.match(source, /tabs\.every\(\(tab\) => tab\.target\.groupIndex === destinationGroupIndex\)/);
+  assert.match(source, /moveTabsToGroupButton/);
   assert.doesNotMatch(source, /messageButton\('移至上一组'/);
   assert.doesNotMatch(source, /messageButton\('移至下一组'/);
-  assert.match(panelSource, /message\.type === 'moveToGroup'/);
-  assert.match(panelSource, /private async moveEditorToVsCodeGroup\(target: TabTarget, targetGroupIndex: number\): Promise<void>/);
-  assert.match(panelSource, /private async moveActiveEditorToGroup\(sourceTab: vscode\.Tab, destination: vscode\.TabGroup\): Promise<void>/);
-  assert.match(panelSource, /groupsBefore\.indexOf\(destination\)/);
-  assert.match(panelSource, /const targetViewColumn = destination\.viewColumn/);
-  assert.match(panelSource, /vscode\.commands\.executeCommand\('moveActiveEditor', \{\s*to: 'position',\s*by: 'group',\s*value: targetViewColumn,/);
-  assert.doesNotMatch(panelSource, /value: targetGroupIndex \+ 1/);
-  assert.match(panelSource, /if \(groupsAfter\.length > groupCountBefore\)/);
-  const absoluteMoveMethod = panelSource.match(/private async moveActiveEditorToGroup[\s\S]+?\n  \}\n\n  private async moveActiveEditorBeforeTarget/)?.[0] ?? '';
-  assert.doesNotMatch(absoluteMoveMethod, /moveEditorToNextGroup|moveEditorToPreviousGroup/);
+  assert.match(panelSource, /if \(message\.type === 'moveTabs'\)/);
+  assert.match(panelSource, /this\.resolveVsCodeDisplayGroup\(groupId\)/);
 });
 
 test('activation updates the focused editor without clearing shown tabs in other groups', () => {

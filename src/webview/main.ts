@@ -1,6 +1,7 @@
-import type { ExtensionMessage, GroupMode, NativeContextMenuEntry, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import type { ExtensionMessage, GroupMode, ManualTabGroup, NativeContextMenuEntry, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
 import { TabSelection } from './TabSelection';
+import { chooseContextSubmenuLayout, clampContextMenuCoordinate } from './contextMenuLayout';
 import { dragInsertionEdge, type DragInsertionEdge } from './dragInsertion';
 import { canMoveFilesBetweenDirectories, canReorderTabs, tabDragCapability } from './dragPolicy';
 import { isKeyboardContextMenuKey, nextVerticalNavigationIndex, type VerticalNavigationKey } from './keyboardNavigation';
@@ -22,6 +23,14 @@ interface WebviewState {
 interface DragImageOffset {
   readonly x: number;
   readonly y: number;
+}
+
+interface CompactContextSubmenuFrame {
+  readonly trigger: HTMLButtonElement;
+  readonly submenu: HTMLElement;
+  readonly originalParent: HTMLElement;
+  readonly originalNextSibling: ChildNode | null;
+  readonly backButton: HTMLButtonElement;
 }
 
 const vscode = acquireVsCodeApi();
@@ -47,6 +56,10 @@ const collapsedGroups = new Set(vscode.getState()?.collapsedGroups ?? []);
 const searchCollapsedGroups = new Set<string>();
 let contextMenu: HTMLElement | undefined;
 let contextMenuInvoker: HTMLElement | undefined;
+let contextSubmenuHoverTimer: number | undefined;
+let pendingContextSubmenuHover: { readonly trigger: HTMLButtonElement; readonly submenu: HTMLElement } | undefined;
+const compactContextSubmenuStack: CompactContextSubmenuFrame[] = [];
+const COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS = 1000;
 let pendingNativeMenuRequest: { readonly requestId: string; readonly target: TabTarget; readonly menu: HTMLElement; readonly x: number; readonly y: number } | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let currentSearchQuery = '';
@@ -70,6 +83,9 @@ const EN_DEFAULTS: Record<string, string> = {
   pinGroup: 'Pin group', unpinGroup: 'Unpin group', cannotPinVscodeGroup: 'Cannot pin group when following VS Code groups',
   rename: 'Rename', renameGroup: 'Rename group', groupName: 'Group name',
   newGroup: 'New group', newGroupOnlyManual: 'Only manual grouping mode can create groups',
+  back: 'Back', moveToGroup: 'Move to Group', moveToManualGroup: 'Move to a manual group',
+  moveToVscodeGroup: 'Move to a VS Code editor group', moveOutOfGroup: 'Move out of group',
+  moveToNamedGroup: 'Move to {0}',
   previewTab: 'Preview tab', pinnedTab: 'Pinned tab', readonlyResource: 'Read-only',
   resourceMissing: 'Resource is missing or deleted', resourceNoPermissions: 'No permission to access resource',
   resourceUnavailable: 'Resource file system is unavailable',
@@ -219,6 +235,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
     logToExtension('error', '渲染标签失败：缺少必要 DOM 节点', `groups=${Boolean(groups)}, description=${Boolean(description)}`);
     return;
   }
+  if (contextMenu) dismissContextMenu();
   latestSnapshot = message.snapshot;
   if (message.snapshot.collapsedGroupKeys) {
     collapsedGroups.clear();
@@ -1297,6 +1314,15 @@ function showContextMenu(
     groupActionButton(i18n.closeSaved, i18n.closeSavedTabs, 'closeSaved'),
     groupActionButton(i18n.closeAll, i18n.closeAllUnpinned, 'closeAll'),
   );
+  if (tab && snapshot) {
+    const selectedTabs = selectedTabsFor(tab);
+    const targets = selectedTabs.map((candidate) => candidate.target);
+    if (snapshot.groupMode === 'manual') {
+      appendManualGroupActions(menu, selectedTabs, targets, snapshot.manualGroups);
+    } else if (snapshot.groupMode === 'vscode') {
+      appendVsCodeGroupActions(menu, selectedTabs, targets, snapshot.displayGroups);
+    }
+  }
   menu.querySelectorAll<HTMLButtonElement>('button').forEach((item) => {
     item.classList.add('tab-context-action');
     item.setAttribute('role', 'menuitem');
@@ -1348,18 +1374,8 @@ function nativeContextMenuElements(entries: readonly NativeContextMenuEntry[], t
       submenu.className = 'tab-context-submenu-list';
       submenu.setAttribute('role', 'menu');
       submenu.append(...children);
-      trigger.addEventListener('click', () => {
-        openContextSubmenu(trigger, submenu);
-        focusContextMenuItem(submenu, 0);
-      });
-      wrapper.addEventListener('mouseenter', () => openContextSubmenu(trigger, submenu));
-      wrapper.addEventListener('mouseleave', () => {
-        if (!wrapper.contains(document.activeElement)) closeContextSubmenu(trigger);
-      });
-      wrapper.addEventListener('focusout', (event) => {
-        if (!(event.relatedTarget instanceof Node) || !wrapper.contains(event.relatedTarget)) closeContextSubmenu(trigger);
-      });
       wrapper.append(trigger, submenu);
+      wireContextSubmenu(wrapper, trigger, submenu);
       elements.push(wrapper);
       continue;
     }
@@ -1392,22 +1408,166 @@ function createContextMenuSeparator(): HTMLDivElement {
 }
 
 function positionContextMenu(menu: HTMLElement, x: number, y: number): void {
-  const bounds = menu.getBoundingClientRect();
-  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - bounds.width - 4))}px`;
-  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - bounds.height - 4))}px`;
+  let bounds = menu.getBoundingClientRect();
+  menu.classList.toggle('is-width-constrained', bounds.width > window.innerWidth - 8);
+  menu.classList.toggle('is-height-constrained', bounds.height > window.innerHeight - 8);
+  bounds = menu.getBoundingClientRect();
+  menu.style.left = `${clampContextMenuCoordinate(x, bounds.width, window.innerWidth)}px`;
+  menu.style.top = `${clampContextMenuCoordinate(y, bounds.height, window.innerHeight)}px`;
 }
 
-function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement): void {
+function wireContextSubmenu(wrapper: HTMLElement, trigger: HTMLButtonElement, submenu: HTMLElement): void {
+  trigger.addEventListener('click', () => openContextSubmenu(trigger, submenu, true));
+  wrapper.addEventListener('mouseenter', () => openContextSubmenu(trigger, submenu, false));
+  wrapper.addEventListener('mouseleave', () => {
+    cancelPendingContextSubmenuHover(trigger, submenu);
+    if (submenu.classList.contains('is-compact-panel')) return;
+    if (!wrapper.contains(document.activeElement)) closeContextSubmenu(trigger);
+  });
+  wrapper.addEventListener('focusout', (event) => {
+    if (submenu.classList.contains('is-compact-panel')) return;
+    if (!(event.relatedTarget instanceof Node) || !wrapper.contains(event.relatedTarget)) closeContextSubmenu(trigger);
+  });
+}
+
+function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement, immediate: boolean): void {
   const wrapper = trigger.parentElement;
   if (!wrapper) return;
+  cancelPendingContextSubmenuHover();
+  closeSiblingContextSubmenus(wrapper);
+  const parentMenu = trigger.closest<HTMLElement>('.tab-context-submenu-list, .tab-context-menu');
+  if (!parentMenu) return;
+  const submenuWidth = measureContextSubmenuWidth(submenu);
+  const compactEnabled = latestSnapshot?.compactContextSubmenusEnabled ?? true;
+  const layout = (parentMenu.classList.contains('is-height-constrained') || submenu.classList.contains('is-height-constrained')) && compactEnabled
+    ? 'compact'
+    : chooseContextSubmenuLayout(parentMenu.getBoundingClientRect(), submenuWidth, window.innerWidth, compactEnabled);
+  if (layout === 'compact') {
+    if (immediate) {
+      enterCompactContextSubmenu(trigger, submenu);
+    } else {
+      pendingContextSubmenuHover = { trigger, submenu };
+      contextSubmenuHoverTimer = window.setTimeout(() => {
+        contextSubmenuHoverTimer = undefined;
+        const pending = pendingContextSubmenuHover;
+        pendingContextSubmenuHover = undefined;
+        if (pending?.trigger === trigger && pending.submenu === submenu && trigger.matches(':hover')) {
+          enterCompactContextSubmenu(trigger, submenu);
+        }
+      }, COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS);
+    }
+    return;
+  }
   trigger.setAttribute('aria-expanded', 'true');
   wrapper.classList.add('is-open');
-  wrapper.classList.toggle('opens-left', submenu.getBoundingClientRect().right > window.innerWidth - 4);
+  wrapper.classList.toggle('opens-left', layout === 'left');
+  positionContextSubmenuVertically(trigger, submenu);
+  if (immediate) focusFirstContextSubmenuAction(submenu);
 }
 
 function closeContextSubmenu(trigger: HTMLButtonElement): void {
+  cancelPendingContextSubmenuHover(trigger);
+  const compactFrameIndex = compactContextSubmenuStack.findIndex((frame) => frame.trigger === trigger);
+  if (compactFrameIndex >= 0) {
+    while (compactContextSubmenuStack.length > compactFrameIndex) leaveCompactContextSubmenu();
+    return;
+  }
   trigger.setAttribute('aria-expanded', 'false');
   trigger.parentElement?.classList.remove('is-open', 'opens-left');
+  const submenu = trigger.nextElementSibling;
+  if (submenu instanceof HTMLElement) submenu.style.removeProperty('top');
+}
+
+function closeSiblingContextSubmenus(wrapper: HTMLElement): void {
+  const parent = wrapper.parentElement;
+  if (!parent) return;
+  for (const sibling of Array.from(parent.children)) {
+    if (sibling === wrapper || !sibling.classList.contains('tab-context-submenu')) continue;
+    const siblingTrigger = sibling.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger');
+    if (siblingTrigger) closeContextSubmenu(siblingTrigger);
+  }
+}
+
+function measureContextSubmenuWidth(submenu: HTMLElement): number {
+  submenu.classList.add('is-measuring');
+  const bounds = submenu.getBoundingClientRect();
+  const isHeightConstrained = submenu.scrollHeight > window.innerHeight - 8;
+  submenu.classList.remove('is-measuring');
+  submenu.classList.toggle('is-height-constrained', isHeightConstrained);
+  return Math.min(Math.max(1, bounds.width), Math.max(1, window.innerWidth - 8));
+}
+
+function positionContextSubmenuVertically(trigger: HTMLButtonElement, submenu: HTMLElement): void {
+  const triggerBounds = trigger.getBoundingClientRect();
+  const submenuBounds = submenu.getBoundingClientRect();
+  const requestedTop = triggerBounds.top - 4;
+  const top = clampContextMenuCoordinate(requestedTop, submenuBounds.height, window.innerHeight);
+  submenu.style.top = `${top - triggerBounds.top}px`;
+}
+
+function enterCompactContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement): void {
+  const menu = contextMenu;
+  const originalParent = submenu.parentElement;
+  if (!menu || !originalParent || !menu.contains(trigger)) return;
+  cancelPendingContextSubmenuHover();
+  const previousPanel = compactContextSubmenuStack.at(-1)?.submenu;
+  if (previousPanel) previousPanel.hidden = true;
+  const backButton = button(`‹ ${i18n.back}`, i18n.back);
+  backButton.className = 'tab-context-action tab-context-back';
+  backButton.setAttribute('role', 'menuitem');
+  backButton.tabIndex = -1;
+  backButton.addEventListener('click', () => leaveCompactContextSubmenu());
+  const frame: CompactContextSubmenuFrame = {
+    trigger,
+    submenu,
+    originalParent,
+    originalNextSibling: submenu.nextSibling,
+    backButton,
+  };
+  compactContextSubmenuStack.push(frame);
+  trigger.setAttribute('aria-expanded', 'true');
+  originalParent.classList.remove('is-open', 'opens-left');
+  submenu.style.removeProperty('top');
+  submenu.prepend(backButton);
+  submenu.classList.add('is-compact-panel');
+  menu.append(submenu);
+  menu.classList.add('is-compact');
+  focusFirstContextSubmenuAction(submenu);
+}
+
+function leaveCompactContextSubmenu(): void {
+  const frame = compactContextSubmenuStack.pop();
+  if (!frame) return;
+  frame.backButton.remove();
+  frame.submenu.classList.remove('is-compact-panel');
+  frame.submenu.hidden = false;
+  if (frame.originalNextSibling?.parentNode === frame.originalParent) {
+    frame.originalParent.insertBefore(frame.submenu, frame.originalNextSibling);
+  } else {
+    frame.originalParent.append(frame.submenu);
+  }
+  frame.trigger.setAttribute('aria-expanded', 'false');
+  const previousPanel = compactContextSubmenuStack.at(-1)?.submenu;
+  if (previousPanel) {
+    previousPanel.hidden = false;
+  } else {
+    contextMenu?.classList.remove('is-compact');
+  }
+  frame.trigger.focus();
+}
+
+function focusFirstContextSubmenuAction(submenu: HTMLElement): void {
+  const actions = enabledContextMenuItems(submenu);
+  const firstActionIndex = actions.findIndex((action) => !action.classList.contains('tab-context-back'));
+  focusContextMenuItem(submenu, firstActionIndex >= 0 ? firstActionIndex : 0);
+}
+
+function cancelPendingContextSubmenuHover(trigger?: HTMLButtonElement, submenu?: HTMLElement): void {
+  if (trigger && pendingContextSubmenuHover?.trigger !== trigger) return;
+  if (submenu && pendingContextSubmenuHover?.submenu !== submenu) return;
+  if (contextSubmenuHoverTimer !== undefined) window.clearTimeout(contextSubmenuHoverTimer);
+  contextSubmenuHoverTimer = undefined;
+  pendingContextSubmenuHover = undefined;
 }
 
 function openKeyboardContextMenu(
@@ -1454,14 +1614,20 @@ function handleContextMenuKeyDown(event: KeyboardEvent): void {
     if (!(submenu instanceof HTMLElement)) return;
     event.preventDefault();
     event.stopPropagation();
-    openContextSubmenu(action, submenu);
-    focusContextMenuItem(submenu, 0);
+    openContextSubmenu(action, submenu, true);
+    if (!submenu.classList.contains('is-compact-panel')) focusFirstContextSubmenuAction(submenu);
     return;
   }
   if (event.key === 'ArrowLeft') {
     const action = event.target;
     if (!(action instanceof HTMLButtonElement)) return;
     const submenu = action.closest<HTMLElement>('.tab-context-submenu-list');
+    if (submenu?.classList.contains('is-compact-panel')) {
+      event.preventDefault();
+      event.stopPropagation();
+      leaveCompactContextSubmenu();
+      return;
+    }
     const trigger = submenu?.parentElement?.querySelector<HTMLButtonElement>(':scope > .tab-context-submenu-trigger');
     if (!trigger) return;
     event.preventDefault();
@@ -1508,6 +1674,91 @@ function renameGroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
   result.addEventListener('click', () => {
     const value = window.prompt(i18n.groupName, group.title);
     if (value?.trim()) vscode.postMessage({ type: 'renameGroup', groupId: group.id, name: value.trim() });
+    dismissContextMenu();
+  });
+  return result;
+}
+
+function appendManualGroupActions(
+  menu: HTMLElement,
+  tabs: readonly VerticalTabItem[],
+  targets: readonly TabTarget[],
+  manualGroups: readonly ManualTabGroup[],
+): void {
+  appendGroupSubmenu(menu, i18n.moveToGroup, i18n.moveToManualGroup, (submenu) => {
+    for (const group of manualGroups) {
+      submenu.append(moveTabsToGroupButton(group.name, targets, group.id, tabs.every((tab) => tab.manualGroupId === group.id)));
+    }
+    submenu.append(moveTabsToGroupButton(
+      i18n.ungrouped,
+      targets,
+      undefined,
+      tabs.every((tab) => tab.manualGroupId === undefined),
+      i18n.moveOutOfGroup,
+    ));
+  });
+}
+
+function appendVsCodeGroupActions(
+  menu: HTMLElement,
+  tabs: readonly VerticalTabItem[],
+  targets: readonly TabTarget[],
+  displayGroups: readonly VerticalTabDisplayGroup[],
+): void {
+  appendGroupSubmenu(menu, i18n.moveToGroup, i18n.moveToVscodeGroup, (submenu) => {
+    for (const group of displayGroups) {
+      if (group.mode !== 'vscode') continue;
+      const destinationGroupIndex = group.tabs[0]?.target.groupIndex;
+      if (destinationGroupIndex === undefined) continue;
+      submenu.append(moveTabsToGroupButton(
+        group.title,
+        targets,
+        group.id,
+        tabs.every((tab) => tab.target.groupIndex === destinationGroupIndex),
+      ));
+    }
+  });
+}
+
+function appendGroupSubmenu(
+  menu: HTMLElement,
+  label: string,
+  title: string,
+  fill: (submenu: HTMLElement) => void,
+): void {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'tab-context-submenu';
+  const trigger = button(label, title);
+  trigger.classList.add('tab-context-action', 'tab-context-submenu-trigger');
+  trigger.setAttribute('role', 'menuitem');
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.tabIndex = -1;
+  const submenu = document.createElement('div');
+  submenu.className = 'tab-context-submenu-list';
+  submenu.setAttribute('role', 'menu');
+  fill(submenu);
+  trigger.disabled = enabledContextMenuItems(submenu).length === 0;
+  wrapper.append(trigger, submenu);
+  wireContextSubmenu(wrapper, trigger, submenu);
+  menu.append(wrapper);
+}
+
+function moveTabsToGroupButton(
+  label: string,
+  targets: readonly TabTarget[],
+  groupId: string | undefined,
+  disabled: boolean,
+  title = formatI18n(i18n.moveToNamedGroup, label),
+): HTMLButtonElement {
+  const result = button(label, title);
+  result.classList.add('tab-context-action');
+  result.setAttribute('role', 'menuitem');
+  result.tabIndex = -1;
+  result.disabled = disabled;
+  result.addEventListener('click', () => {
+    if (disabled) return;
+    vscode.postMessage({ type: 'moveTabs', targets, ...(groupId === undefined ? {} : { groupId }) });
     dismissContextMenu();
   });
   return result;
@@ -1641,10 +1892,12 @@ function parseTargetDataset(value: string | undefined): TabTarget | undefined {
 
 function dismissContextMenu(restoreFocus = false): void {
   const invoker = contextMenuInvoker;
+  cancelPendingContextSubmenuHover();
   contextMenu?.remove();
   contextMenu = undefined;
   contextMenuInvoker = undefined;
   pendingNativeMenuRequest = undefined;
+  compactContextSubmenuStack.splice(0, compactContextSubmenuStack.length);
   if (!restoreFocus || !invoker?.isConnected) return;
   if (invoker.classList.contains('tree-navigation-item')) setTreeTabStop(invoker);
   invoker.focus({ preventScroll: true });

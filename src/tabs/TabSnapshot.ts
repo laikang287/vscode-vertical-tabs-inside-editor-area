@@ -53,6 +53,7 @@ export interface SnapshotBuildOptions {
   readonly searchGroups?: boolean;
   readonly alwaysFollowActiveTab?: boolean;
   readonly nativeContextMenuActionsEnabled?: boolean;
+  readonly compactContextSubmenusEnabled?: boolean;
   readonly relativePathDisplay?: RelativePathDisplay;
   readonly displayOrderByGroup?: ReadonlyMap<string, readonly string[]>;
   readonly pinnedGroupIds?: ReadonlySet<string>;
@@ -112,6 +113,7 @@ export function buildSnapshot(
     searchGroups: options.searchGroups ?? false,
     alwaysFollowActiveTab: options.alwaysFollowActiveTab ?? true,
     nativeContextMenuActionsEnabled: options.nativeContextMenuActionsEnabled ?? true,
+    compactContextSubmenusEnabled: options.compactContextSubmenusEnabled ?? true,
     tabs,
     manualGroups,
     displayGroups,

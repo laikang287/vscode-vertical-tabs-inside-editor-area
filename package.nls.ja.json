@@ -8,6 +8,7 @@
   "verticalTabs.command.next": "垂直タブ: 次のタブ",
   "verticalTabs.command.showLogs": "垂直タブ: ログの表示",
   "verticalTabs.config.showNativeContextMenuActions": "VS Code とインストール済み拡張機能のアクションを、タブのコンテキスト メニューの 2 番目のグループとして表示します。重複する閉じる操作とピン留め操作は除外されます。変更はすぐに適用されます。",
+  "verticalTabs.config.compactContextSubmenus": "サブメニューを親メニューの横に完全に表示できない場合、1 秒間ホバーすると同じ位置で親メニューを置き換えます。クリックまたはキーボードではすぐに開きます。変更はすぐに適用されます。",
   "verticalTabs.config.alwaysFollowActiveTab": "常にアクティブなタブを追跡します。有効にすると、フォーカスされたエディターの切り替え時にそのグループを自動的に展開し、タブが見える位置までスクロールします。手動でタブを参照するときに現在のリスト位置を保つには無効にしてください。",
   "verticalTabs.config.position": "エディター領域内の垂直タブ バーの位置です。変更はすぐに適用されます。",
   "verticalTabs.config.position.left": "垂直タブ バーをエディター領域の左端に配置します。",

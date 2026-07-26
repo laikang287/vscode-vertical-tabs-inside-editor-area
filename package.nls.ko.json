@@ -8,6 +8,7 @@
   "verticalTabs.command.next": "세로 탭: 다음 탭",
   "verticalTabs.command.showLogs": "세로 탭: 로그 표시",
   "verticalTabs.config.showNativeContextMenuActions": "탭의 상황에 맞는 메뉴에서 VS Code 및 설치된 확장의 작업을 두 번째 그룹으로 표시합니다. 중복된 닫기 및 고정 작업은 제거됩니다. 변경 내용은 즉시 적용됩니다.",
+  "verticalTabs.config.compactContextSubmenus": "하위 메뉴를 상위 메뉴 옆에 완전히 표시할 수 없으면 1초 동안 가리킨 후 같은 위치에서 상위 메뉴를 대체합니다. 클릭하거나 키보드를 사용하면 즉시 열립니다. 변경 내용은 즉시 적용됩니다.",
   "verticalTabs.config.alwaysFollowActiveTab": "항상 활성 탭을 따라갑니다. 사용하면 포커스된 편집기를 전환할 때 해당 그룹을 자동으로 펼치고 탭이 보이도록 스크롤합니다. 탭을 수동으로 탐색하는 동안 현재 목록 위치를 유지하려면 사용하지 않도록 설정하세요.",
   "verticalTabs.config.position": "편집기 영역 안에서 세로 탭 표시줄의 위치입니다. 변경 내용은 즉시 적용됩니다.",
   "verticalTabs.config.position.left": "세로 탭 표시줄을 편집기 영역의 왼쪽 가장자리에 배치합니다.",

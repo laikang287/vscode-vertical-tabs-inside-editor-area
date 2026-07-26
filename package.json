@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "%verticalTabs.displayName%",
   "description": "%verticalTabs.description%",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -219,6 +219,12 @@
           "default": true,
           "scope": "window",
           "markdownDescription": "%verticalTabs.config.showNativeContextMenuActions%"
+        },
+        "verticalTabs.compactContextSubmenus": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "%verticalTabs.config.compactContextSubmenus%"
         },
         "verticalTabs.toolbarPosition": {
           "type": "string",
