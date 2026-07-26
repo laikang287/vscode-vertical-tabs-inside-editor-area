@@ -10,7 +10,6 @@ import { calculateScrollAnchorRestoration, isWithinNaturalScrollRange } from './
 import {
   evaluateTabSearch,
   findTextMatchRanges,
-  type SearchDisplayGroup,
   type TabSearchResult,
 } from './searchFilter';
 
@@ -84,8 +83,7 @@ const EN_DEFAULTS: Record<string, string> = {
   closeAllUnpinned: 'Close all unpinned tabs in group', pinTab: 'Pin tab', unpinTab: 'Unpin tab',
   pinGroup: 'Pin group', unpinGroup: 'Unpin group', cannotPinVscodeGroup: 'Cannot pin group when following VS Code groups',
   rename: 'Rename', renameGroup: 'Rename group', groupName: 'Group name',
-  newGroup: 'New group', newSubgroup: 'New subgroup', moveGroup: 'Move group to', moveToTopLevel: 'Top level',
-  groupDepthLimit: 'Manual groups support up to three levels', newGroupOnlyManual: 'Only manual grouping mode can create groups',
+  newGroup: 'New group', newGroupOnlyManual: 'Only manual grouping mode can create groups',
   back: 'Back', moveToGroup: 'Move to Group', moveToManualGroup: 'Move to a manual group',
   moveToVscodeGroup: 'Move to a VS Code editor group', moveOutOfGroup: 'Move out of group',
   moveToNamedGroup: 'Move to {0}',
@@ -102,7 +100,7 @@ const EN_DEFAULTS: Record<string, string> = {
   searchWorkspaceRelativePaths: 'Search workspace-relative paths',
   searchResultCount: '{0} matching tabs', searchResultCountWithGroups: '{0} matching tabs · {1} matching groups',
   noSearchResults: 'No tabs match the current search.',
-  ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root', outsideWorkspace: 'Outside workspace',
+  ungrouped: 'Ungrouped', other: 'Other', workspaceRoot: 'Workspace root',
   noExtension: 'No extension', editorGroup: 'Editor Group {0}',
 };
 
@@ -328,23 +326,11 @@ function handleTreeHorizontalNavigation(event: KeyboardEvent, item: HTMLElement)
     if ((event.key === 'ArrowRight' && !expanded) || (event.key === 'ArrowLeft' && expanded)) {
       event.preventDefault();
       item.click();
-    } else if (event.key === 'ArrowRight' && expanded) {
-      const firstChild = item.parentElement?.querySelector<HTMLElement>(':scope > .tab-group > .tree-navigation-item, :scope > .tab-row > .tree-navigation-item');
-      if (firstChild) {
-        event.preventDefault();
-        focusTreeItem(firstChild);
-      }
-    } else if (event.key === 'ArrowLeft') {
-      const parentHeader = item.parentElement?.parentElement?.querySelector<HTMLElement>(':scope > .group-header');
-      if (parentHeader) {
-        event.preventDefault();
-        focusTreeItem(parentHeader);
-      }
     }
     return;
   }
   if (event.key !== 'ArrowLeft') return;
-  const groupHeader = item.closest<HTMLElement>('.tab-group')?.querySelector<HTMLElement>(':scope > .group-header');
+  const groupHeader = item.closest<HTMLElement>('.tab-group')?.querySelector<HTMLElement>('.group-header');
   if (!groupHeader) return;
   event.preventDefault();
   focusTreeItem(groupHeader);
@@ -481,9 +467,8 @@ function renderCurrentTabs(options: RenderCurrentTabsOptions = {}): void {
     : latestSearchResult.affectsList && latestSearchResult.matchedTabCount === 0
       ? i18n.noSearchResults
       : '';
-  const resultGroups = latestSearchResult.groups;
-  for (const resultGroup of resultGroups.filter((candidate) => candidate.group.parentId === undefined)) {
-    appendDisplayGroup(nextTree, resultGroup, resultGroups);
+  for (const resultGroup of latestSearchResult.groups) {
+    appendDisplayGroup(nextTree, resultGroup.group, resultGroup.autoExpand);
   }
   groups.replaceChildren(nextTree);
   initializeTreeFocus(previousTreeFocusKey, hadTreeFocus);
@@ -525,12 +510,7 @@ function stringifyDetails(value: unknown): string {
   }
 }
 
-function appendDisplayGroup(
-  parent: HTMLElement | DocumentFragment,
-  result: SearchDisplayGroup,
-  allGroups: readonly SearchDisplayGroup[],
-): void {
-  const { group, autoExpand } = result;
+function appendDisplayGroup(parent: HTMLElement | DocumentFragment, group: VerticalTabDisplayGroup, autoExpand = false): void {
   const section = document.createElement('section');
   const collapsed = autoExpand
     ? searchCollapsedGroups.has(groupCollapseKey(group))
@@ -544,7 +524,6 @@ function appendDisplayGroup(
     collapsed ? 'is-collapsed' : '',
   ].filter(Boolean).join(' ');
   section.dataset.groupId = group.id;
-  section.style.setProperty('--tree-indent', `${Math.min(Math.max(0, group.depth - 1), 6) * 12}px`);
   section.setAttribute('role', 'group');
   section.addEventListener('dragover', (event) => handleGroupDragOver(event, group));
   section.addEventListener('drop', (event) => handleGroupDrop(event, group));
@@ -554,7 +533,7 @@ function appendDisplayGroup(
     header.dataset.focusKey = treeFocusKeyForGroup(group);
     header.tabIndex = -1;
     header.setAttribute('role', 'treeitem');
-    header.setAttribute('aria-level', String(Math.max(1, group.depth)));
+    header.setAttribute('aria-level', '1');
     header.setAttribute('aria-expanded', String(!collapsed));
     header.title = collapsed ? i18n.expandGroup : i18n.collapseGroup;
     header.addEventListener('click', () => toggleRenderedDisplayGroup(group, autoExpand));
@@ -619,26 +598,20 @@ function appendDisplayGroup(
     header.append(actions);
     section.append(header);
   }
-  if (!collapsed) {
-    for (const child of allGroups.filter((candidate) => candidate.group.parentId === group.id)) {
-      appendDisplayGroup(section, child, allGroups);
-    }
-    appendTabList(section, group.tabs, group, Math.max(1, group.depth + (group.showHeader ? 1 : 0)));
-  }
+  if (!collapsed) appendTabList(section, group.tabs, group, group.showHeader ? 1 : 0);
   parent.append(section);
 }
 
-function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], group: VerticalTabDisplayGroup, level: number): void {
+function appendTabList(parent: HTMLElement, tabs: readonly VerticalTabItem[], group: VerticalTabDisplayGroup, level: 0 | 1): void {
   for (const tab of tabs) parent.append(createTab(tab, group, level));
 }
 
-function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: number): HTMLElement {
+function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 0 | 1): HTMLElement {
   const row = document.createElement('article');
   const selected = isSelected(tab);
   const multiSelected = selected && selection.keys().length > 1;
   const displayPath = searchDisplayPath(tab);
-  row.className = ['tab-row', 'tree-level', displayPath ? 'has-description' : '', selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isFocused ? 'is-focused' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isPreview ? 'is-preview' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
-  row.style.setProperty('--tree-indent', `${Math.min(Math.max(0, level - 1), 6) * 12}px`);
+  row.className = ['tab-row', `tree-level-${level}`, displayPath ? 'has-description' : '', selected ? 'is-selected' : '', multiSelected ? 'is-multi-selected' : '', tab.isActive ? 'is-active' : '', tab.isFocused ? 'is-focused' : '', tab.isDirty ? 'is-dirty' : '', tab.isPinned ? 'is-pinned' : '', tab.isPreview ? 'is-preview' : '', tab.isActivatable ? '' : 'is-unavailable'].filter(Boolean).join(' ');
   row.draggable = currentDragCapability() !== 'disabled';
   row.dataset.groupId = group.id;
   row.dataset.target = JSON.stringify(tab.target);
@@ -707,7 +680,7 @@ function createTab(tab: VerticalTabItem, group: VerticalTabDisplayGroup, level: 
   activate.tabIndex = -1;
   activate.dataset.focusKey = treeFocusKeyForTab(tab);
   activate.setAttribute('role', 'treeitem');
-  activate.setAttribute('aria-level', String(level));
+  activate.setAttribute('aria-level', String(level + 1));
   activate.setAttribute('aria-selected', String(selected));
   activate.setAttribute('aria-disabled', String(!tab.isActivatable));
   activate.title = activationTitle(tab);
@@ -1007,16 +980,30 @@ function clamp(value: number, minimum: number, maximum: number): number {
 
 function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): void {
   if (draggedGroupId) {
-    const plan = manualGroupDropPlan(event, group);
-    if (!plan) { clearDropIndicator(); return; }
+    if (draggedGroupId === group.id) { clearDropIndicator(); return; }
     event.preventDefault();
-    event.stopPropagation();
     event.dataTransfer!.dropEffect = 'move';
     const section = event.currentTarget as HTMLElement;
-    const header = section.querySelector<HTMLElement>(':scope > .group-header');
-    const rect = (header ?? section).getBoundingClientRect();
-    if (plan.nest) showGroupDropHighlight(section);
-    else showDropIndicator(rect.left, plan.after ? rect.bottom : rect.top, rect.width);
+    const rect = section.getBoundingClientRect();
+    const edge = dragInsertionEdge(event.clientY, rect.top, rect.height);
+    const displayGroups = latestSnapshot?.displayGroups ?? [];
+    if (edge === 'after') {
+      const groupIndex = displayGroups.findIndex((g) => g.id === group.id);
+      const nextGroup = displayGroups.slice(groupIndex + 1).find((g) => g.showHeader && g.isManual && g.id !== '__ungrouped');
+      const nextSection = nextGroup ? section.parentElement?.querySelector<HTMLElement>(`.tab-group[data-group-id="${nextGroup.id}"]`) : undefined;
+      if (nextSection) {
+        const nextRect = nextSection.getBoundingClientRect();
+        showDropIndicator(Math.max(rect.left, nextRect.left), nextRect.top, Math.max(rect.width, nextRect.width));
+      } else {
+        const lastChild = section.parentElement?.lastElementChild as HTMLElement;
+        if (lastChild) {
+          const lastRect = lastChild.getBoundingClientRect();
+          showDropIndicator(lastRect.left, lastRect.bottom, lastRect.width);
+        }
+      }
+    } else {
+      showDropIndicator(rect.left, rect.top, rect.width);
+    }
     return;
   }
   if (!draggedTarget || currentDragCapability() === 'disabled' || targetsForDrop(group).length === 0) {
@@ -1031,16 +1018,24 @@ function handleGroupDragOver(event: DragEvent, group: VerticalTabDisplayGroup): 
 function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void {
   clearDropIndicator();
   if (draggedGroupId) {
-    const plan = manualGroupDropPlan(event, group);
-    if (!plan) return;
+    if (draggedGroupId === group.id) return;
     event.preventDefault();
-    event.stopPropagation();
-    vscode.postMessage({
-      type: 'reorderManualGroup',
-      groupId: draggedGroupId,
-      ...(plan.parentGroupId ? { parentGroupId: plan.parentGroupId } : {}),
-      ...(plan.beforeGroupId ? { beforeGroupId: plan.beforeGroupId } : {}),
-    });
+    const displayGroups = latestSnapshot?.displayGroups ?? [];
+    const targetIndex = displayGroups.findIndex((g) => g.id === group.id);
+    let beforeGroupId: string | undefined;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    if (dragInsertionEdge(event.clientY, rect.top, rect.height) === 'after') {
+      const afterMatch = displayGroups.slice(targetIndex + 1).find((g) => g.showHeader && g.isManual && g.id !== '__ungrouped');
+      beforeGroupId = afterMatch?.id;
+    } else {
+      if (group.isManual && group.id !== '__ungrouped') {
+        beforeGroupId = group.id;
+      } else {
+        beforeGroupId = displayGroups.find((g) => g.showHeader && g.isManual && g.id !== '__ungrouped')?.id;
+      }
+    }
+    logToExtension('debug', '分组拖拽排序请求', `groupId=${draggedGroupId}, beforeGroupId=${beforeGroupId ?? 'none'}`);
+    vscode.postMessage({ type: 'reorderManualGroup', groupId: draggedGroupId, ...(beforeGroupId ? { beforeGroupId } : {}) });
     draggedGroupId = undefined;
     return;
   }
@@ -1051,45 +1046,6 @@ function handleGroupDrop(event: DragEvent, group: VerticalTabDisplayGroup): void
   const groupId = group.mode === 'manual' && group.id === '__ungrouped' ? undefined : group.id;
   logToExtension('debug', '标签拖拽投放到分组', dropDetails(event, draggedTarget, group.id));
   postTabMove(targets, groupId);
-}
-
-interface ManualGroupDropPlan {
-  readonly parentGroupId?: string;
-  readonly beforeGroupId?: string;
-  readonly nest: boolean;
-  readonly after: boolean;
-}
-
-function manualGroupDropPlan(event: DragEvent, group: VerticalTabDisplayGroup): ManualGroupDropPlan | undefined {
-  if (!draggedGroupId || !latestSnapshot || !group.isManual || draggedGroupId === group.id) return undefined;
-  const dragged = latestSnapshot.displayGroups.find((candidate) => candidate.id === draggedGroupId && candidate.isManual);
-  if (!dragged) return undefined;
-  const descendants = manualGroupDescendants(latestSnapshot.displayGroups, dragged.id);
-  const subtreeHeight = manualGroupSubtreeHeight(latestSnapshot.displayGroups, dragged.id);
-  const rootTarget = group.id === '__ungrouped';
-  if (!rootTarget && descendants.has(group.id)) return undefined;
-  const section = event.currentTarget as HTMLElement;
-  const header = section.querySelector<HTMLElement>(':scope > .group-header');
-  const rect = (header ?? section).getBoundingClientRect();
-  const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5;
-  const canReorder = latestSnapshot.sortMode === 'none';
-  if (!rootTarget && ratio >= 0.25 && ratio <= 0.75) {
-    if (group.depth + subtreeHeight > 3) return undefined;
-    return { parentGroupId: group.id, nest: true, after: false };
-  }
-  if (rootTarget) return { nest: false, after: false };
-  if (!canReorder) return undefined;
-  const parentGroupId = group.parentId;
-  if (ratio <= 0.5) return { parentGroupId, beforeGroupId: group.id, nest: false, after: false };
-  const siblings = latestSnapshot.displayGroups.filter((candidate) =>
-    candidate.isManual && candidate.id !== '__ungrouped' && candidate.parentId === parentGroupId);
-  const index = siblings.findIndex((candidate) => candidate.id === group.id);
-  return {
-    parentGroupId,
-    beforeGroupId: siblings.slice(index + 1).find((candidate) => candidate.id !== dragged.id)?.id,
-    nest: false,
-    after: true,
-  };
 }
 
 function handleTabDragOver(event: DragEvent, row: HTMLElement, tab: VerticalTabItem, group: VerticalTabDisplayGroup): void {
@@ -1182,7 +1138,6 @@ function currentDragCapability(): ReturnType<typeof tabDragCapability> {
 function targetsForDrop(group: VerticalTabDisplayGroup): readonly TabTarget[] {
   const capability = currentDragCapability();
   const dragOrigin = draggedTarget;
-  if (group.mode === 'parentDirTree' && !group.directoryUri) return [];
   const dragOriginIsInGroup = dragOrigin !== undefined && group.tabs.some((tab) => sameTarget(tab.target, dragOrigin));
   if (group.mode === 'fileType' && capability === 'reorder') {
     // File-type groups describe an extension; a cross-group drop must never be
@@ -1227,14 +1182,8 @@ function prepareActiveTabFollow(
   }
   const focusedGroup = snapshot.displayGroups.find((group) =>
     group.tabs.some((tab) => sameTarget(tab.target, focusedTab.target)));
-  let currentGroup = focusedGroup;
-  while (currentGroup) {
-    if (currentGroup.showHeader && isGroupCollapsed(currentGroup)) {
-      setDisplayGroupCollapsed(currentGroup, false, false);
-    }
-    currentGroup = currentGroup.parentId
-      ? snapshot.displayGroups.find((group) => group.id === currentGroup?.parentId)
-      : undefined;
+  if (focusedGroup?.showHeader && isGroupCollapsed(focusedGroup)) {
+    setDisplayGroupCollapsed(focusedGroup, false, false);
   }
   return focusedTab.target;
 }
@@ -1364,25 +1313,7 @@ function postSelectionChanged(): void {
 }
 
 function selectableTabs(): readonly VerticalTabItem[] {
-  const snapshot = latestSnapshot;
-  if (!snapshot) return [];
-  const byId = new Map(snapshot.displayGroups.map((group) => [group.id, group]));
-  return snapshot.displayGroups.flatMap((group) => isDisplayGroupVisible(group, byId) ? group.tabs : []);
-}
-
-function isDisplayGroupVisible(
-  group: VerticalTabDisplayGroup,
-  byId: ReadonlyMap<string, VerticalTabDisplayGroup>,
-): boolean {
-  if (isGroupCollapsed(group)) return false;
-  let parentId = group.parentId;
-  while (parentId) {
-    const parent = byId.get(parentId);
-    if (!parent) break;
-    if (isGroupCollapsed(parent)) return false;
-    parentId = parent.parentId;
-  }
-  return true;
+  return latestSnapshot?.displayGroups.flatMap((group) => isGroupCollapsed(group) ? [] : group.tabs) ?? [];
 }
 
 function nextActivateRequestId(): string {
@@ -1438,7 +1369,7 @@ function showContextMenu(
   menu.setAttribute('role', 'menu');
   menu.addEventListener('click', (event) => event.stopPropagation());
   if (group?.isManual && group.id !== '__ungrouped') {
-    menu.append(renameGroupButton(group), createSubgroupButton(group), groupMoveSubmenu(group));
+    menu.append(renameGroupButton(group));
   }
   if (group) {
     menu.append(
@@ -1962,86 +1893,6 @@ function markActiveTab(target: TabTarget): void {
     if (candidateTarget?.groupIndex === target.groupIndex) row.classList.remove('is-active');
   }
   findTabRow(target)?.classList.add('is-active', 'is-focused');
-}
-
-function createSubgroupButton(group: VerticalTabDisplayGroup): HTMLButtonElement {
-  const enabled = group.depth < 3;
-  const result = button(i18n.newSubgroup, enabled ? i18n.newSubgroup : i18n.groupDepthLimit);
-  result.disabled = !enabled;
-  result.addEventListener('click', () => {
-    if (!enabled) return;
-    const value = window.prompt(i18n.groupName);
-    if (value?.trim()) vscode.postMessage({ type: 'createGroup', name: value.trim(), parentGroupId: group.id });
-    dismissContextMenu();
-  });
-  return result;
-}
-
-function groupMoveSubmenu(group: VerticalTabDisplayGroup): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'tab-context-submenu';
-  const trigger = button(i18n.moveGroup, i18n.moveGroup);
-  trigger.classList.add('tab-context-submenu-trigger');
-  trigger.setAttribute('aria-haspopup', 'menu');
-  trigger.setAttribute('aria-expanded', 'false');
-  const submenu = document.createElement('div');
-  submenu.className = 'tab-context-submenu-list';
-  submenu.setAttribute('role', 'menu');
-  const snapshotGroups = latestSnapshot?.displayGroups ?? [];
-  const descendants = manualGroupDescendants(snapshotGroups, group.id);
-  const subtreeHeight = manualGroupSubtreeHeight(snapshotGroups, group.id);
-  const destinations: Array<{ readonly id?: string; readonly title: string; readonly depth: number }> = [
-    { title: i18n.moveToTopLevel, depth: 0 },
-    ...snapshotGroups
-      .filter((candidate) => candidate.isManual
-        && candidate.id !== '__ungrouped'
-        && candidate.id !== group.id
-        && candidate.depth + subtreeHeight <= 3
-        && !descendants.has(candidate.id))
-      .map((candidate) => ({ id: candidate.id, title: candidate.title, depth: candidate.depth })),
-  ];
-  for (const destination of destinations) {
-    const action = button(destination.title, `${i18n.moveGroup}: ${destination.title}`);
-    action.classList.add('tab-context-action');
-    action.setAttribute('role', 'menuitem');
-    action.disabled = group.parentId === destination.id;
-    action.addEventListener('click', () => {
-      vscode.postMessage({
-        type: 'reorderManualGroup',
-        groupId: group.id,
-        ...(destination.id ? { parentGroupId: destination.id } : {}),
-      });
-      dismissContextMenu();
-    });
-    submenu.append(action);
-  }
-  trigger.addEventListener('click', () => {
-    openContextSubmenu(trigger, submenu, true);
-    focusContextMenuItem(submenu, 0);
-  });
-  wrapper.addEventListener('mouseenter', () => openContextSubmenu(trigger, submenu, false));
-  wrapper.append(trigger, submenu);
-  return wrapper;
-}
-
-function manualGroupDescendants(groups: readonly VerticalTabDisplayGroup[], groupId: string): Set<string> {
-  const result = new Set<string>();
-  const queue = [groupId];
-  while (queue.length > 0) {
-    const parentId = queue.shift()!;
-    for (const group of groups) {
-      if (group.parentId !== parentId || result.has(group.id)) continue;
-      result.add(group.id);
-      queue.push(group.id);
-    }
-  }
-  return result;
-}
-
-function manualGroupSubtreeHeight(groups: readonly VerticalTabDisplayGroup[], groupId: string): number {
-  const children = groups.filter((group) => group.parentId === groupId);
-  if (children.length === 0) return 1;
-  return 1 + Math.max(...children.map((child) => manualGroupSubtreeHeight(groups, child.id)));
 }
 
 function previewKeyboardNavigation(target: TabTarget): void {

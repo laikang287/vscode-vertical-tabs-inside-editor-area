@@ -44,7 +44,6 @@ import {
   type TabCommandDirection,
 } from '../tabs/TabCommands';
 import { DeferredTargetCommitter } from '../tabs/DeferredTargetCommitter';
-import { canMoveManualGroup, displayGroupDescendantIds, MAX_MANUAL_GROUP_DEPTH, manualGroupDepth, moveManualGroup, normalizeManualGroups } from '../tabs/GroupTree';
 import { TabMruTracker } from '../tabs/TabMruTracker';
 import {
   classifyTabResourceStatus,
@@ -55,7 +54,6 @@ import {
 import { buildSnapshot, displayOrderKey, identityKey, moveItemsBefore, sameIdentity, selectCloseTargets, selectCloseTargetsForTabs, type SnapshotSourceGroup, type SnapshotSourceTab } from '../tabs/TabSnapshot';
 import {
   MAX_WORKSET_NAME_LENGTH,
-  WORKSET_SCHEMA_VERSION,
   WORKSETS_STORAGE_KEY,
   normalizeWorksetName,
   parseStoredWorksets,
@@ -65,7 +63,7 @@ import {
   worksetNamesEqual,
   writeStoredWorksets,
   type StoredWorksetTab,
-  type StoredWorkset,
+  type StoredWorksetV1,
   type WorksetRestoreFailure,
   type WorksetRestoreFailureCategory,
   type WorksetTabInput,
@@ -201,7 +199,7 @@ export class VerticalTabsPanel {
   private readonly displayOrderByGroup: Map<string, string[]>;
   private readonly pinnedGroupIds: Set<string>;
   private readonly collapsedGroupKeys: Set<string>;
-  private readonly worksets: StoredWorkset[];
+  private readonly worksets: StoredWorksetV1[];
   private readonly mruTracker = new TabMruTracker<vscode.Tab>();
   private readonly nativeTabMenuProvider = new NativeTabMenuProvider();
   private readonly resourceDirectoryWatchers = new Map<string, ResourceDirectoryWatcher>();
@@ -231,7 +229,7 @@ export class VerticalTabsPanel {
     this.toolbarControlsVisible = readToolbarControlsVisible(context);
     this.searchVisible = readSearchVisible(context);
     this.searchGroups = readSearchGroups(context);
-    this.manualGroups = this.rememberStateEnabled ? normalizeManualGroups(readManualGroups(context)) : [];
+    this.manualGroups = this.rememberStateEnabled ? readManualGroups(context) : [];
     this.manualGroupByIdentity = this.rememberStateEnabled ? readStringMap(context, MANUAL_GROUP_BY_IDENTITY_STORAGE_KEY) : new Map();
     this.displayOrderByGroup = this.rememberStateEnabled ? readStringArrayMap(context, DISPLAY_ORDER_BY_GROUP_STORAGE_KEY) : new Map();
     this.pinnedGroupIds = this.rememberStateEnabled ? readStringSet(context, PINNED_GROUP_IDS_STORAGE_KEY) : new Set();
@@ -1270,7 +1268,6 @@ export class VerticalTabsPanel {
       isActivatable: isActivatableTab(tab),
       isVerticalTabsPanel: isVerticalTabsPanel(tab),
       manualGroupId: this.manualGroupByIdentity.get(identityKey(targetIdentity(tab))),
-      ...inputDirectoryTree(tab.input),
     };
   }
 
@@ -1546,7 +1543,7 @@ export class VerticalTabsPanel {
         logWarn('创建手动标签分组失败：当前不是手动分组模式', { groupMode: this.groupMode, name: message.name.trim() });
         return;
       }
-      await this.createManualGroup(message.name, message.parentGroupId);
+      await this.createManualGroup(message.name);
       return;
     }
     if (message.type === 'renameGroup') {
@@ -1649,19 +1646,22 @@ export class VerticalTabsPanel {
 
 
     if (message.type === 'reorderManualGroup') {
-      if (this.groupMode !== 'manual') {
-        logWarn('拒绝非手动分组模式下的分组拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode });
+      if (this.groupMode !== 'manual' || this.sortMode !== 'none') {
+        logWarn('拒绝非手动排序模式下的分组拖拽消息', { groupMode: this.groupMode, sortMode: this.sortMode });
         return;
       }
-      const parentGroupId = message.parentGroupId;
-      const beforeGroupId = this.sortMode === 'none' ? message.beforeGroupId : undefined;
-      if (!canMoveManualGroup(this.manualGroups, message.groupId, parentGroupId, beforeGroupId)) {
-        logWarn('重排手动分组失败：目标层级无效', { groupId: message.groupId, parentGroupId, beforeGroupId });
+      const index = this.manualGroups.findIndex((group) => group.id === message.groupId);
+      if (index < 0) {
+        logWarn('重排手动分组失败：分组不存在', { groupId: message.groupId });
         return;
       }
-      this.manualGroups.splice(0, this.manualGroups.length, ...moveManualGroup(this.manualGroups, message.groupId, parentGroupId, beforeGroupId));
+      const [moved] = this.manualGroups.splice(index, 1);
+      const beforeIndex = message.beforeGroupId
+        ? this.manualGroups.findIndex((group) => group.id === message.beforeGroupId)
+        : -1;
+      this.manualGroups.splice(beforeIndex >= 0 ? beforeIndex : this.manualGroups.length, 0, moved);
       await this.persistManualGroups();
-      logInfo('重排手动分组', { groupId: message.groupId, parentGroupId, beforeGroupId });
+      logInfo('重排手动分组', { groupId: message.groupId, beforeGroupId: message.beforeGroupId });
       await this.refresh({ reason: 'operation' });
       return;
     }
@@ -2046,7 +2046,7 @@ export class VerticalTabsPanel {
   }
 
   private async showWorksetManager(): Promise<void> {
-    type ManagerItem = vscode.QuickPickItem & { readonly itemType: 'create' | 'workset'; readonly workset?: StoredWorkset };
+    type ManagerItem = vscode.QuickPickItem & { readonly itemType: 'create' | 'workset'; readonly workset?: StoredWorksetV1 };
     const items: ManagerItem[] = [{
       label: `$(add) ${this.localeStrings.createWorkset}`,
       description: this.localeStrings.createWorksetDescription,
@@ -2110,12 +2110,12 @@ export class VerticalTabsPanel {
     void vscode.window.showInformationMessage(format(this.localeStrings.worksetDeleted, selected.workset.name));
   }
 
-  private async pickWorkset(title: string): Promise<StoredWorkset | undefined> {
+  private async pickWorkset(title: string): Promise<StoredWorksetV1 | undefined> {
     if (this.worksets.length === 0) {
       void vscode.window.showInformationMessage(this.localeStrings.noWorksets);
       return undefined;
     }
-    type WorksetItem = vscode.QuickPickItem & { readonly workset: StoredWorkset };
+    type WorksetItem = vscode.QuickPickItem & { readonly workset: StoredWorksetV1 };
     const selected = await vscode.window.showQuickPick<WorksetItem>(
       sortWorksets(this.worksets).map((workset) => ({
         label: workset.name,
@@ -2136,7 +2136,7 @@ export class VerticalTabsPanel {
     return duplicate ? format(this.localeStrings.worksetNameExists, duplicate.name) : undefined;
   }
 
-  private async renameWorkset(workset: StoredWorkset): Promise<void> {
+  private async renameWorkset(workset: StoredWorksetV1): Promise<void> {
     const name = await vscode.window.showInputBox({
       title: this.localeStrings.renameWorkset,
       value: workset.name,
@@ -2152,7 +2152,7 @@ export class VerticalTabsPanel {
     void vscode.window.showInformationMessage(format(this.localeStrings.worksetRenamed, normalizedName));
   }
 
-  private async overwriteWorkset(workset: StoredWorkset, name = workset.name): Promise<void> {
+  private async overwriteWorkset(workset: StoredWorksetV1, name = workset.name): Promise<void> {
     const index = this.worksets.findIndex((candidate) => candidate.id === workset.id);
     if (index < 0) return;
     const replacement = this.captureWorkset(name, workset);
@@ -2165,7 +2165,7 @@ export class VerticalTabsPanel {
     await writeStoredWorksets(this.context.workspaceState, this.worksets);
   }
 
-  private captureWorkset(name: string, existing?: StoredWorkset): StoredWorkset {
+  private captureWorkset(name: string, existing?: StoredWorksetV1): StoredWorksetV1 {
     const groups = userEditorGroups();
     const tabs: StoredWorksetTab[] = [];
     const entryIdsByIdentity = new Map<string, string[]>();
@@ -2201,7 +2201,7 @@ export class VerticalTabsPanel {
     ] as const);
     const now = Date.now();
     return {
-      schemaVersion: WORKSET_SCHEMA_VERSION,
+      schemaVersion: 1,
       id: existing?.id ?? crypto.randomBytes(9).toString('base64url'),
       name: normalizeWorksetName(name),
       createdAt: existing?.createdAt ?? now,
@@ -2218,7 +2218,7 @@ export class VerticalTabsPanel {
     };
   }
 
-  private async restoreWorkset(workset: StoredWorkset): Promise<void> {
+  private async restoreWorkset(workset: StoredWorksetV1): Promise<void> {
     const preflight = await this.preflightWorkset(workset);
     if (workset.tabs.length > 0 && preflight.resolved.length === 0) {
       await this.showWorksetRestoreReport(workset, 0, preflight.failures);
@@ -2274,7 +2274,7 @@ export class VerticalTabsPanel {
     await this.showWorksetRestoreReport(workset, restoredById.size, failures);
   }
 
-  private async preflightWorkset(workset: StoredWorkset): Promise<WorksetPreflight> {
+  private async preflightWorkset(workset: StoredWorksetV1): Promise<WorksetPreflight> {
     const currentTabs = userEditorGroups().flatMap((group) => group.tabs.filter((tab) => !isVerticalTabsPanel(tab)));
     const replacement = selectReplacementCandidates(
       currentTabs.map((tab) => ({ key: worksetInputKey(worksetInputFromTab(tab)), isDirty: tab.isDirty, isPinned: tab.isPinned })),
@@ -2305,7 +2305,7 @@ export class VerticalTabsPanel {
     };
   }
 
-  private async confirmWorksetRestore(workset: StoredWorkset, preflight: WorksetPreflight): Promise<boolean> {
+  private async confirmWorksetRestore(workset: StoredWorksetV1, preflight: WorksetPreflight): Promise<boolean> {
     const currentTabs = userEditorGroups().flatMap((group) => group.tabs).filter((tab) => !isVerticalTabsPanel(tab));
     if (currentTabs.length === 0 && this.manualGroups.length === 0) return true;
     const detail: string[] = [
@@ -2445,7 +2445,7 @@ export class VerticalTabsPanel {
     return undefined;
   }
 
-  private async applyRestoredPinnedState(workset: StoredWorkset, restoredById: ReadonlyMap<string, vscode.Tab>): Promise<void> {
+  private async applyRestoredPinnedState(workset: StoredWorksetV1, restoredById: ReadonlyMap<string, vscode.Tab>): Promise<void> {
     for (const stored of workset.tabs) {
       const tab = restoredById.get(stored.id);
       if (!tab || tab.isPinned === stored.isPinned || !isActivatableTabForCommands(tab)) continue;
@@ -2454,7 +2454,7 @@ export class VerticalTabsPanel {
     }
   }
 
-  private async applyRestoredTabOrder(workset: StoredWorkset, restoredById: ReadonlyMap<string, vscode.Tab>): Promise<void> {
+  private async applyRestoredTabOrder(workset: StoredWorksetV1, restoredById: ReadonlyMap<string, vscode.Tab>): Promise<void> {
     for (let groupIndex = 0; groupIndex < Math.max(1, workset.groupCount); groupIndex += 1) {
       const group = userEditorGroups()[groupIndex];
       if (!group) continue;
@@ -2467,7 +2467,7 @@ export class VerticalTabsPanel {
     }
   }
 
-  private applyRestoredPresentationState(workset: StoredWorkset, restoredById: ReadonlyMap<string, vscode.Tab>): void {
+  private applyRestoredPresentationState(workset: StoredWorksetV1, restoredById: ReadonlyMap<string, vscode.Tab>): void {
     this.groupMode = workset.groupMode;
     this.sortMode = workset.sortMode;
     this.manualGroups.splice(0, this.manualGroups.length, ...workset.manualGroups.map((group) => ({ ...group })));
@@ -2510,7 +2510,7 @@ export class VerticalTabsPanel {
   }
 
   private async showWorksetRestoreReport(
-    workset: StoredWorkset,
+    workset: StoredWorksetV1,
     restoredCount: number,
     failures: readonly WorksetRestoreFailure[],
   ): Promise<void> {
@@ -2560,11 +2560,7 @@ export class VerticalTabsPanel {
   }
 
   private targetsForDisplayGroup(groupId: string): readonly TabTarget[] {
-    const ids = displayGroupDescendantIds(this.currentSnapshot.displayGroups, groupId);
-    ids.add(groupId);
-    return this.currentSnapshot.displayGroups
-      .filter((group) => ids.has(group.id))
-      .flatMap((group) => group.tabs.map((tab) => tab.target));
+    return this.currentSnapshot.displayGroups.find((group) => group.id === groupId)?.tabs.map((tab) => tab.target) ?? [];
   }
 
   private async closeDisplayGroup(groupId: string): Promise<void> {
@@ -2574,58 +2570,39 @@ export class VerticalTabsPanel {
       return;
     }
 
-    const descendantIds = displayGroupDescendantIds(this.currentSnapshot.displayGroups, groupId);
-    descendantIds.add(groupId);
-    const groupTabs = this.currentSnapshot.displayGroups
-      .filter((group) => descendantIds.has(group.id))
-      .flatMap((group) => group.tabs);
-    const closableTabs = groupTabs.filter((tab) => !tab.isPinned);
-
-    if (displayGroup.mode === 'vscode' && closableTabs.length === groupTabs.length) {
+    if (displayGroup.mode === 'vscode') {
       const sourceGroupIndex = displayGroup.tabs[0]?.target.groupIndex;
       const sourceGroup = sourceGroupIndex === undefined ? undefined : vscode.window.tabGroups.all[sourceGroupIndex];
       if (sourceGroup && !sourceGroup.tabs.some((tab) => isVerticalTabsPanel(tab))) {
         logInfo('关闭 VS Code 编辑器分组及其全部标签', { groupId, sourceGroupIndex, tabCount: sourceGroup.tabs.length });
         await vscode.window.tabGroups.close(sourceGroup, true);
       } else {
-        await this.closeTargets(closableTabs.map((tab) => tab.target));
+        await this.closeTargets(displayGroup.tabs.map((tab) => tab.target));
       }
     } else {
-      await this.closeTargets(closableTabs.map((tab) => tab.target));
+      await this.closeTargets(displayGroup.tabs.map((tab) => tab.target));
     }
 
     const manualGroupIndex = this.manualGroups.findIndex((candidate) => candidate.id === groupId);
-    const hasRemainingTabs = groupTabs.some((tab) => this.resolveTab(tab.target) !== undefined);
-    if (manualGroupIndex >= 0 && !hasRemainingTabs) {
-      const manualIds = displayGroupDescendantIds(this.currentSnapshot.displayGroups, groupId);
-      manualIds.add(groupId);
-      this.manualGroups.splice(0, this.manualGroups.length, ...this.manualGroups.filter((group) => !manualIds.has(group.id)));
+    if (manualGroupIndex >= 0) {
+      this.manualGroups.splice(manualGroupIndex, 1);
       for (const [key, assignedGroupId] of this.manualGroupByIdentity) {
-        if (manualIds.has(assignedGroupId)) this.manualGroupByIdentity.delete(key);
+        if (assignedGroupId === groupId) this.manualGroupByIdentity.delete(key);
       }
-      for (const id of manualIds) {
-        this.displayOrderByGroup.delete(displayOrderKey('manual', id));
-        this.pinnedGroupIds.delete(id);
-      }
+      this.displayOrderByGroup.delete(displayOrderKey('manual', groupId));
       logInfo('关闭标签并删除手动分组', { groupId });
-    } else if (manualGroupIndex < 0 && !hasRemainingTabs) {
-      for (const id of descendantIds) this.pinnedGroupIds.delete(id);
-      logDebug('自动分组关闭且不再包含标签，清理分组固定状态', { groupId });
+    }
+
+    if (this.pinnedGroupIds.delete(groupId)) {
+      logDebug('关闭分组后清理分组固定状态', { groupId });
     }
     await Promise.all([this.persistManualState(), this.persistPinnedGroups()]);
   }
 
-  private async createManualGroup(name: string, parentId?: string): Promise<void> {
+  private async createManualGroup(name: string): Promise<void> {
     const trimmedName = name.trim();
-    if (parentId) {
-      const depth = manualGroupDepth(this.manualGroups, parentId);
-      if (depth === undefined || depth >= MAX_MANUAL_GROUP_DEPTH) {
-        logWarn('创建手动子分组失败：目标父组无效或已达到最大深度', { parentId, depth });
-        return;
-      }
-    }
-    logInfo('创建手动标签分组', { name: trimmedName, parentId });
-    this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: trimmedName, collapsed: false, ...(parentId ? { parentId } : {}) });
+    logInfo('创建手动标签分组', { name: trimmedName });
+    this.manualGroups.push({ id: crypto.randomBytes(9).toString('base64url'), name: trimmedName, collapsed: false });
     await this.persistManualGroups();
     await this.refresh({ reason: 'operation' });
   }
@@ -2808,7 +2785,7 @@ export class VerticalTabsPanel {
   private async moveParentDirectoryTabs(targets: readonly TabTarget[], destinationGroupId: string | undefined, beforeTarget: TabTarget | undefined): Promise<void> {
     const destinationGroup = destinationGroupId === undefined
       ? undefined
-      : this.currentSnapshot.displayGroups.find((group) => (group.mode === 'parentDir' || group.mode === 'parentDirTree') && group.id === destinationGroupId);
+      : this.currentSnapshot.displayGroups.find((group) => group.mode === 'parentDir' && group.id === destinationGroupId);
     if (!destinationGroup) {
       logWarn('父目录分组移动失败：目标目录分组不存在', { destinationGroupId, count: targets.length });
       return;
@@ -2846,7 +2823,7 @@ export class VerticalTabsPanel {
         .filter((key) => !movedSourceKeys.has(key));
       const beforeKey = beforeTarget ? identityKey(beforeTarget.identity) : undefined;
       this.displayOrderByGroup.set(
-        displayOrderKey(this.groupMode, destinationGroup.id),
+        displayOrderKey('parentDir', destinationGroup.id),
         moveItemsBefore(destinationKeys, movedIdentityKeys, beforeKey),
       );
       await this.persistManualState();
@@ -2860,7 +2837,6 @@ export class VerticalTabsPanel {
 
   private parentDirectoryUri(destinationGroup: VerticalTabsSnapshot['displayGroups'][number], sourceTarget: TabTarget): vscode.Uri | undefined {
     if (destinationGroup.id === '__other') return undefined;
-    if (destinationGroup.directoryUri) return vscode.Uri.parse(destinationGroup.directoryUri);
     if (destinationGroup.id === '__root') {
       const source = this.resolveTab(sourceTarget);
       const sourceUri = source ? inputUri(source.input) : undefined;
@@ -2881,14 +2857,6 @@ export class VerticalTabsPanel {
     const sourceTabs = sourceUri ? findTabsByResourceUri(sourceUri) : [];
     if (!tab || !sourceUri || sourceUri.scheme === 'untitled' || sourceTabs.some((candidate) => candidate.isDirty)) {
       logWarn('父目录分组移动失败：仅支持已保存且未修改的文件标签', { target, source: tab ? describeTab(tab) : undefined, destinationGroupId });
-      return undefined;
-    }
-    if (sourceUri.scheme !== destinationDirectory.scheme || sourceUri.authority !== destinationDirectory.authority) {
-      logWarn('父目录分组移动失败：源文件与目标目录不属于同一文件系统', {
-        source: sourceUri.toString(),
-        destination: destinationDirectory.toString(),
-        destinationGroupId,
-      });
       return undefined;
     }
     const destinationUri = vscode.Uri.joinPath(destinationDirectory, path.posix.basename(sourceUri.path));
@@ -3541,7 +3509,7 @@ export class VerticalTabsPanel {
       logDebug('文件类型分组拒绝跨组移动命令', { direction, count: targets.length, destinationGroupId: destination.id });
       return;
     }
-    if (this.groupMode === 'parentDir' || this.groupMode === 'parentDirTree') {
+    if (this.groupMode === 'parentDir') {
       await this.moveParentDirectoryTabs(targets, destination.id, undefined);
     } else if (this.groupMode === 'manual') {
       await this.moveTabs(targets, destination.id === '__ungrouped' ? undefined : destination.id, undefined);
@@ -3791,7 +3759,7 @@ export class VerticalTabsPanel {
         <button id="collapse-all" class="toolbar-icon" type="button" title="" aria-label=""><span class="codicon codicon-collapse-all" aria-hidden="true"></span></button>
       </div>
       <div id="toolbar-controls" class="toolbar-selects">
-        <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="parentDirTree">${i18n.groupModeParentDirTree}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
+        <label class="toolbar-field" for="group-mode"><span>${i18n.groupModeLabel}</span><select id="group-mode"><option value="vscode">${i18n.groupModeVscode}</option><option value="manual">${i18n.groupModeManual}</option><option value="parentDir">${i18n.groupModeParentDir}</option><option value="fileType">${i18n.groupModeFileType}</option></select></label>
         <label class="toolbar-field" for="sort-mode"><span>${i18n.sortModeLabel}</span><select id="sort-mode"><option value="none">${i18n.sortModeNone}</option><option value="mru">${i18n.sortModeMru}</option><option value="modifiedAsc">${i18n.sortModeModifiedAsc}</option><option value="modifiedDesc">${i18n.sortModeModifiedDesc}</option><option value="nameAsc">${i18n.sortModeNameAsc}</option><option value="nameDesc">${i18n.sortModeNameDesc}</option></select></label>
       </div>
       <div id="search-container" class="search-container">
@@ -5023,35 +4991,6 @@ function inputDirectoryName(input: vscode.Tab['input']): string | undefined {
   return directoryName && directoryName !== '.' ? directoryName : undefined;
 }
 
-function inputDirectoryTree(input: vscode.Tab['input']): Pick<SnapshotSourceTab, 'directoryTree' | 'isOutsideWorkspace'> {
-  const uri = inputUri(input);
-  if (!uri || uri.scheme === 'untitled') return {};
-  const parentUri = uri.with({ path: path.posix.dirname(uri.path.replace(/\\/g, '/')), query: '', fragment: '' });
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-  if (!workspaceFolder) {
-    const name = path.posix.basename(parentUri.path) || parentUri.authority || parentUri.scheme;
-    return {
-      directoryTree: [{ uri: parentUri.toString(), name }],
-      isOutsideWorkspace: true,
-    };
-  }
-
-  const relativePath = vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
-  const directoryPath = path.posix.dirname(relativePath);
-  const nodes: { uri: string; name: string }[] = [{
-    uri: workspaceFolder.uri.toString(),
-    name: workspaceFolder.name,
-  }];
-  if (directoryPath !== '.') {
-    let current = workspaceFolder.uri;
-    for (const segment of directoryPath.split('/').filter(Boolean)) {
-      current = vscode.Uri.joinPath(current, segment);
-      nodes.push({ uri: current.toString(), name: segment });
-    }
-  }
-  return { directoryTree: nodes, isOutsideWorkspace: false };
-}
-
 function createWebviewOptions(context: vscode.ExtensionContext): vscode.WebviewOptions {
   return {
     enableScripts: true,
@@ -5286,7 +5225,7 @@ function readCompactContextSubmenusEnabled(): boolean {
 }
 
 function isGroupMode(value: unknown): value is GroupMode {
-  return value === 'manual' || value === 'parentDir' || value === 'parentDirTree' || value === 'fileType' || value === 'vscode';
+  return value === 'manual' || value === 'parentDir' || value === 'fileType' || value === 'vscode';
 }
 
 function isRelativePathDisplay(value: unknown): value is RelativePathDisplay {
@@ -5305,8 +5244,7 @@ function isStoredManualGroup(value: unknown): value is ManualTabGroup {
   return typeof value === 'object' && value !== null
     && typeof (value as Partial<ManualTabGroup>).id === 'string'
     && typeof (value as Partial<ManualTabGroup>).name === 'string'
-    && typeof (value as Partial<ManualTabGroup>).collapsed === 'boolean'
-    && ((value as Partial<ManualTabGroup>).parentId === undefined || typeof (value as Partial<ManualTabGroup>).parentId === 'string');
+    && typeof (value as Partial<ManualTabGroup>).collapsed === 'boolean';
 }
 
 async function focusEditorGroup(viewColumn: vscode.ViewColumn | undefined): Promise<void> {

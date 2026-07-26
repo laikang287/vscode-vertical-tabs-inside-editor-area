@@ -30,7 +30,6 @@
   "verticalTabs.config.defaultGroupMode.vscode": "Follow VS Code editor groups.",
   "verticalTabs.config.defaultGroupMode.manual": "Use manual grouping.",
   "verticalTabs.config.defaultGroupMode.parentDir": "Group by parent directory.",
-  "verticalTabs.config.defaultGroupMode.parentDirTree": "Group open tabs in a parent directory tree.",
   "verticalTabs.config.defaultGroupMode.fileType": "Group by file type.",
   "verticalTabs.config.defaultSortMode": "Default sort mode. Defaults to manual sort. Always used when automatic memory is disabled; used only when no saved value exists when automatic memory is enabled.",
   "verticalTabs.config.defaultSortMode.none": "Manual sort; tabs can be reordered by dragging.",

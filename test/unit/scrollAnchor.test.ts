@@ -70,7 +70,7 @@ test('webview rebuilds atomically and restores a preferred group scroll anchor',
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
 
   assert.match(source, /const nextTree = document\.createDocumentFragment\(\)/);
-  assert.match(source, /appendDisplayGroup\(nextTree, resultGroup, resultGroups\)/);
+  assert.match(source, /appendDisplayGroup\(nextTree, resultGroup\.group, resultGroup\.autoExpand\)/);
   assert.match(source, /groups\.replaceChildren\(nextTree\)/);
   assert.doesNotMatch(source, /groups\.replaceChildren\(\);/);
   assert.match(source, /renderCurrentTabs\(\{ preferredFocusKey: treeFocusKeyForGroup\(group\) \}\)/);

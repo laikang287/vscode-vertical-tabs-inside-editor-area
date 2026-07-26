@@ -30,7 +30,6 @@
   "verticalTabs.config.defaultGroupMode.vscode": "VS Code-Editorgruppen folgen.",
   "verticalTabs.config.defaultGroupMode.manual": "Manuelle Gruppierung verwenden.",
   "verticalTabs.config.defaultGroupMode.parentDir": "Nach übergeordnetem Verzeichnis gruppieren.",
-  "verticalTabs.config.defaultGroupMode.parentDirTree": "Geöffnete Tabs in einem übergeordneten Verzeichnisbaum gruppieren.",
   "verticalTabs.config.defaultGroupMode.fileType": "Nach Dateityp gruppieren.",
   "verticalTabs.config.defaultSortMode": "Standardmäßiger Sortiermodus. Standard ist die manuelle Sortierung. Wird bei deaktiviertem automatischem Speichern immer und ansonsten nur ohne gespeicherten Wert verwendet.",
   "verticalTabs.config.defaultSortMode.none": "Manuelle Sortierung; Tabs können per Drag-and-drop neu angeordnet werden.",

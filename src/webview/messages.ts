@@ -4,7 +4,7 @@
   | { readonly kind: 'webview'; readonly viewType: string; readonly label: string }
   | { readonly kind: 'terminal' | 'unknown'; readonly label: string };
 export interface TabTarget { readonly revision: number; readonly groupIndex: number; readonly tabIndex: number; readonly identity: TabTargetIdentity; }
-export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'parentDirTree' | 'fileType';
+export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
 export type SortMode = 'none' | 'mru' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
 export type RelativePathDisplay = 'off' | 'duplicatesDirectory' | 'duplicates' | 'alwaysDirectory' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
@@ -18,11 +18,11 @@ export interface VerticalTabItem {
   readonly groupId?: string; readonly isFile: boolean; readonly inputKind: TabInputKind; readonly resourceStatus?: TabResourceStatus;
   readonly resourcePath?: string; readonly workspaceRelativePath?: string; readonly tooltipPath?: string; readonly mtime?: number; readonly lastActivatedAt?: number;
 }
-export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; readonly parentId?: string; }
+export interface ManualTabGroup { readonly id: string; readonly name: string; readonly collapsed: boolean; }
 export interface VerticalTabDisplayGroup {
   readonly id: string; readonly title: string; readonly description?: string; readonly collapsed: boolean;
   readonly mode: GroupMode; readonly tabs: readonly VerticalTabItem[]; readonly showHeader: boolean; readonly isManual: boolean;
-  readonly isPinned: boolean; readonly parentId?: string; readonly depth: number; readonly directoryUri?: string;
+  readonly isPinned: boolean;
 }
 export interface VerticalTabsSnapshot {
   readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
@@ -46,7 +46,7 @@ export type WebviewMessage =
   | { readonly type: 'setSearchGroups'; readonly enabled: boolean }
   | { readonly type: 'setCollapsedGroups'; readonly keys: readonly string[] }
   | { readonly type: 'manageWorksets' }
-  | { readonly type: 'railWidth'; readonly width: number } | { readonly type: 'createGroup'; readonly name: string; readonly parentGroupId?: string }
+  | { readonly type: 'railWidth'; readonly width: number } | { readonly type: 'createGroup'; readonly name: string }
   | { readonly type: 'renameGroup'; readonly groupId: string; readonly name: string } | { readonly type: 'deleteGroup' | 'closeGroup'; readonly groupId: string }
   | { readonly type: 'toggleGroup'; readonly groupId: string } | { readonly type: 'assignGroup'; readonly target: TabTarget; readonly groupId?: string }
   | { readonly type: 'pinTab' | 'unpinTab'; readonly target: TabTarget }
@@ -58,7 +58,7 @@ export type WebviewMessage =
   | { readonly type: 'createGroupFromTabs'; readonly source: TabTarget; readonly target: TabTarget }
   | { readonly type: 'moveToPreviousGroup' | 'moveToNextGroup' | 'moveToNewGroup'; readonly target: TabTarget }
   | { readonly type: 'moveToGroup'; readonly target: TabTarget; readonly groupIndex: number }
-  | { readonly type: 'reorderManualGroup'; readonly groupId: string; readonly parentGroupId?: string; readonly beforeGroupId?: string }
+  | { readonly type: 'reorderManualGroup'; readonly groupId: string; readonly beforeGroupId?: string }
   | { readonly type: 'requestNativeTabMenu'; readonly requestId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
   | { readonly type: 'runNativeTabMenuAction'; readonly actionId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string; readonly focus?: TabActivationFocus }
@@ -90,9 +90,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   if (value.type === 'setSearchGroups' && typeof value.enabled === 'boolean') return { type: 'setSearchGroups', enabled: value.enabled };
   if (value.type === 'setCollapsedGroups' && isCollapsedGroupKeys(value.keys)) return { type: 'setCollapsedGroups', keys: value.keys };
   if (value.type === 'railWidth' && isRailWidth(value.width)) return { type: 'railWidth', width: value.width };
-  if (value.type === 'createGroup' && isName(value.name) && (value.parentGroupId === undefined || isId(value.parentGroupId))) {
-    return { type: 'createGroup', name: value.name, ...(value.parentGroupId === undefined ? {} : { parentGroupId: value.parentGroupId }) };
-  }
+  if (value.type === 'createGroup' && isName(value.name)) return { type: 'createGroup', name: value.name };
   if ((value.type === 'renameGroup') && isId(value.groupId) && isName(value.name)) return { type: 'renameGroup', groupId: value.groupId, name: value.name };
   if ((value.type === 'deleteGroup' || value.type === 'toggleGroup') && isId(value.groupId)) return { type: value.type, groupId: value.groupId };
   if ((value.type === 'closeGroup' || value.type === 'pinGroup' || value.type === 'unpinGroup') && isDisplayGroupId(value.groupId)) return { type: value.type, groupId: value.groupId };
@@ -107,9 +105,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   }
   if (value.type === 'createGroupFromTabs' && isTabTarget(value.source) && isTabTarget(value.target)) return { type: 'createGroupFromTabs', source: value.source, target: value.target };
   if ((value.type === 'moveToPreviousGroup' || value.type === 'moveToNextGroup' || value.type === 'moveToNewGroup') && isTabTarget(value.target)) return { type: value.type, target: value.target };
-  if (value.type === 'reorderManualGroup' && isId(value.groupId) && (value.parentGroupId === undefined || isId(value.parentGroupId)) && (value.beforeGroupId === undefined || isId(value.beforeGroupId))) {
-    return { type: 'reorderManualGroup', groupId: value.groupId, ...(value.parentGroupId === undefined ? {} : { parentGroupId: value.parentGroupId }), ...(value.beforeGroupId === undefined ? {} : { beforeGroupId: value.beforeGroupId }) };
-  }
+  if (value.type === 'reorderManualGroup' && isId(value.groupId) && (value.beforeGroupId === undefined || isId(value.beforeGroupId))) return { type: 'reorderManualGroup', groupId: value.groupId, ...(value.beforeGroupId === undefined ? {} : { beforeGroupId: value.beforeGroupId }) };
   if (value.type === 'moveToGroup' && isTabTarget(value.target) && isNonNegativeInteger(value.groupIndex)) return { type: 'moveToGroup', target: value.target, groupIndex: value.groupIndex };
   if (value.type === 'requestNativeTabMenu' && isRequestId(value.requestId) && isTabTarget(value.target) && isTabTargets(value.targets)) {
     return { type: 'requestNativeTabMenu', requestId: value.requestId, target: value.target, targets: value.targets };
@@ -132,7 +128,7 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
   return undefined;
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
-function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'parentDirTree' || value === 'fileType'; }
+function isGroupMode(value: unknown): value is GroupMode { return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType'; }
 function isSortMode(value: unknown): value is SortMode { return value === 'none' || value === 'mru' || value === 'modifiedAsc' || value === 'modifiedDesc' || value === 'nameAsc' || value === 'nameDesc'; }
 function isWebviewLogLevel(value: unknown): value is 'debug' | 'warn' | 'error' { return value === 'debug' || value === 'warn' || value === 'error'; }
 function isTabActivationFocus(value: unknown): value is TabActivationFocus { return value === 'editor' || value === 'rail'; }

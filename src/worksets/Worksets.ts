@@ -1,9 +1,8 @@
 import type * as vscode from 'vscode';
-import { normalizeManualGroups } from '../tabs/GroupTree';
 import type { GroupMode, ManualTabGroup, SortMode } from '../webview/messages';
 
 export const WORKSETS_STORAGE_KEY = 'verticalTabs.worksets.v1';
-export const WORKSET_SCHEMA_VERSION = 2;
+export const WORKSET_SCHEMA_VERSION = 1;
 export const MAX_WORKSETS = 500;
 export const MAX_WORKSET_TABS = 2000;
 export const MAX_COLLAPSED_GROUP_KEYS = 2000;
@@ -48,12 +47,6 @@ export interface StoredWorksetV1 {
   readonly collapsedGroupKeys: readonly string[];
   readonly activeTabId?: string;
 }
-
-export interface StoredWorksetV2 extends Omit<StoredWorksetV1, 'schemaVersion'> {
-  readonly schemaVersion: 2;
-}
-
-export type StoredWorkset = StoredWorksetV2;
 
 export type WorksetRestoreFailureCategory =
   | 'notFound'
@@ -134,28 +127,18 @@ export function worksetInputKey(input: WorksetTabInput): string {
   }
 }
 
-export function parseStoredWorksets(value: unknown): StoredWorkset[] {
+export function parseStoredWorksets(value: unknown): StoredWorksetV1[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, MAX_WORKSETS).flatMap((item) => {
-    if (!isStoredWorkset(item)) return [];
-    const manualGroups = item.schemaVersion === 1
-      ? item.manualGroups.map((group) => ({ id: group.id, name: group.name, collapsed: group.collapsed }))
-      : item.manualGroups;
-    return [{
-      ...item,
-      schemaVersion: WORKSET_SCHEMA_VERSION,
-      manualGroups: normalizeManualGroups(manualGroups),
-    }];
-  });
+  return value.slice(0, MAX_WORKSETS).filter(isStoredWorksetV1);
 }
 
-export function sortWorksets(worksets: readonly StoredWorkset[]): StoredWorkset[] {
+export function sortWorksets(worksets: readonly StoredWorksetV1[]): StoredWorksetV1[] {
   return [...worksets].sort((left, right) => right.updatedAt - left.updatedAt || left.name.localeCompare(right.name));
 }
 
 export async function writeStoredWorksets(
   state: vscode.Memento,
-  worksets: readonly StoredWorkset[],
+  worksets: readonly StoredWorksetV1[],
 ): Promise<void> {
   await state.update(WORKSETS_STORAGE_KEY, worksets.slice(0, MAX_WORKSETS));
 }
@@ -166,9 +149,9 @@ export function isCollapsedGroupKeys(value: unknown): value is readonly string[]
     && value.every((item) => typeof item === 'string' && item.length > 0 && item.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(item));
 }
 
-function isStoredWorkset(value: unknown): value is StoredWorksetV1 | StoredWorksetV2 {
+function isStoredWorksetV1(value: unknown): value is StoredWorksetV1 {
   if (!isRecord(value)
-    || (value.schemaVersion !== 1 && value.schemaVersion !== WORKSET_SCHEMA_VERSION)
+    || value.schemaVersion !== WORKSET_SCHEMA_VERSION
     || !isId(value.id)
     || !isWorksetName(value.name)
     || !isTimestamp(value.createdAt)
@@ -224,11 +207,7 @@ function isWorksetTabInput(value: unknown): value is WorksetTabInput {
 }
 
 function isManualGroup(value: unknown): value is ManualTabGroup {
-  return isRecord(value)
-    && isId(value.id)
-    && isShortString(value.name, MAX_WORKSET_NAME_LENGTH)
-    && typeof value.collapsed === 'boolean'
-    && (value.parentId === undefined || isId(value.parentId));
+  return isRecord(value) && isId(value.id) && isShortString(value.name, MAX_WORKSET_NAME_LENGTH) && typeof value.collapsed === 'boolean';
 }
 
 function isStringArrayEntries(value: unknown): value is readonly (readonly [string, readonly string[]])[] {
@@ -270,7 +249,7 @@ function isShortString(value: unknown, maxLength: number): value is string {
 }
 
 function isGroupMode(value: unknown): value is GroupMode {
-  return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'parentDirTree' || value === 'fileType';
+  return value === 'vscode' || value === 'manual' || value === 'parentDir' || value === 'fileType';
 }
 
 function isSortMode(value: unknown): value is SortMode {
