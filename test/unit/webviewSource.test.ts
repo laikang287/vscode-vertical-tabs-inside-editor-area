@@ -171,12 +171,16 @@ test('tab context menus append an optional VS Code action group with secure opaq
 
   assert.match(webviewSource, /if \(tab && snapshot\?\.nativeContextMenuActionsEnabled\)/);
   assert.match(webviewSource, /type: 'requestNativeTabMenu', requestId, target: tab\.target, targets/);
-  assert.match(webviewSource, /pending\.menu\.append\(createContextMenuSeparator\(\), \.\.\.nativeContextMenuElements/);
+  assert.match(webviewSource, /if \(!hasNativeMenuAction\(entries\)\) return;[\s\S]+pending\.menu\.append\([\s\S]+createNativeMenuSourceDivider\(i18n\.nativeMenuSourceWarning\),[\s\S]+\.\.\.nativeContextMenuElements/);
+  assert.match(webviewSource, /divider\.setAttribute\('role', 'separator'\)/);
+  assert.match(webviewSource, /divider\.setAttribute\('aria-label', label\)/);
   assert.match(webviewSource, /type: 'runNativeTabMenuAction', actionId: entry\.actionId, target, targets/);
   assert.match(webviewSource, /pending\.requestId !== requestId/);
   assert.match(webviewSource, /event\.key === 'ArrowRight'/);
   assert.match(webviewSource, /event\.key === 'ArrowLeft'/);
   assert.match(style, /\.tab-context-separator/);
+  assert.match(style, /\.tab-context-source-divider \{[\s\S]+color: var\(--vscode-descriptionForeground\);[\s\S]+display: flex;/);
+  assert.match(style, /\.tab-context-source-divider::before,[\s\S]+\.tab-context-source-divider::after \{[\s\S]+border-top:/);
   assert.match(panelSource, /nativeTabMenuProvider\.resolveAction\(actionId\)/);
   assert.match(panelSource, /action\.command === 'compareSelected'/);
   assert.match(panelSource, /'vscode\.diff',[\s\S]+originalInput\.uri,[\s\S]+modifiedInput\.uri/);

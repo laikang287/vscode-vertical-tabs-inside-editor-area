@@ -500,6 +500,30 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   margin: 3px 7px;
 }
 
+.tab-context-source-divider {
+  align-items: center;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  font-size: 0.85em;
+  gap: 6px;
+  margin: 4px 7px;
+  max-width: 320px;
+  text-align: center;
+}
+
+.tab-context-source-divider::before,
+.tab-context-source-divider::after {
+  border-top: 1px solid var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
+  content: "";
+  flex: 1 1 14px;
+  min-width: 14px;
+}
+
+.tab-context-source-divider span {
+  max-width: 260px;
+  white-space: normal;
+}
+
 .tab-context-submenu {
   position: relative;
 }

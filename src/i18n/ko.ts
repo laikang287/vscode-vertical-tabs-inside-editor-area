@@ -111,6 +111,7 @@ const ko: LocaleStrings = {
   nativeCopyRelativePath: '상대 경로 복사',
   nativeRevealInFileExplorer: '파일 탐색기에서 표시',
   nativeCompareSelected: '선택한 파일 비교',
+  nativeMenuSourceWarning: '아래 작업은 가로 탭 메뉴에서 가져왔으며 작동하지 않을 수 있습니다',
   nativeMoveTerminalIntoPanel: '터미널을 패널로 이동',
   nativeRenameTerminal: '터미널 이름 바꾸기',
   nativeChangeTerminalColor: '터미널 색 변경',
