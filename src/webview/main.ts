@@ -1,4 +1,5 @@
 import type { ExtensionMessage, GroupMode, ManualTabGroup, NativeContextMenuEntry, SortMode, TabTarget, TabTargetIdentity, VerticalTabDisplayGroup, VerticalTabItem } from './messages';
+import { DeferredTargetCommitter } from '../tabs/DeferredTargetCommitter';
 import { ActiveTabFollowTracker } from './ActiveTabFollowTracker';
 import { TabSelection } from './TabSelection';
 import { chooseContextSubmenuLayout, clampContextMenuCoordinate } from './contextMenuLayout';
@@ -130,8 +131,19 @@ let nativeMenuRequestSequence = 0;
 let pendingActivateTarget: TabTarget | undefined;
 let pendingActivateTimestamp = 0;
 let keyboardNavigationPreviewTarget: TabTarget | undefined;
+let pendingTreeFocusRequest = false;
 const selection = new TabSelection();
 const activeTabFollowTracker = new ActiveTabFollowTracker();
+const keyboardNavigationActivation = new DeferredTargetCommitter<TabTarget>(160, {
+  onPreview: (target) => previewKeyboardNavigation(target),
+  onClear: () => clearKeyboardNavigationPreview(),
+  onCommit: async (target) => {
+    const requestId = nextActivateRequestId();
+    markActiveTab(target);
+    vscode.postMessage({ type: 'activateTab', target, requestId, focus: 'rail' });
+  },
+  onError: (error) => logToExtension('error', '提交键盘标签导航失败', stringifyDetails(error)),
+});
 
 window.addEventListener('error', (event) => logToExtension('error', '脚本运行错误', `${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 window.addEventListener('unhandledrejection', (event) => logToExtension('error', '脚本 Promise 未处理异常', stringifyDetails(event.reason)));
@@ -151,6 +163,17 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
   }
   if (event.data.type === 'clearTabNavigationPreview') {
     clearKeyboardNavigationPreview();
+    return;
+  }
+  if (event.data.type === 'focusTabList') {
+    requestTreeFocus();
+    return;
+  }
+  if (event.data.type === 'blurTabList') {
+    cancelKeyboardNavigationActivation();
+    if (document.activeElement instanceof HTMLElement && document.activeElement.closest('.vertical-tabs')) {
+      document.activeElement.blur();
+    }
   }
 });
 verticalTabs?.addEventListener('contextmenu', (event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); });
@@ -218,13 +241,20 @@ searchInput?.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('click', () => dismissContextMenu());
+document.addEventListener('pointerdown', () => cancelKeyboardNavigationActivation(), { capture: true });
 document.addEventListener('dragend', () => { clearDropIndicator(); draggedGroupId = undefined; });
 document.addEventListener('drop', () => clearDropIndicator());
 document.addEventListener('dragleave', (event) => { if (event.relatedTarget === null) clearDropIndicator(); });
 document.addEventListener('dragover', (event) => {
   if (!(event.target instanceof Element) || !event.target.closest('.tab-group')) clearDropIndicator();
 });
-window.addEventListener('blur', () => dismissContextMenu());
+window.addEventListener('blur', () => {
+  dismissContextMenu();
+  cancelKeyboardNavigationActivation();
+  if (document.activeElement instanceof HTMLElement && document.activeElement.closest('.vertical-tabs')) {
+    document.activeElement.blur();
+  }
+});
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape') dismissContextMenu(true); });
 new ResizeObserver(([entry]) => { const width = Math.round(entry.contentRect.width); if (width >= 180) vscode.postMessage({ type: 'railWidth', width }); }).observe(document.documentElement);
 logToExtension('debug', 'Webview 脚本已启动');
@@ -256,6 +286,7 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   correctPendingActivation();
   revealFollowedTab(followedTarget);
   applyKeyboardNavigationPreview();
+  applyPendingTreeFocusRequest();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   postSelectionChanged();
   logToExtension('debug', '标签渲染完成并发送确认', `revision=${message.snapshot.revision}, tabs=${message.snapshot.tabs.length}, groups=${message.snapshot.displayGroups.length}`);
@@ -266,7 +297,12 @@ function handleTreeKeyDown(event: KeyboardEvent): void {
   if (!item || event.target !== item) return;
   if (event.key === 'Enter' && item.classList.contains('tab-main')) {
     event.preventDefault();
+    cancelKeyboardNavigationActivation();
     item.click();
+    return;
+  }
+  if (event.key === ' ' && item.classList.contains('tab-main')) {
+    cancelKeyboardNavigationActivation();
     return;
   }
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -281,6 +317,7 @@ function handleTreeKeyDown(event: KeyboardEvent): void {
   if (!nextItem) return;
   event.preventDefault();
   focusTreeItem(nextItem);
+  queueKeyboardNavigationActivation(nextItem);
 }
 
 function handleTreeHorizontalNavigation(event: KeyboardEvent, item: HTMLElement): void {
@@ -346,6 +383,50 @@ function setTreeTabStop(item: HTMLElement): void {
 function focusTreeItem(item: HTMLElement): void {
   setTreeTabStop(item);
   item.focus();
+}
+
+function queueKeyboardNavigationActivation(item: HTMLElement): void {
+  if (!item.classList.contains('tab-main') || item.getAttribute('aria-disabled') === 'true') {
+    cancelKeyboardNavigationActivation();
+    return;
+  }
+  const target = parseTargetDataset(item.closest<HTMLElement>('.tab-row')?.dataset.target);
+  if (!target) {
+    cancelKeyboardNavigationActivation();
+    return;
+  }
+  keyboardNavigationActivation.queue(target);
+}
+
+function cancelKeyboardNavigationActivation(): void {
+  if (keyboardNavigationActivation.hasPendingTarget) {
+    keyboardNavigationActivation.cancel();
+  }
+}
+
+function requestTreeFocus(): void {
+  pendingTreeFocusRequest = true;
+  applyPendingTreeFocusRequest();
+}
+
+function applyPendingTreeFocusRequest(): void {
+  if (!pendingTreeFocusRequest || !groups) return;
+  const target = groups.querySelector<HTMLElement>('.tab-row.is-focused .tab-main')
+    ?? groups.querySelector<HTMLElement>('.tab-row.is-active .tab-main')
+    ?? groups.querySelector<HTMLElement>('.tree-navigation-item[tabindex="0"]')
+    ?? groups.querySelector<HTMLElement>('.tab-main')
+    ?? groups.querySelector<HTMLElement>('.tree-navigation-item');
+  if (!target) {
+    if (latestSnapshot) {
+      groups.tabIndex = 0;
+      groups.focus({ preventScroll: true });
+      pendingTreeFocusRequest = false;
+    }
+    return;
+  }
+  focusTreeItem(target);
+  target.scrollIntoView({ block: 'nearest' });
+  pendingTreeFocusRequest = false;
 }
 
 function treeFocusKeyForGroup(group: VerticalTabDisplayGroup): string {
