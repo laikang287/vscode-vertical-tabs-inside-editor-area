@@ -71,10 +71,7 @@ let contextMenu: HTMLElement | undefined;
 let contextMenuInvoker: HTMLElement | undefined;
 let contextMenuBinding: ContextMenuBinding | undefined;
 let contextMenuPosition: { readonly x: number; readonly y: number } | undefined;
-let contextSubmenuHoverTimer: number | undefined;
-let pendingContextSubmenuHover: { readonly trigger: HTMLButtonElement; readonly submenu: HTMLElement } | undefined;
 const compactContextSubmenuStack: CompactContextSubmenuFrame[] = [];
-const COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS = 1000;
 let pendingNativeMenuRequest: { readonly requestId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[]; readonly menu: HTMLElement; readonly x: number; readonly y: number } | undefined;
 let latestSnapshot: Extract<ExtensionMessage, { type: 'renderTabs' }>['snapshot'] | undefined;
 let currentSearchQuery = '';
@@ -1613,9 +1610,7 @@ function repositionOpenContextMenu(requestedTopOverride?: number): void {
 
 function wireContextSubmenu(wrapper: HTMLElement, trigger: HTMLButtonElement, submenu: HTMLElement): void {
   trigger.addEventListener('click', () => openContextSubmenu(trigger, submenu, true));
-  wrapper.addEventListener('mouseenter', () => openContextSubmenu(trigger, submenu, false));
   wrapper.addEventListener('mouseleave', () => {
-    cancelPendingContextSubmenuHover(trigger, submenu);
     if (submenu.classList.contains('is-compact-panel')) return;
     if (!wrapper.contains(document.activeElement)) closeContextSubmenu(trigger);
   });
@@ -1628,7 +1623,6 @@ function wireContextSubmenu(wrapper: HTMLElement, trigger: HTMLButtonElement, su
 function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement, immediate: boolean): void {
   const wrapper = trigger.parentElement;
   if (!wrapper) return;
-  cancelPendingContextSubmenuHover();
   closeSiblingContextSubmenus(wrapper);
   const parentMenu = trigger.closest<HTMLElement>('.tab-context-submenu-list, .tab-context-menu');
   if (!parentMenu) return;
@@ -1638,19 +1632,7 @@ function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement, im
     ? 'compact'
     : chooseContextSubmenuLayout(parentMenu.getBoundingClientRect(), submenuWidth, window.innerWidth, compactEnabled);
   if (layout === 'compact') {
-    if (immediate) {
-      enterCompactContextSubmenu(trigger, submenu);
-    } else {
-      pendingContextSubmenuHover = { trigger, submenu };
-      contextSubmenuHoverTimer = window.setTimeout(() => {
-        contextSubmenuHoverTimer = undefined;
-        const pending = pendingContextSubmenuHover;
-        pendingContextSubmenuHover = undefined;
-        if (pending?.trigger === trigger && pending.submenu === submenu && trigger.matches(':hover')) {
-          enterCompactContextSubmenu(trigger, submenu);
-        }
-      }, COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS);
-    }
+    enterCompactContextSubmenu(trigger, submenu);
     return;
   }
   trigger.setAttribute('aria-expanded', 'true');
@@ -1661,7 +1643,6 @@ function openContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLElement, im
 }
 
 function closeContextSubmenu(trigger: HTMLButtonElement): void {
-  cancelPendingContextSubmenuHover(trigger);
   const compactFrameIndex = compactContextSubmenuStack.findIndex((frame) => frame.trigger === trigger);
   if (compactFrameIndex >= 0) {
     while (compactContextSubmenuStack.length > compactFrameIndex) leaveCompactContextSubmenu();
@@ -1704,7 +1685,6 @@ function enterCompactContextSubmenu(trigger: HTMLButtonElement, submenu: HTMLEle
   const menu = contextMenu;
   const originalParent = submenu.parentElement;
   if (!menu || !originalParent || !menu.contains(trigger)) return;
-  cancelPendingContextSubmenuHover();
   const anchorTop = trigger.getBoundingClientRect().top;
   const previousMenuTop = menu.getBoundingClientRect().top;
   const previousPanel = compactContextSubmenuStack.at(-1)?.submenu;
@@ -1761,14 +1741,6 @@ function focusFirstContextSubmenuAction(submenu: HTMLElement): void {
   const actions = enabledContextMenuItems(submenu);
   const firstActionIndex = actions.findIndex((action) => !action.classList.contains('tab-context-back'));
   focusContextMenuItem(submenu, firstActionIndex >= 0 ? firstActionIndex : 0);
-}
-
-function cancelPendingContextSubmenuHover(trigger?: HTMLButtonElement, submenu?: HTMLElement): void {
-  if (trigger && pendingContextSubmenuHover?.trigger !== trigger) return;
-  if (submenu && pendingContextSubmenuHover?.submenu !== submenu) return;
-  if (contextSubmenuHoverTimer !== undefined) window.clearTimeout(contextSubmenuHoverTimer);
-  contextSubmenuHoverTimer = undefined;
-  pendingContextSubmenuHover = undefined;
 }
 
 function openKeyboardContextMenu(
@@ -2104,7 +2076,6 @@ function parseTargetDataset(value: string | undefined): TabTarget | undefined {
 
 function dismissContextMenu(restoreFocus = false): void {
   const invoker = contextMenuInvoker;
-  cancelPendingContextSubmenuHover();
   contextMenu?.remove();
   contextMenu = undefined;
   contextMenuInvoker = undefined;

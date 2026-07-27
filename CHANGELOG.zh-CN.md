@@ -1,7 +1,9 @@
 # 更新日志
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
-
+## [1.0.2] - 2026-07-27
+### 问题修复
+-  右键菜单，去除悬停1秒弹出子菜单的逻辑，只能点击鼠标弹出
 ## [1.0.1] - 2026-07-27
 ### 功能更新
 -  <mark>键盘移动标签的功能功能完善</mark>

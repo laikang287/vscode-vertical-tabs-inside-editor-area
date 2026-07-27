@@ -188,12 +188,11 @@ test('tab context menus append an optional VS Code action group with secure opaq
   assert.match(manifest, /"verticalTabs\.showNativeContextMenuActions"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
   assert.match(manifest, /"verticalTabs\.compactContextSubmenus"[\s\S]+?"default": true[\s\S]+?"scope": "window"/);
   assert.match(panelSource, /compactContextSubmenusEnabled: readCompactContextSubmenusEnabled\(\)/);
-  assert.match(webviewSource, /COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS = 1000/);
   assert.match(webviewSource, /chooseContextSubmenuLayout/);
-  assert.match(webviewSource, /wrapper\.addEventListener\('mouseenter', \(\) => openContextSubmenu\(trigger, submenu, false\)\)/);
   assert.match(webviewSource, /trigger\.addEventListener\('click', \(\) => openContextSubmenu\(trigger, submenu, true\)\)/);
-  assert.match(webviewSource, /window\.setTimeout\([\s\S]+COMPACT_CONTEXT_SUBMENU_HOVER_DELAY_MS/);
-  assert.match(webviewSource, /window\.clearTimeout\(contextSubmenuHoverTimer\)/);
+  assert.doesNotMatch(webviewSource, /addEventListener\('mouseenter'[\s\S]+openContextSubmenu/);
+  assert.doesNotMatch(webviewSource, /CONTEXT_SUBMENU_HOVER_DELAY/);
+  assert.doesNotMatch(webviewSource, /pendingContextSubmenuHover|contextSubmenuHoverTimer/);
   assert.match(webviewSource, /enterCompactContextSubmenu/);
   assert.match(webviewSource, /leaveCompactContextSubmenu/);
   assert.match(webviewSource, /button\(`‹ \$\{i18n\.back\}`/);

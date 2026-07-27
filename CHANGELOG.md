@@ -1,9 +1,17 @@
 # Changelog
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+
+## [1.0.2] - 2026-07-27
+
+### Bug Fixes
+
+- Removed the logic that automatically opens submenus in the context menu after hovering for 1 second. Submenus can now only be opened by clicking the mouse.
+
 ## [1.0.1] - 2026-07-27
 
 ### Feature Updates
+
 - <mark>Improved keyboard navigation for tabs</mark>
 	- Added `verticalTabs.focus` (default shortcut: `Ctrl+Shift+V`) to activate focus on the vertical tab bar
 	- When the focus is on the vertical tab bar, use the Up/Down arrow keys, `Home`, and `End` to navigate between tabs
@@ -12,10 +20,13 @@
 	- Note: The default shortcut `Ctrl+Shift+V` may conflict with shortcuts from other applications, such as YoudaoDict
 
 - Moved the status bar icon from the right side to the left side. Clicking this icon can show or hide the vertical tab bar
+
 - Added the "Move Group" option to the right-click context menu
 
 ### Bug Fixes
+
 - Fixed some known issues (mostly minor issues, not listed individually)
+
 ## [1.0.0] - 2026-07-23
 
 <mark>This is a major update. Due to the large number of changes, consider reverting to version 0.2.1 if you encounter bugs.</mark>
@@ -29,9 +40,9 @@
 - Enhanced search.
 - Added the `verticalTabs.relativePathDisplay` setting, which controls when a tab displays a path—for example, showing the parent directory only for files with duplicate names.
 - Added multiple configurable shortcuts for switching and moving tabs.
-    - See the keyboard shortcut descriptions for details.
-    - No shortcuts are bound by default; bind them as needed.
-    - `verticalTabs.previousAcrossGroups` and `verticalTabs.nextAcrossGroups` switch to the previous and next tab across groups. <mark>These commands are used very frequently. Consider binding them to `Ctrl+Tab` and `Ctrl+Shift+Tab`, overriding VS Code's default shortcuts.</mark>
+	- See the keyboard shortcut descriptions for details.
+	- No shortcuts are bound by default; bind them as needed.
+	- `verticalTabs.previousAcrossGroups` and `verticalTabs.nextAcrossGroups` switch to the previous and next tab across groups. <mark>These commands are used very frequently. Consider binding them to `Ctrl+Tab` and `Ctrl+Shift+Tab`, overriding VS Code's default shortcuts.</mark>
 - Added multiple settings; see the setting descriptions for details.
 
 ### Native VS Code Context Menu Integration
@@ -67,23 +78,23 @@ Paths appear below tab names. Files in the workspace root and files outside the 
 - Newly opened and activated tabs become the most recently used items; tabs that have not been activated retain a stable order.
 - Added the Always Follow Active Tab setting. After switching editors, the corresponding group expands automatically and the active tab scrolls into view.
 - Added eight configurable commands:
-    - Switch to the previous or next tab within a group.
-    - Switch to the previous or next tab across groups.
-    - Move tabs up or down within the current group.
-    - Move tabs to the previous or next group.
+	- Switch to the previous or next tab within a group.
+	- Switch to the previous or next tab across groups.
+	- Move tabs up or down within the current group.
+	- Move tabs to the previous or next group.
 - Movement commands support multi-selection and preserve the relative order of selected tabs.
 - Manual sorting supports movement within a group. Directory grouping supports moving files across groups, while file-type grouping blocks cross-group moves that would violate the grouping rule.
 
 ### Worksets and Session Restoration
 
 - Added workspace-scoped worksets that can save:
-    - Currently open tabs.
-    - Native editor groups and tab order.
-    - The active tab.
-    - Manual groups and manual sorting.
-    - Pinned states for tabs and tab groups.
-    - Collapsed states for groups.
-    - The current grouping and sorting modes.
+	- Currently open tabs.
+	- Native editor groups and tab order.
+	- The active tab.
+	- Manual groups and manual sorting.
+	- Pinned states for tabs and tab groups.
+	- Collapsed states for groups.
+	- The current grouping and sorting modes.
 - Worksets can be created, loaded, overwritten, renamed, and deleted from the Command Palette or the vertical tab bar.
 - Before loading, the extension lists tabs that may be closed and any unsaved tabs. Unsaved and pinned tabs are protected by default.
 - If an original path is missing, the extension automatically associates it only when the workspace contains exactly one file with the same name, preventing incorrect restoration.
@@ -108,7 +119,7 @@ Paths appear below tab names. Files in the workspace root and files outside the 
 ### Keyboard and Accessibility
 
 - When focus is on an empty area of the vertical tabs, the arrow keys, `Home`, `End`, and `Enter` can be used to navigate to and activate tabs.
-    - This has limited practical usefulness: after using the keyboard to move to or activate a tab, focus moves inside the tab, so subsequent navigation within the vertical tabs is unavailable.
+	- This has limited practical usefulness: after using the keyboard to move to or activate a tab, focus moves inside the tab, so subsequent navigation within the vertical tabs is unavailable.
 - Tab and group menus support the Menu key, `Shift+F10`, the arrow keys, `Enter`, Space, and `Esc`.
 
 ## [0.2.1] - 2026-07-23
