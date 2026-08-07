@@ -483,7 +483,7 @@ test('editor-area position setting supports live left and right placement with a
   assert.match(panelSource, /this\.railPosition === 'left'[\s\S]+newGroupRight[\s\S]+newGroupLeft/);
 });
 
-test('adjacent navigation reuses an open panel without stealing the active editor focus', () => {
+test('adjacent focus navigation opens or reuses the vertical-tabs panel', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(
@@ -492,37 +492,23 @@ test('adjacent navigation reuses an open panel without stealing the active edito
   );
 });
 
-test('shortcut navigation previews immediately and commits only the latest target after an idle delay', () => {
+test('shortcut navigation moves vertical-tab focus without activating an editor', () => {
   const panelSource = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
   const webviewSource = readFileSync(path.resolve(__dirname, '../../../src/webview/main.ts'), 'utf8');
   const messagesSource = readFileSync(path.resolve(__dirname, '../../../src/webview/messages.ts'), 'utf8');
   const style = readFileSync(path.resolve(__dirname, '../../../media/vertical-tabs.css'), 'utf8');
   const navigateMethod = panelSource.match(/private async navigate\([\s\S]+?\n  \}\n\n  private async ensureShortcutNavigationSnapshot/)?.[0] ?? '';
 
-  assert.match(panelSource, /const SHORTCUT_NAVIGATION_COMMIT_DELAY_MS = 160/);
-  assert.match(navigateMethod, /this\.shortcutNavigationOrigin \?\?= anchor/);
-  assert.match(navigateMethod, /this\.shortcutNavigation\.queue\(target\)/);
-  assert.doesNotMatch(navigateMethod, /this\.refresh\(/);
-  assert.match(panelSource, /private async commitShortcutNavigation\(target: TabTarget\)/);
-  assert.match(panelSource, /await this\.activateTab\(tab\);\s*await this\.refresh\(\{ reason: 'navigate' \}\)/);
-  assert.match(
-    panelSource,
-    /this\.shortcutNavigationActivationDepth === 0 && !this\.shortcutNavigationOriginRemainsActive\(\)/,
-  );
-  const guardedCancellationCount = panelSource.match(
-    /this\.shortcutNavigationActivationDepth === 0 && !this\.shortcutNavigationOriginRemainsActive\(\)/g,
-  )?.length ?? 0;
-  assert.equal(guardedCancellationCount, 3);
-  assert.match(
-    panelSource,
-    /private shortcutNavigationOriginRemainsActive\(\): boolean \{[\s\S]+tab\.group\.activeTab === tab/,
-  );
-  assert.match(messagesSource, /type: 'previewTabNavigation'/);
-  assert.match(messagesSource, /type: 'clearTabNavigationPreview'/);
-  assert.match(webviewSource, /previewKeyboardNavigation\(event\.data\.target\)/);
-  assert.match(webviewSource, /row\.classList\.add\('is-keyboard-preview'\)/);
-  assert.match(webviewSource, /row\.scrollIntoView\(\{ block: 'nearest' \}\)/);
-  assert.match(style, /\.tab-row\.is-keyboard-preview/);
+  assert.match(navigateMethod, /const anchor = this\.tabListFocusAnchor \?\? this\.commandAnchorTarget\(\)/);
+  assert.match(navigateMethod, /const adjacentTarget = adjacentDisplayedTabTarget\(this\.currentSnapshot, anchor, direction, scope\)/);
+  assert.match(navigateMethod, /const focusTarget = adjacentTarget \?\? anchor/);
+  assert.match(navigateMethod, /await this\.reveal\(false\);[\s\S]+?await this\.waitForPanelActivation\(\)[\s\S]+?await this\.requestTabListFocus\('outside', preferredTab\)/);
+  assert.doesNotMatch(navigateMethod, /activateTab|DeferredTargetCommitter|setTimeout/);
+  assert.match(panelSource, /if \(message\.type === 'tabListFocusChanged'\) \{\s*this\.tabListFocusAnchor = message\.target/);
+  assert.match(messagesSource, /type: 'tabListFocusChanged'; readonly target\?: TabTarget/);
+  assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'tabListFocusChanged', \.\.\.\(target \? \{ target \} : \{\}\) \}\)/);
+  assert.match(webviewSource, /\(event\.key === 'Enter' \|\| event\.key === ' '\)[\s\S]+?item\.click\(\)/);
+  assert.doesNotMatch(style, /\.tab-row\.is-keyboard-preview/);
 });
 
 test('webview exposes grouping, sorting, bulk close, pinning, and drag messages', () => {
@@ -1040,10 +1026,17 @@ test('focus shortcut targets an exact tab and uses an acknowledged race-safe foc
   assert.match(panelSource, /const preferredTab = existing\?\.selectTabListFocusTab\(source\)[\s\S]+?\?\? currentActiveUserTab\(\)/);
   assert.match(panelSource, /prepareTabListFocusRequest\(source, preferredTab\)/);
   assert.match(panelSource, /requestTabListFocus\([\s\S]+?preparedRequest/);
+  assert.doesNotMatch(
+    panelSource,
+    /const instance = await VerticalTabsPanel\.open\(context\);\s*await instance\?\.reveal\(false\);\s*if \(instance\)/,
+    'The focus command must rely on open() for the native reveal so a duplicate delayed reveal cannot steal focus back.',
+  );
+  assert.match(panelSource, /if \(!await instance\.waitForPanelActivation\(\)\)/);
+  assert.match(panelSource, /private async waitForPanelActivation\(\): Promise<boolean>/);
   assert.match(panelSource, /TAB_LIST_FOCUS_ACK_TIMEOUT_MS/);
   assert.match(panelSource, /TAB_LIST_FOCUS_MAX_ATTEMPTS/);
   assert.match(panelSource, /message\.type === 'tabListFocusResult'/);
-  assert.match(panelSource, /if \(this\.panel\.active\) return;\s*this\.clearPendingTabListFocus\(\);\s*this\.sendTabListBlur\(\);/);
+  assert.match(panelSource, /if \(this\.panel\.active\) return;\s*this\.tabListFocusAnchor = undefined;\s*this\.clearPendingTabListFocus\(\);\s*this\.sendTabListBlur\(\);/);
   assert.match(panelSource, /await request\.completion/);
   assert.match(panelSource, /type: 'blurTabList', sequence/);
   assert.match(source, /event\.data\.type === 'blurTabList'/);
@@ -1058,6 +1051,7 @@ test('focus shortcut targets an exact tab and uses an acknowledged race-safe foc
   assert.match(messagesSource, /\{ readonly type: 'focusTabList'; readonly requestId: string; readonly sequence: number; readonly target\?: TabTarget \}/);
   assert.match(messagesSource, /\{ readonly type: 'blurTabList'; readonly sequence: number \}/);
   assert.match(messagesSource, /\{ readonly type: 'tabListFocusResult'; readonly requestId: string; readonly sequence: number; readonly focused: boolean; readonly target\?: TabTarget \}/);
+  assert.match(messagesSource, /\{ readonly type: 'tabListFocusChanged'; readonly target\?: TabTarget \}/);
 });
 
 test('show and toggle commands do not reuse the explicit focus command', () => {

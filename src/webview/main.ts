@@ -142,7 +142,6 @@ let dragRequestSequence = 0;
 let nativeMenuRequestSequence = 0;
 let pendingActivateTarget: TabTarget | undefined;
 let pendingActivateTimestamp = 0;
-let keyboardNavigationPreviewTarget: TabTarget | undefined;
 let latestTreeFocusSequence = 0;
 let pendingTreeFocusRequest: Extract<ExtensionMessage, { type: 'focusTabList' }> | undefined;
 const selection = new TabSelection();
@@ -168,14 +167,6 @@ window.addEventListener('message', (event: MessageEvent<ExtensionMessage>) => {
     renderNativeContextMenu(event.data.requestId, event.data.entries);
     return;
   }
-  if (event.data.type === 'previewTabNavigation') {
-    previewKeyboardNavigation(event.data.target);
-    return;
-  }
-  if (event.data.type === 'clearTabNavigationPreview') {
-    clearKeyboardNavigationPreview();
-    return;
-  }
   if (event.data.type === 'focusTabList') {
     requestTreeFocus(event.data);
     return;
@@ -194,7 +185,10 @@ groups?.addEventListener('keydown', handleTreeKeyDown);
 groups?.addEventListener('scroll', clearScrollAnchorCompensationWhenSafe, { passive: true });
 groups?.addEventListener('focusin', (event) => {
   const item = treeItemFromEventTarget(event.target);
-  if (item) setTreeTabStop(item);
+  if (!item) return;
+  setTreeTabStop(item);
+  const target = parseTargetDataset(item.closest<HTMLElement>('.tab-row')?.dataset.target);
+  vscode.postMessage({ type: 'tabListFocusChanged', ...(target ? { target } : {}) });
 });
 toggleToolbarControlsButton?.addEventListener('click', () => {
   const visible = toolbarControls?.hidden ?? false;
@@ -300,7 +294,6 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   reconcileOpenContextMenu();
   correctPendingActivation();
   revealFollowedTab(followedTarget);
-  applyKeyboardNavigationPreview();
   applyPendingTreeFocusRequest();
   vscode.postMessage({ type: 'renderAck', revision: message.snapshot.revision });
   postSelectionChanged();
@@ -1985,29 +1978,6 @@ function markActiveTab(target: TabTarget): void {
     if (candidateTarget?.groupIndex === target.groupIndex) row.classList.remove('is-active');
   }
   findTabRow(target)?.classList.add('is-active', 'is-focused');
-}
-
-function previewKeyboardNavigation(target: TabTarget): void {
-  keyboardNavigationPreviewTarget = target;
-  applyKeyboardNavigationPreview();
-}
-
-function clearKeyboardNavigationPreview(): void {
-  keyboardNavigationPreviewTarget = undefined;
-  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
-    row.classList.remove('is-keyboard-preview');
-  }
-}
-
-function applyKeyboardNavigationPreview(): void {
-  for (const row of Array.from(document.querySelectorAll<HTMLElement>('.tab-row.is-keyboard-preview'))) {
-    row.classList.remove('is-keyboard-preview');
-  }
-  if (!keyboardNavigationPreviewTarget) return;
-  const row = findTabRow(keyboardNavigationPreviewTarget);
-  if (!row) return;
-  row.classList.add('is-keyboard-preview');
-  row.scrollIntoView({ block: 'nearest' });
 }
 
 function correctPendingActivation(): void {

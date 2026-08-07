@@ -35,6 +35,8 @@ test('accepts tab-list focus results with strict request correlation', () => {
     parseWebviewMessage({ type: 'tabListFocusResult', requestId: 'focus-2', sequence: 4, focused: false }),
     { type: 'tabListFocusResult', requestId: 'focus-2', sequence: 4, focused: false },
   );
+  assert.deepEqual(parseWebviewMessage({ type: 'tabListFocusChanged', target }), { type: 'tabListFocusChanged', target });
+  assert.deepEqual(parseWebviewMessage({ type: 'tabListFocusChanged' }), { type: 'tabListFocusChanged' });
 });
 
 test('accepts bounded webview log messages', () => {
@@ -102,6 +104,7 @@ test('rejects malformed and unknown messages', () => {
     { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 1.5, focused: true },
     { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 1, focused: 'yes' },
     { type: 'tabListFocusResult', requestId: 'focus-1', sequence: 1, focused: true, target: {} },
+    { type: 'tabListFocusChanged', target: {} },
     { type: 'activateTab' },
     { type: 'activateTab', target, requestId: '' },
     { type: 'activateTab', target, requestId: 42 },

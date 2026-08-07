@@ -334,11 +334,6 @@ button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-off
   right: 0;
   top: 0;
 }
-.tab-row.is-keyboard-preview {
-  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
-  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
-  color: var(--vscode-list-inactiveSelectionForeground, inherit);
-}
 .tab-row.is-unavailable { opacity: .65; }
 
 .tab-main {
@@ -440,8 +435,6 @@ body.vscode-high-contrast-light .group-header {
 
 body.vscode-high-contrast .tab-row.is-focused,
 body.vscode-high-contrast-light .tab-row.is-focused,
-body.vscode-high-contrast .tab-row.is-keyboard-preview,
-body.vscode-high-contrast-light .tab-row.is-keyboard-preview,
 body.vscode-high-contrast .group-header:focus-visible,
 body.vscode-high-contrast-light .group-header:focus-visible {
   border-color: var(--vscode-contrastActiveBorder, var(--vscode-focusBorder));

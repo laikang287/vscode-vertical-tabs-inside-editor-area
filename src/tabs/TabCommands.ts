@@ -79,7 +79,8 @@ export function displayGroupForTarget(
 /**
  * Finds the previous/next activatable tab using the order rendered by the
  * vertical tab bar. Unsupported tabs remain in the ordering but are skipped as
- * navigation destinations.
+ * focus destinations. Navigation stops at the list boundary, matching the
+ * vertical tab tree's ArrowUp and ArrowDown behavior.
  */
 export function adjacentDisplayedTabTarget(
   snapshot: VerticalTabsSnapshot,
@@ -95,14 +96,15 @@ export function adjacentDisplayedTabTarget(
 
   const resolvedAnchor = anchor ? resolveDisplayedTab(snapshot, anchor) : undefined;
   const anchorIndex = resolvedAnchor ? candidates.indexOf(resolvedAnchor) : -1;
-  for (let step = 1; step <= candidates.length; step += 1) {
-    const index = anchorIndex < 0
-      ? (direction < 0 ? candidates.length - step : step - 1)
-      : (anchorIndex + (step * direction) + (candidates.length * step)) % candidates.length;
+  let index = anchorIndex < 0
+    ? (direction < 0 ? candidates.length : -1)
+    : anchorIndex;
+  while (true) {
+    index += direction;
+    if (index < 0 || index >= candidates.length) return undefined;
     const candidate = candidates[index];
     if (candidate?.isActivatable) return candidate.target;
   }
-  return undefined;
 }
 
 /**

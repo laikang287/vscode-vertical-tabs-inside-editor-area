@@ -512,7 +512,7 @@ suite('Vertical Tabs extension', () => {
     assert.ok(configurableCommands.every((command) => !manifest.contributes.keybindings.some((entry) => entry.command === command)), 'Tab switching and moving commands must not have default keybindings.');
   });
 
-  test('switches and moves tabs within and across editor groups', async function () {
+  test('moves shortcut focus without activating tabs and still moves tabs on move commands', async function () {
     this.timeout(20_000);
     await vscode.commands.executeCommand('verticalTabs.open');
     await waitFor(() => verticalTabs().length === 1);
@@ -536,21 +536,20 @@ suite('Vertical Tabs extension', () => {
 
     await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
     await vscode.commands.executeCommand('verticalTabs.nextInGroup');
-    await waitFor(() => activeTextDocumentUri() === documents[2].uri.toString());
+    await waitFor(() => verticalTabs()[0]?.group.isActive === true);
+    assert.equal(activeTextDocumentUriInGroup(sourceGroup), documents[1].uri.toString());
     await vscode.commands.executeCommand('verticalTabs.previousInGroup');
-    await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
+    assert.equal(activeTextDocumentUriInGroup(sourceGroup), documents[1].uri.toString());
 
     await Promise.all([
       vscode.commands.executeCommand('verticalTabs.nextInGroup'),
       vscode.commands.executeCommand('verticalTabs.nextInGroup'),
     ]);
-    await new Promise<void>((resolve) => setTimeout(resolve, 80));
     assert.equal(
-      activeTextDocumentUri(),
+      activeTextDocumentUriInGroup(sourceGroup),
       documents[1].uri.toString(),
-      'A rapid shortcut burst should preview targets without activating an intermediate editor.',
+      'A rapid shortcut burst must only move focus and never activate an editor.',
     );
-    await waitFor(() => activeTextDocumentUri() === documents[0].uri.toString());
     await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
     await waitFor(() => activeTextDocumentUri() === documents[1].uri.toString());
 
@@ -569,9 +568,12 @@ suite('Vertical Tabs extension', () => {
 
     await vscode.window.showTextDocument(documents[2], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
     await vscode.commands.executeCommand('verticalTabs.nextAcrossGroups');
-    await waitFor(() => activeTextDocumentUri() === destinationDocument.uri.toString());
+    await waitFor(() => verticalTabs()[0]?.group.isActive === true);
+    assert.equal(activeTextDocumentUriInGroup(sourceGroup), documents[2].uri.toString());
+    assert.equal(activeTextDocumentUriInGroup(destinationGroup), destinationDocument.uri.toString());
     await vscode.commands.executeCommand('verticalTabs.previousAcrossGroups');
-    await waitFor(() => activeTextDocumentUri() === documents[2].uri.toString());
+    assert.equal(activeTextDocumentUriInGroup(sourceGroup), documents[2].uri.toString());
+    assert.equal(activeTextDocumentUriInGroup(destinationGroup), destinationDocument.uri.toString());
 
     await vscode.window.showTextDocument(documents[1], { viewColumn: sourceGroup.viewColumn, preserveFocus: false });
     await vscode.commands.executeCommand('verticalTabs.moveToNextGroup');
@@ -582,7 +584,7 @@ suite('Vertical Tabs extension', () => {
     assert.equal(textTabUris(sourceGroup).at(-1), documents[1].uri.toString());
   });
 
-  test('switches tabs by vertical sorted order rather than native horizontal order', async function () {
+  test('keeps the active editor unchanged while shortcut focus follows vertical sorted order', async function () {
     this.timeout(20_000);
     const configuration = vscode.workspace.getConfiguration('verticalTabs');
     const originalRememberState = configuration.inspect<boolean>('rememberState')?.globalValue;
@@ -615,9 +617,12 @@ suite('Vertical Tabs extension', () => {
 
       // Native order is c, b, a while the vertical name order is a, b, c.
       await vscode.commands.executeCommand('verticalTabs.nextInGroup');
-      await waitFor(() => activeTextDocumentUri() === uris[0]!.toString());
+      await waitFor(() => verticalTabs()[0]?.group.isActive === true);
+      const sourceGroup = destinationDocumentTab(documents[1])?.group;
+      assert.ok(sourceGroup);
+      assert.equal(activeTextDocumentUriInGroup(sourceGroup), uris[1]!.toString());
       await vscode.commands.executeCommand('verticalTabs.previousInGroup');
-      await waitFor(() => activeTextDocumentUri() === uris[1]!.toString());
+      assert.equal(activeTextDocumentUriInGroup(sourceGroup), uris[1]!.toString());
     } finally {
       const temporaryTabs = nonVerticalTabs()
         .filter(({ tab }) => {
@@ -638,7 +643,7 @@ suite('Vertical Tabs extension', () => {
     }
   });
 
-  test('activates existing built-in webview tabs without duplicating them', async function () {
+  test('focuses existing built-in webview tabs without activating or duplicating them', async function () {
     this.timeout(15_000);
     await vscode.commands.executeCommand('verticalTabs.close');
     await waitFor(() => verticalTabs().length === 0);
@@ -896,8 +901,12 @@ async function verifyBuiltInWebviewNavigation(kind: 'settings' | 'welcome'): Pro
   await waitFor(() => activeTextDocumentUri() === document.uri.toString());
 
   await vscode.commands.executeCommand('verticalTabs.next');
-  await waitFor(() => matchingBuiltInWebviewTabs(kind).some(({ tab, group }) => group.isActive && group.activeTab === tab));
-  assert.equal(matchingBuiltInWebviewTabs(kind).length, before, `${kind} navigation should not create a duplicate tab.`);
+  await waitFor(() => verticalTabs()[0]?.group.isActive === true);
+  assert.equal(matchingBuiltInWebviewTabs(kind).length, before, `${kind} focus navigation should not create a duplicate tab.`);
+  assert.ok(
+    matchingBuiltInWebviewTabs(kind).every(({ group }) => !group.isActive),
+    `${kind} focus navigation must not activate the built-in tab.`,
+  );
   await closeNonVerticalTabs();
 }
 
@@ -933,6 +942,11 @@ function matchingSettingsUiTabs(): Array<{ tab: vscode.Tab; group: vscode.TabGro
 
 function activeTextDocumentUri(): string | undefined {
   const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+  return active?.input instanceof vscode.TabInputText ? active.input.uri.toString() : undefined;
+}
+
+function activeTextDocumentUriInGroup(group: vscode.TabGroup): string | undefined {
+  const active = group.activeTab;
   return active?.input instanceof vscode.TabInputText ? active.input.uri.toString() : undefined;
 }
 

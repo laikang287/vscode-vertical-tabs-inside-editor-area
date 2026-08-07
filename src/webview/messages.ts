@@ -61,13 +61,12 @@ export type WebviewMessage =
   | { readonly type: 'requestNativeTabMenu'; readonly requestId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
   | { readonly type: 'runNativeTabMenuAction'; readonly actionId: string; readonly target: TabTarget; readonly targets: readonly TabTarget[] }
   | { readonly type: 'tabListFocusResult'; readonly requestId: string; readonly sequence: number; readonly focused: boolean; readonly target?: TabTarget }
+  | { readonly type: 'tabListFocusChanged'; readonly target?: TabTarget }
   | { readonly type: 'activateTab'; readonly target: TabTarget; readonly requestId?: string }
   | { readonly type: 'closeTab' | 'closeOthers' | 'closeBelow'; readonly target: TabTarget };
 export type ExtensionMessage =
   | { readonly type: 'renderTabs'; readonly title: string; readonly snapshot: VerticalTabsSnapshot }
   | { readonly type: 'nativeTabMenu'; readonly requestId: string; readonly entries: readonly NativeContextMenuEntry[] }
-  | { readonly type: 'previewTabNavigation'; readonly target: TabTarget }
-  | { readonly type: 'clearTabNavigationPreview' }
   | { readonly type: 'focusTabList'; readonly requestId: string; readonly sequence: number; readonly target?: TabTarget }
   | { readonly type: 'blurTabList'; readonly sequence: number };
 const MAX_BATCH_TAB_TARGETS = 2000;
@@ -125,6 +124,9 @@ export function parseWebviewMessage(value: unknown): WebviewMessage | undefined 
       focused: value.focused,
       ...(value.target === undefined ? {} : { target: value.target }),
     };
+  }
+  if (value.type === 'tabListFocusChanged' && (value.target === undefined || isTabTarget(value.target))) {
+    return { type: 'tabListFocusChanged', ...(value.target === undefined ? {} : { target: value.target }) };
   }
   if (value.type === 'activateTab'
     && value.focus === undefined

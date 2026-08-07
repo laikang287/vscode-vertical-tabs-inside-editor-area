@@ -37,7 +37,7 @@ test('does not move a selected block beyond a group boundary', () => {
   assert.deepEqual(moveItemsOneStep(order, ['c', 'd'], 1), order);
 });
 
-test('navigates by vertical display groups and order instead of native snapshot order', () => {
+test('moves focus by vertical display order without wrapping at a boundary', () => {
   const a = displayedTab('a', 0, 0);
   const b = displayedTab('b', 0, 1);
   const c = displayedTab('c', 1, 0);
@@ -50,9 +50,11 @@ test('navigates by vertical display groups and order instead of native snapshot 
     ],
   );
 
-  assert.deepEqual(adjacentDisplayedTabTarget(snapshot, a.target, 1, 'group'), b.target);
+  assert.deepEqual(adjacentDisplayedTabTarget(snapshot, b.target, 1, 'group'), a.target);
+  assert.equal(adjacentDisplayedTabTarget(snapshot, a.target, 1, 'group'), undefined);
   assert.deepEqual(adjacentDisplayedTabTarget(snapshot, a.target, 1, 'all'), c.target);
-  assert.deepEqual(adjacentDisplayedTabTarget(snapshot, b.target, -1, 'all'), c.target);
+  assert.equal(adjacentDisplayedTabTarget(snapshot, b.target, -1, 'all'), undefined);
+  assert.equal(adjacentDisplayedTabTarget(snapshot, c.target, 1, 'all'), undefined);
   assert.deepEqual(adjacentDisplayedTabTarget(snapshot, unsupported.target, -1, 'all'), a.target);
 });
 
