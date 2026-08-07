@@ -939,14 +939,15 @@ test('extension inlines styles and restricts icon fonts to local Webview resourc
   assert.match(source, /this\.panel\.webview\.options = createWebviewOptions\(context\)/);
 });
 
-test('extension marks built-in welcome and settings webviews as activatable', () => {
+test('extension marks built-in welcome and settings editors as activatable', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
-  assert.match(source, /function getActivatableBuiltInWebviewTarget\(tab: vscode\.Tab\): 'welcome' \| 'settings' \| undefined/);
+  assert.match(source, /function getActivatableBuiltInEditorTarget\(tab: vscode\.Tab\): 'welcome' \| 'settings' \| undefined/);
+  assert.match(source, /kind !== 'webview' && kind !== 'unknown'/);
   assert.match(source, /viewType\.includes\('gettingstarted'\)/);
   assert.match(source, /label\.includes\('入门'\)/);
   assert.match(source, /viewType\.includes\('settings'\)/);
-  assert.match(source, /workbench\.action\.openSettings/);
+  assert.match(source, /workbench\.action\.openSettings2/);
 });
 
 test('webview enables best-effort activation with a distinct tooltip', () => {
@@ -1163,11 +1164,13 @@ test('webview keeps the grabbed point aligned with the pointer while dragging', 
   assert.doesNotMatch(source, /setDragImage\(row, 8, 8\)/);
 });
 
-test('extension selects existing tabs without cycling through intermediate tabs', () => {
+test('extension selects existing tabs at any index without cycling through intermediate tabs', () => {
   const source = readFileSync(path.resolve(__dirname, '../../../src/webview/VerticalTabsPanel.ts'), 'utf8');
 
   assert.match(source, /private async selectExistingTab\(tab: vscode\.Tab, requestId\?: string\): Promise<boolean>/);
-  assert.match(source, /workbench\.action\.openEditorAtIndex\$\{target\.tabIndex \+ 1\}/);
+  assert.match(source, /const command = 'workbench\.action\.openEditorAtIndex'/);
+  assert.match(source, /executeCommand\(command, target\.tabIndex\)/);
+  assert.doesNotMatch(source, /target\.tabIndex < 9/);
   assert.doesNotMatch(source, /workbench\.action\.nextEditorInGroup/);
   assert.doesNotMatch(source, /step < target\.group\.tabs\.length/);
   assert.match(source, /避免循环切换中间标签/);

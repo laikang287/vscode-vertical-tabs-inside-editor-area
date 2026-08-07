@@ -3915,19 +3915,19 @@ export class VerticalTabsPanel {
       this.logActivationOutcome(tab, 'vscode.openWith:notebook', requestId);
       return;
     }
-    const builtInWebviewTarget = getActivatableBuiltInWebviewTarget(tab);
-    if (builtInWebviewTarget === 'welcome') {
-      logDebug('使用欢迎页命令激活内置 Webview 标签', { requestId, target: describeTab(tab) });
+    const builtInEditorTarget = getActivatableBuiltInEditorTarget(tab);
+    if (builtInEditorTarget === 'welcome') {
+      logDebug('使用欢迎页命令激活内置编辑器标签', { requestId, target: describeTab(tab) });
       await focusEditorGroup(tab.group.viewColumn);
       await openWelcomeEditor();
       this.logActivationOutcome(tab, 'openWelcomeEditor', requestId);
       return;
     }
-    if (builtInWebviewTarget === 'settings') {
-      logDebug('使用设置页命令激活内置 Webview 标签', { requestId, target: describeTab(tab) });
+    if (builtInEditorTarget === 'settings') {
+      logDebug('使用设置页命令激活内置编辑器标签', { requestId, target: describeTab(tab) });
       await focusEditorGroup(tab.group.viewColumn);
-      await vscode.commands.executeCommand('workbench.action.openSettings');
-      this.logActivationOutcome(tab, 'workbench.action.openSettings', requestId);
+      await vscode.commands.executeCommand('workbench.action.openSettings2');
+      this.logActivationOutcome(tab, 'workbench.action.openSettings2', requestId);
       return;
     }
     logWarn('标签类型不支持通过公开 API 激活', { requestId, target: describeTab(tab) });
@@ -3954,19 +3954,17 @@ export class VerticalTabsPanel {
       return true;
     }
 
-    if (target.tabIndex >= 0 && target.tabIndex < 9) {
-      const command = `workbench.action.openEditorAtIndex${target.tabIndex + 1}`;
-      try {
-        logDebug('尝试通过索引命令选择已有标签', { requestId, target: describeTab(tab), command });
-        await vscode.commands.executeCommand(command);
-        if (activeTabMatches(target, tab)) {
-          logDebug('通过索引命令选择已有标签', { requestId, target: describeTab(tab), command });
-          return true;
-        }
-        logDebug('索引命令执行后目标标签仍未激活', { requestId, target: describeTab(tab), command, active: describeActiveTab() });
-      } catch (error) {
-        logDebug('按索引选择已有标签失败，将尝试组内循环导航', { requestId, target: describeTab(tab), command, error });
+    const command = 'workbench.action.openEditorAtIndex';
+    try {
+      logDebug('尝试通过任意索引命令选择已有标签', { requestId, target: describeTab(tab), command, tabIndex: target.tabIndex });
+      await vscode.commands.executeCommand(command, target.tabIndex);
+      if (activeTabMatches(target, tab)) {
+        logDebug('通过任意索引命令选择已有标签', { requestId, target: describeTab(tab), command, tabIndex: target.tabIndex });
+        return true;
       }
+      logDebug('任意索引命令执行后目标标签仍未激活', { requestId, target: describeTab(tab), command, tabIndex: target.tabIndex, active: describeActiveTab() });
+    } catch (error) {
+      logDebug('按任意索引选择已有标签失败，将使用对应编辑器 API', { requestId, target: describeTab(tab), command, tabIndex: target.tabIndex, error });
     }
 
     logDebug('单次内置导航命令未能选择目标已有标签，将改用对应编辑器 API，避免循环切换中间标签', { requestId, target: describeTab(tab), tabIndex: target.tabIndex, groupIndex: target.groupIndex, active: describeActiveTab() });
@@ -5369,7 +5367,7 @@ function worksetInputFromTab(tab: vscode.Tab): WorksetTabInput {
     };
   }
   if (input instanceof vscode.TabInputWebview) {
-    const builtIn = getActivatableBuiltInWebviewTarget(tab);
+    const builtIn = getActivatableBuiltInEditorTarget(tab);
     return { kind: 'webview', viewType: input.viewType, label: tab.label, ...(builtIn ? { builtIn } : {}) };
   }
   if (input instanceof vscode.TabInputTerminal) return { kind: 'terminal', label: tab.label };
@@ -5402,7 +5400,7 @@ function errorMessage(error: unknown): string {
 }
 
 function isActivatableTab(tab: vscode.Tab): boolean | undefined {
-  return getActivatableBuiltInWebviewTarget(tab) ? true : undefined;
+  return getActivatableBuiltInEditorTarget(tab) ? true : undefined;
 }
 
 function isActivatableTabForCommands(tab: vscode.Tab): boolean {
@@ -5411,11 +5409,12 @@ function isActivatableTabForCommands(tab: vscode.Tab): boolean {
     || kind === 'webview' || kind === 'terminal' || kind === 'unknown';
 }
 
-function getActivatableBuiltInWebviewTarget(tab: vscode.Tab): 'welcome' | 'settings' | undefined {
-  if (!(tab.input instanceof vscode.TabInputWebview)) {
+function getActivatableBuiltInEditorTarget(tab: vscode.Tab): 'welcome' | 'settings' | undefined {
+  const kind = inputKind(tab.input);
+  if (kind !== 'webview' && kind !== 'unknown') {
     return undefined;
   }
-  const viewType = tab.input.viewType.toLowerCase();
+  const viewType = tab.input instanceof vscode.TabInputWebview ? tab.input.viewType.toLowerCase() : '';
   const label = tab.label.toLowerCase();
   if (viewType.includes('welcome')
     || viewType.includes('gettingstarted')
