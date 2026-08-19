@@ -1,6 +1,22 @@
 # 更新日志
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+
+## [1.0.4] - 2026-08-20
+- 按快捷键切换标签页时（此时未激活标签页），标签外围加上蓝色框框，有助于识别
+
+## [1.0.3] - 2026-08-20
+- bug修复：部分情况下点击"设置"等特殊标签页无法切换的问题
+- 更改快捷键切换、激活标签的逻辑，原先是按住快捷键就切换并激活新标签，现改为按住快捷键后只切换标签但不激活，按住空格、回测后激活标签
+	- 为什么要改？因为原方案在vscode中非常卡，切换的速度慢，如下，A.txt要切换到E.txt就要切换4次标签页，卡成狗了，新方案不卡
+```
+A.txt
+B.txt
+C.txt
+D.txt
+E.txt
+```
+
 ## [1.0.2] - 2026-07-27
 ### 问题修复
 -  右键菜单，去除悬停1秒弹出子菜单的逻辑，只能点击鼠标弹出

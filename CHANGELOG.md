@@ -2,6 +2,24 @@
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 
+## [1.0.4] - 2026-08-20
+
+- When switching tabs with a keyboard shortcut before activating them, a blue outline now appears around the focused tab, making its position easier to identify.
+
+## [1.0.3] - 2026-08-20
+
+- Fixed an issue where clicking special tabs such as Settings would sometimes fail to switch to them.
+- Changed keyboard shortcut navigation and activation behavior. Previously, holding the shortcut switched to and activated each new tab. Now the shortcut only moves focus between tabs; press `Space` or `Enter` to activate the focused tab.
+	- Why was this changed? The previous approach was very slow in VS Code because moving from `A.txt` to `E.txt`, for example, required activating four intermediate tabs. The new approach avoids those intermediate activations and remains responsive.
+
+```text
+A.txt
+B.txt
+C.txt
+D.txt
+E.txt
+```
+
 ## [1.0.2] - 2026-07-27
 
 ### Bug Fixes
