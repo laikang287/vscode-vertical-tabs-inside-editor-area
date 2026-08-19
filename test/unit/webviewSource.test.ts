@@ -507,6 +507,8 @@ test('shortcut navigation moves vertical-tab focus without activating an editor'
   assert.match(panelSource, /if \(message\.type === 'tabListFocusChanged'\) \{\s*this\.tabListFocusAnchor = message\.target/);
   assert.match(messagesSource, /type: 'tabListFocusChanged'; readonly target\?: TabTarget/);
   assert.match(webviewSource, /vscode\.postMessage\(\{ type: 'tabListFocusChanged', \.\.\.\(target \? \{ target \} : \{\}\) \}\)/);
+  assert.match(webviewSource, /const target = requestedRow\?\.querySelector<HTMLElement>\('\.tab-main'\)[\s\S]+?focusTreeItem\(target\)/);
+  assert.match(style, /\.tab-main:focus\s*\{ outline: 1px solid var\(--vscode-focusBorder\); outline-offset: -1px; \}/);
   assert.match(webviewSource, /\(event\.key === 'Enter' \|\| event\.key === ' '\)[\s\S]+?item\.click\(\)/);
   assert.doesNotMatch(style, /\.tab-row\.is-keyboard-preview/);
 });

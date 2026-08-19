@@ -193,7 +193,8 @@ button {
 .toolbar .toolbar-icon { font-size: 16px; height: 22px; line-height: 20px; min-width: 24px; padding: 1px 4px; }
 .toolbar button:disabled { color: var(--vscode-disabledForeground); cursor: default; }
 button:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--vscode-toolbar-hoverBackground); }
-button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+button:focus-visible,
+.tab-main:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 
 #description { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.5; margin: 6px 8px; }
 
