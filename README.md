@@ -89,8 +89,20 @@ The extension then uses VS Code's editor group locking feature to lock that grou
 
 MIT License - see [LICENSE](LICENSE)
 
-## Manual Installation
+## How to Install the Extension
 
-- Find the `vscode-vertical-tabs-inside-editor-area` repository on GitHub, locate the latest `.vsix` file in its releases directory, and download it
-	- GitHub repository: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
-- Open VS Code, go to the Extensions view in the activity bar, click the three-dot menu in the top-right corner of the sidebar, and select "Install from VSIX..."
+- Method 1: Install from the VS Code Marketplace
+  - Search for Vertical Tabs Inside Editor Area in the VS Code Marketplace and install it
+    - VS Code Marketplace link: [Vertical Tabs Inside Editor Area - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area)
+- Method 2: Manual Installation
+  - Go to the releases directory of the vscode-vertical-tabs-inside-editor-area GitHub repository and download the latest .vsix file
+    - GitHub repository link: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
+  - Open VS Code → Go to Extensions in the Activity Bar → Click the three-dot menu in the upper-right corner of the sidebar → Select Install from VSIX...
+
+
+## Known Issues
+
+1. When updating or installing other extensions, the vertical tabs may sometimes become unclickable. Restarting VS Code will resolve the issue.
+
+Example 1: Updating this extension may sometimes trigger this issue.
+Example 2: Installing or updating the VIM (VSCodeVim project) extension will trigger this issue.
