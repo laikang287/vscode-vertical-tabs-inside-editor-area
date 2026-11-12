@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Onglets verticaux dans la zone d’édition",
-  "verticalTabs.description": "Un navigateur d’onglets verticaux ancré dans la zone d’édition. Affiche tous les onglets des groupes d’éditeurs VS Code avec groupement, épinglage, glisser-déposer, tri et interface multilingue.",
+  "verticalTabs.description": "Onglets verticaux affichés dans la zone d’édition, sans utiliser les deux barres latérales.",
   "verticalTabs.title": "Onglets verticaux",
   "verticalTabs.command.toggle": "Onglets verticaux : Basculer",
   "verticalTabs.command.focus": "Onglets verticaux : Donner le focus",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (Russe)",
   "verticalTabs.config.defaultToolbarControlsVisible": "Visibilité par défaut des listes de groupement et de tri. Lorsque la mémorisation automatique est activée, cette valeur n’est utilisée qu’en l’absence de visibilité enregistrée ; lorsqu’elle est désactivée, elle est toujours utilisée.",
+  "verticalTabs.config.groupDisplayStyle": "Définit l’apparence des en-têtes de groupe et le retrait des onglets.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1 : apparence d’origine",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2 : groupes alignés à gauche et onglets en retrait",
   "verticalTabs.config.toolbarPosition": "Position des icônes de recherche et d’action de groupe, des contrôles de groupement et de tri, ainsi que du champ de recherche dans la barre d’onglets verticaux. Les modifications s’appliquent immédiatement.",
   "verticalTabs.config.toolbarPosition.top": "Fixer les contrôles au-dessus de la liste des onglets.",
   "verticalTabs.config.toolbarPosition.bottom": "Fixer les contrôles sous la liste des onglets et inverser l’ordre vertical de leurs sections."

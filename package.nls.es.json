@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Pestañas verticales en el área del editor",
-  "verticalTabs.description": "Un navegador de pestañas verticales anclado dentro del área del editor. Muestra todas las pestañas de los grupos de editores de VS Code con agrupación, fijación, arrastrar y colocar, ordenación e interfaz multilingüe.",
+  "verticalTabs.description": "Pestañas verticales que se muestran en el área del editor, sin usar ninguna de las dos barras laterales.",
   "verticalTabs.title": "Pestañas verticales",
   "verticalTabs.command.toggle": "Pestañas verticales: Alternar",
   "verticalTabs.command.focus": "Pestañas verticales: Enfocar",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (Ruso)",
   "verticalTabs.config.defaultToolbarControlsVisible": "Visibilidad predeterminada de los controles desplegables de agrupación y ordenación. Cuando la memoria automática está habilitada, solo se usa si no hay una visibilidad guardada; cuando está deshabilitada, siempre se usa este valor.",
+  "verticalTabs.config.groupDisplayStyle": "Controla la apariencia de los encabezados de grupo y la sangría de las pestañas.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1: apariencia original",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2: grupos alineados a la izquierda y pestañas con sangría",
   "verticalTabs.config.toolbarPosition": "Posición de los iconos de búsqueda y acciones de grupo, los controles de agrupación y ordenación y el cuadro de búsqueda en la barra de pestañas verticales. Los cambios se aplican de inmediato.",
   "verticalTabs.config.toolbarPosition.top": "Fijar los controles encima de la lista de pestañas.",
   "verticalTabs.config.toolbarPosition.bottom": "Fijar los controles debajo de la lista de pestañas e invertir el orden vertical de sus secciones."

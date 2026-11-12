@@ -445,3 +445,9 @@ test('applies independent persisted vertical order to automatic groups in manual
   assert.deepEqual(byParent.displayGroups.find((group) => group.id === 'src')?.tabs.map((tab) => tab.label), ['a.ts', 'b.ts']);
   assert.deepEqual(byType.displayGroups.find((group) => group.id === '.md')?.tabs.map((tab) => tab.label), ['y.md', 'z.md']);
 });
+
+
+test('group display style defaults to V2 and preserves the selected V1 style', () => {
+  assert.equal(buildSnapshot([], 1, []).groupDisplayStyle, 'v2');
+  assert.equal(buildSnapshot([], 1, [], { groupDisplayStyle: 'v1' }).groupDisplayStyle, 'v1');
+});

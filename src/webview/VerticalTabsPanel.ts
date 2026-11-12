@@ -1468,6 +1468,7 @@ export class VerticalTabsPanel {
       groupMode: this.groupMode,
       sortMode: this.sortMode,
       toolbarPosition: this.toolbarPosition,
+      groupDisplayStyle: vscode.workspace.getConfiguration('verticalTabs').get<unknown>('groupDisplayStyle') === 'v1' ? 'v1' : 'v2',
       rememberState: shouldRememberState(),
       toolbarControlsVisible: this.toolbarControlsVisible,
       searchVisible: this.searchVisible,

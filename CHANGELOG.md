@@ -2,6 +2,15 @@
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 
+## [1.0.5] - 2026-11-12
+
+- Streamlined the documentation.
+- Updated the display style of group and file names. Choose between V2 (the new default) and V1 (the previous style).
+  - V2 style:
+    - ![](media/file-20261112231437724.gif)
+  - V1 style:
+    - ![](media/file-20261112225119117.gif)
+
 ## [1.0.4] - 2026-08-20
 
 - When switching tabs with a keyboard shortcut before activating them, a blue outline now appears around the focused tab, making its position easier to identify.

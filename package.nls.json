@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Vertical Tabs Inside Editor Area",
-  "verticalTabs.description": "A vertical tab navigator locked inside the editor area. Shows all tabs across VS Code editor groups with grouping, pinning, drag-and-drop, sorting, and multi-language support.",
+  "verticalTabs.description": "Vertical tabs displayed in the editor area, without using either sidebar.",
   "verticalTabs.title": "Vertical Tabs",
   "verticalTabs.command.toggle": "Vertical Tabs: Toggle",
   "verticalTabs.command.focus": "Vertical Tabs: Focus",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (Russian)",
   "verticalTabs.config.defaultToolbarControlsVisible": "Default visibility for the grouping and sorting dropdown controls. When automatic memory is enabled, this is used only when no saved visibility exists; when automatic memory is disabled, this default is always used.",
+  "verticalTabs.config.groupDisplayStyle": "Controls the appearance of group headers and tab indentation.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1: original appearance",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2: left-aligned groups and indented tabs",
   "verticalTabs.config.toolbarPosition": "Position of the search and group action icons, grouping and sorting controls, and search box in the vertical tab bar. Changes apply immediately.",
   "verticalTabs.config.toolbarPosition.top": "Fix the controls above the tab list.",
   "verticalTabs.config.toolbarPosition.bottom": "Fix the controls below the tab list and reverse their vertical section order."

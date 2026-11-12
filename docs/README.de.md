@@ -1,12 +1,8 @@
-
 # Vertikale Tabs im Editorbereich
-
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Zeigt eine stets sichtbare <mark>vertikale Tableiste</mark> auf der <mark>linken Seite des Editorbereichs</mark> an, ohne die primäre oder sekundäre Seitenleiste zu belegen.
-
-Das Interface-Layout ist wie folgt:
+Zeigt eine stets sichtbare <mark>vertikale Tableiste</mark> <mark>links im Editorbereich</mark> an, ohne die primäre oder sekundäre Seitenleiste zu verwenden.
 
 ```text
 Primäre Seitenleiste | Vertikale Tableiste | Editorbereich | Sekundäre Seitenleiste
@@ -14,84 +10,53 @@ Primäre Seitenleiste | Vertikale Tableiste | Editorbereich | Sekundäre Seitenl
 
 ## Demo
 
-![demo.gif](media/demo.gif)
-
-## Warum Diese Erweiterung
-
-VS Code verwendet standardmäßig eine horizontale Tableiste. Bei vielen geöffneten Dateien werden Tab-Namen leicht abgeschnitten, was das Finden und Wechseln von Dateien unübersichtlich macht.
-
-Viele vertikale Tab-Erweiterungen platzieren die Tab-Liste in der primären Seitenleiste, aber diese muss auch den Datei-Explorer, die Suche, die Quellcodeverwaltung, Erweiterungen und andere Funktionen anzeigen.
-
-Wenn Benutzer die Seitenleistenfunktion wechseln, werden auch die vertikalen Tabs ausgeblendet.
-
-Diese Erweiterung platziert die vertikale Tableiste auf der linken Seite des Editorbereichs, sodass sie auch beim Wechseln anderer Funktionen in der primären Seitenleiste sichtbar bleibt.
-
-## Für Wen Ist Es
-
-- Für alle, die häufig mit vielen gleichzeitig geöffneten Dateien arbeiten
-- Für alle mit ausreichend horizontalem Bildschirmplatz
-- Für alle, die nicht möchten, dass vertikale Tabs die primäre Seitenleiste belegen
-
-## Funktionen
-
-- **Zeigt vertikale Tabs auf der linken Seite des Editorbereichs an**
-- Mehrsprachige Unterstützung (i18n)
-- Tab-Gruppen, einschließlich automatischer und manueller Gruppierung (nach Typ, nach übergeordnetem Verzeichnis oder der horizontalen Tableiste von VS Code folgend)
-- Tab-Sortierung: manuell, nach Name, nach Zeit
-- Vertikale Tableiste ein-/ausblenden
-- Grundlegende Tab-Operationen:
-	- Ziehen zum Gruppieren
-	- Stapelweises Schließen
-	- Alle ausklappen
-	- Alle einklappen
-	- Rechtsklick zum Anheften von Tabs und Tab-Gruppen
-	- Stapelweises Verschieben (Shift-Taste für Mehrfachauswahl)
-- Wenn der Gruppentyp "übergeordnetes Verzeichnis" ist, wird beim Ziehen einer Datei in eine andere Gruppe die tatsächliche Datei auf der Festplatte verschoben
+![](../media/demo.gif)
 
 ## Schnellstart
 
-- Suchen Sie im VS Code Extension Marketplace nach "Vertical Tabs Inside Editor Area" und installieren Sie die Erweiterung. Die Erweiterungs-ID lautet `laikang287.vertical-tabs-inside-editor-area`
-- Starten Sie VS Code neu
-- Finden Sie das `VERTICAL TABS`-Symbol in der Aktivitätsleiste von VS Code und klicken Sie darauf, um die Ansicht zu öffnen. Verwenden Sie Show/Hide, um die vertikale Tableiste ein- oder auszublenden
-- Hinweis 1: Sie können die `VERTICAL TABS`-Ansicht an andere häufig genutzte Stellen in der Aktivitätsleiste verschieben
-	- Siehe die Demo-GIF oben
-- Hinweis 2: Es wird empfohlen, den Zeilenumbruch der Tabs von VS Code bei Verwendung dieser Erweiterung zu deaktivieren:
+- Installiere die Erweiterung aus dem VS-Code-Marketplace:
+  - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+- Starte VS Code neu.
+- Klicke auf eine der beiden Schaltflächen, um die vertikalen Tabs ein- oder auszublenden:
+  - ![](../media/file-20261112221754250.gif)
 
-```json
-{
-  "workbench.editor.wrapTabs": false
-}
-```
+## Besonderheiten
 
-## So Ändern Sie die Oberflächensprache
+- Vertikale Tabs erleichtern die Arbeit mit vielen geöffneten Dateien.
+- Die Tableiste bleibt <mark>links im Editorbereich</mark> sichtbar und belegt keine Seitenleiste.
 
-Die Konfigurationsoption `verticalTabs.language` ermöglicht das Umschalten der Sprache der Erweiterung. Der Standardwert ist `auto`.
+## Funktionen
 
-## Funktionsweise
+- **Vertikale Tabs links im Editorbereich anzeigen**
+- Mehrsprachige Oberfläche (i18n)
+- Gruppierung nach nativen VS-Code-Gruppen, manuellen Gruppen, Dateityp oder übergeordnetem Verzeichnis
+- Manuelle Sortierung sowie Sortierung nach Name oder Zeit
+- Vertikale Tabs ein- und ausblenden
+- Grundfunktionen:
+  - Per Drag-and-drop gruppieren
+  - Mehrere Tabs schließen
+  - Alle ausklappen
+  - Alle einklappen
+  - Tabs oder Gruppen per Rechtsklick anheften
+  - Mehrere Tabs verschieben (mit Shift mehrfach auswählen)
+- Bei Gruppierung nach übergeordnetem Verzeichnis verschiebt das Ziehen in eine andere Gruppe die tatsächliche Datei.
+- Die Tableiste kann links oder rechts und die Schaltflächen für Suche, Einstellungen usw. oben oder unten angezeigt werden.
 
-Beim Start erstellt die Erweiterung ein Webview und platziert es in einer separaten Editorgruppe ganz links im Editorbereich.
+## Oberflächensprache ändern
 
-Dieses Webview wird zur Anzeige der vertikalen Tabs verwendet.
-
-Die Erweiterung verwendet anschließend die Editorgruppen-Sperrfunktion von VS Code, um diese Gruppe zu sperren und zu verhindern, dass später geöffnete neue Dateien in die von der vertikalen Tableiste belegte Editorgruppe gelangen.
+Mit `verticalTabs.language` wird die Sprache geändert. Der Standardwert ist `auto`.
 
 ## Hinweise
 
-1. Dieses Projekt hat während der Entwicklung KI-Programmierwerkzeuge verwendet, um das Schreiben von Code, Tests und die Dokumentation zu unterstützen
-2. Die Dokumentation basiert auf README.zh-CN; Versionen in anderen Sprachen sind KI-Übersetzungen
-3. Die vereinfachte chinesische Dokumentation ist die primär gepflegte Version dieses Projekts
-4. Diese Erweiterung setzt vertikale Tabs über eine indirekte Umgehungslösung um und ist daher eher ein Behelf. Die beste Lösung wäre eine offizielle Unterstützung vertikaler Tabs durch VS Code.
-
-	Bitte stimmen Sie für das zugehörige VS-Code-Issue, damit das VS-Code-Team den Bedarf erkennt und dieser Funktion mehr Aufmerksamkeit schenkt:
-
-    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
+1. Mit Unterstützung eines LLM entwickelt.
+2. README.zh-CN.md wird manuell gepflegt; die übrigen READMEs werden von einem LLM übersetzt.
 
 ## Lizenz
 
-MIT-Lizenz - siehe [LICENSE](LICENSE)
+MIT License – siehe [LICENSE](../LICENSE)
 
-## Manuelle Installation
+## Bekannte Probleme
 
-- Suchen Sie auf GitHub nach dem Repository `vscode-vertical-tabs-inside-editor-area`, suchen Sie im releases-Verzeichnis nach der neuesten `.vsix`-Datei und laden Sie sie herunter
-	- GitHub-Repository: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
-- Öffnen Sie VS Code, gehen Sie zur Erweiterungsansicht in der Aktivitätsleiste, klicken Sie auf das Drei-Punkte-Menü oben rechts in der Seitenleiste und wählen Sie "Von VSIX installieren..."
+- Nach der Installation oder Aktualisierung anderer Erweiterungen lassen sich vertikale Tabs manchmal nicht anklicken. Starte VS Code neu.
+  - Beispiel 1: Auch die Aktualisierung dieser Erweiterung kann das Problem auslösen.
+  - Beispiel 2: Die Installation oder Aktualisierung der VIM-Erweiterung (Projekt VSCodeVim) kann es auslösen.

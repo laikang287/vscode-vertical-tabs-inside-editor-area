@@ -1,96 +1,62 @@
-
 # Vertical Tabs Inside Editor Area
-
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Display an always-visible <mark>vertical tab bar</mark> on the <mark>left side of the editor area</mark>, without occupying the primary or secondary sidebars.
-
-The interface layout is as follows:
+Display an always-visible <mark>vertical tab bar</mark> on the <mark>left side of the editor area</mark>, without using the primary or secondary sidebar.
 
 ```text
-Primary Sidebar | Vertical Tab Bar | Editor Area | Secondary Sidebar
+Primary sidebar | Vertical tab bar | Editor area | Secondary sidebar
 ```
 
 ## Demo
 
-![demo.gif](media/demo.gif)
+![](media/demo.gif)
 
-## Why This Extension
+## Quick Start
 
-VS Code uses a horizontal tab bar by default. When many files are open, tab names are easily truncated, making it unintuitive to find and switch between files.
+- Install the extension from the VS Code Marketplace:
+  - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+- Restart VS Code.
+- Click either button shown below to show or hide the vertical tabs:
+  - ![](media/file-20261112221754250.gif)
 
-Many vertical tabs extensions place the tab list in the primary sidebar, but the primary sidebar also needs to display the file explorer, search, source control, extensions, and other features.
+## Extension Highlights
 
-When users switch sidebar functions, the vertical tab list is hidden along with it.
-
-This extension places the vertical tab bar on the left side of the editor area, so it remains visible even when switching between other functions in the primary sidebar.
-
-## Who Is It For
-
-- Frequently working with many files open simultaneously
-- Have enough horizontal screen space
-- Don't want vertical tabs to occupy the primary sidebar
+- Vertical tabs make it easier to work with many open files.
+- The tab bar stays visible on the <mark>left side of the editor area</mark> without using either sidebar.
 
 ## Features
 
 - **Display vertical tabs on the left side of the editor area**
-- Multi-language support (i18n)
-- Tab groups, including automatic and manual grouping (by file type, by parent directory, or follow VS Code horizontal tab bar)
-- Tab sorting: manual, by name, by time
-- Show/hide the vertical tab bar
+- Multiple languages (i18n)
+- Group tabs by native VS Code groups, manual groups, file type, or parent directory
+- Sort tabs manually, by name, or by time
+- Show or hide vertical tabs
 - Basic tab operations:
-	- Drag to group
-	- Batch close
-	- Expand all
-	- Collapse all
-	- Right-click to pin tabs and tab groups
-	- Batch move (use Shift key for multi-select)
-- When group type is "parent directory", dragging a file to another group moves the actual file on disk
+  - Drag tabs into groups
+  - Close tabs in batches
+  - Expand all
+  - Collapse all
+  - Right-click to pin tabs or groups
+  - Move tabs in batches (hold Shift to select multiple tabs)
+- When grouping by parent directory, dragging a file to another group moves the actual file.
+- Configure the tab bar on the left or right, and place the search, settings, and other buttons at the top or bottom.
 
-## Quick Start
+## Switching the Interface Language
 
-- Search for "Vertical Tabs Inside Editor Area" in the VS Code extension marketplace and install it. The extension identifier is `laikang287.vertical-tabs-inside-editor-area`
-- Restart VS Code
-- Find the `VERTICAL TABS` icon in the VS Code activity bar, click it to open the view. Use Show/Hide to toggle the vertical tab bar
-- Note 1: You can drag the `VERTICAL TABS` view into other frequently used areas of the activity bar for convenience
-	- See the demo GIF above
-- Note 2: It is recommended to keep VS Code's tab wrapping disabled when using this extension:
-
-```json
-{
-  "workbench.editor.wrapTabs": false
-}
-```
-
-## How to Switch the Interface Language
-
-Configure `verticalTabs.language` to switch the extension's language. The default value is `auto`.
-
-## How It Works
-
-Upon startup, the extension creates a Webview and places it in a separate editor group on the far left of the editor area.
-
-This Webview is used to display the vertical tabs.
-
-The extension then uses VS Code's editor group locking feature to lock that group, preventing subsequently opened files from entering the editor group occupied by the vertical tab bar.
+Set `verticalTabs.language` to change the extension language. The default is `auto`.
 
 ## Notes
 
-1. This project used AI programming tools during development to assist with code writing, testing, and documentation
-2. Documentation is based on README.zh-CN; other language versions are AI-translated
-3. The Simplified Chinese documentation is the primary maintained version of this project
-4. This extension uses an indirect workaround to implement vertical tabs, so it is somewhat of a hack. The best solution would still be for VS Code to support vertical tabs officially.
+1. Developed with LLM assistance.
+2. README.zh-CN.md is maintained manually; the other READMEs are translated by an LLM.
 
-	Please give the related VS Code issue a thumbs-up so that the VS Code team will recognize the demand and give this feature more attention:
-
-    [Add support for vertical tabs · Issue #108264 · microsoft/vscode](https://github.com/microsoft/vscode/issues/108264)
 ## License
 
 MIT License - see [LICENSE](LICENSE)
 
-## Manual Installation
+## Known Issues
 
-- Find the `vscode-vertical-tabs-inside-editor-area` repository on GitHub, locate the latest `.vsix` file in its releases directory, and download it
-	- GitHub repository: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
-- Open VS Code, go to the Extensions view in the activity bar, click the three-dot menu in the top-right corner of the sidebar, and select "Install from VSIX..."
+- After installing or updating another extension, tabs in the vertical tab bar may sometimes stop responding to clicks. Restart VS Code to resolve this.
+  - Example 1: Updating this extension can also sometimes trigger the issue.
+  - Example 2: Installing or updating the VIM extension (VSCodeVim project) can trigger the issue.

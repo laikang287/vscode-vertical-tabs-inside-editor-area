@@ -591,3 +591,11 @@ body.vscode-high-contrast-light .group-header:focus-visible {
   font-weight: 600;
   margin-bottom: 3px;
 }
+
+/* V2 keeps root tabs flush left and indents group members by six spaces. */
+[data-group-display-style="v2"] .tab-main { padding-left: 0; }
+[data-group-display-style="v2"] .tree-level-1 .tab-main::before { content: "      "; white-space: pre; }
+[data-group-display-style="v2"] .group-header { padding-left: 0; }
+[data-group-display-style="v2"] .tab-group.has-focused-tab > .group-header { padding-left: 0; }
+[data-group-display-style="v2"] .group-main { gap: .25em; }
+[data-group-display-style="v2"] .group-name { flex: 0 1 auto; font-size: var(--vscode-font-size); font-weight: 700; text-align: left; }

@@ -1338,3 +1338,16 @@ test('search uses one control row with an opt-in workspace-relative path mode', 
   assert.match(panelSource, /SEARCH_VISIBLE_STORAGE_KEY/);
   assert.match(panelSource, /SEARCH_GROUPS_STORAGE_KEY/);
 });
+
+
+test('group display style defaults to V2 and retains the V1 layout', () => {
+  const root = path.resolve(__dirname, '../../..');
+  const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const setting = manifest.contributes.configuration.properties['verticalTabs.groupDisplayStyle'];
+  assert.equal(setting.default, 'v2');
+  assert.deepEqual(setting.enum, ['v1', 'v2']);
+  const css = readFileSync(path.join(root, 'media/vertical-tabs.css'), 'utf8');
+  assert.match(css, /\[data-group-display-style="v2"\] \.tab-main \{ padding-left: 0; \}/);
+  assert.match(css, /\[data-group-display-style="v2"\] \.tree-level-1 \.tab-main::before \{ content: "      "; white-space: pre; \}/);
+  assert.match(css, /\[data-group-display-style="v2"\] \.group-name \{ flex: 0 1 auto; font-size: var\(--vscode-font-size\); font-weight: 700; text-align: left; \}/);
+});

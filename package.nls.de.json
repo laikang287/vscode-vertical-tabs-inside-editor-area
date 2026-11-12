@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Vertikale Tabs im Editorbereich",
-  "verticalTabs.description": "Ein im Editorbereich verankerter vertikaler Tab-Navigator. Zeigt alle Tabs aus sämtlichen VS Code-Editorgruppen mit Gruppierung, Anheften, Drag-and-drop, Sortierung und mehrsprachiger Oberfläche.",
+  "verticalTabs.description": "Vertikale Tabs im Editorbereich, ohne eine der beiden Seitenleisten zu verwenden.",
   "verticalTabs.title": "Vertikale Tabs",
   "verticalTabs.command.toggle": "Vertikale Tabs: Umschalten",
   "verticalTabs.command.focus": "Vertikale Tabs: Fokus setzen",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (Russisch)",
   "verticalTabs.config.defaultToolbarControlsVisible": "Standardmäßige Sichtbarkeit der Auswahlfelder für Gruppierung und Sortierung. Bei aktiviertem automatischem Speichern wird dieser Wert nur verwendet, wenn keine Sichtbarkeit gespeichert ist; andernfalls immer.",
+  "verticalTabs.config.groupDisplayStyle": "Legt das Erscheinungsbild von Gruppenüberschriften und Tab-Einrückungen fest.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1: ursprüngliches Erscheinungsbild",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2: linksbündige Gruppen und eingerückte Tabs",
   "verticalTabs.config.toolbarPosition": "Position der Such- und Gruppenaktionssymbole, der Gruppierungs- und Sortiersteuerelemente sowie des Suchfelds in der vertikalen Tableiste. Änderungen werden sofort angewendet.",
   "verticalTabs.config.toolbarPosition.top": "Steuerelemente oberhalb der Tab-Liste fixieren.",
   "verticalTabs.config.toolbarPosition.bottom": "Steuerelemente unterhalb der Tab-Liste fixieren und ihre vertikale Abschnittsreihenfolge umkehren."

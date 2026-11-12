@@ -8,6 +8,7 @@ export type GroupMode = 'vscode' | 'manual' | 'parentDir' | 'fileType';
 export type SortMode = 'none' | 'mru' | 'modifiedAsc' | 'modifiedDesc' | 'nameAsc' | 'nameDesc';
 export type RelativePathDisplay = 'off' | 'duplicatesDirectory' | 'duplicates' | 'alwaysDirectory' | 'always';
 export type ToolbarPosition = 'top' | 'bottom';
+export type GroupDisplayStyle = 'v1' | 'v2';
 export type TabActivationKind = 'reliable' | 'bestEffort' | 'unsupported';
 export type TabInputKind = 'text' | 'diff' | 'custom' | 'notebook' | 'notebookDiff' | 'webview' | 'terminal' | 'unknown';
 export type TabResourceStatus = 'readonly' | 'missing' | 'noPermissions' | 'unavailable';
@@ -24,7 +25,7 @@ export interface VerticalTabDisplayGroup {
   readonly isPinned: boolean;
 }
 export interface VerticalTabsSnapshot {
-  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
+  readonly revision: number; readonly groupMode: GroupMode; readonly sortMode: SortMode; readonly toolbarPosition: ToolbarPosition; readonly groupDisplayStyle?: GroupDisplayStyle; readonly rememberState: boolean; readonly toolbarControlsVisible: boolean;
   readonly tabs: readonly VerticalTabItem[]; readonly manualGroups: readonly ManualTabGroup[]; readonly displayGroups: readonly VerticalTabDisplayGroup[];
   readonly searchVisible: boolean; readonly searchGroups: boolean; readonly alwaysFollowActiveTab: boolean; readonly nativeContextMenuActionsEnabled: boolean; readonly compactContextSubmenusEnabled: boolean;
   readonly collapsedGroupKeys?: readonly string[];

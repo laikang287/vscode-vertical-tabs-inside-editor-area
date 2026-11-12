@@ -2,6 +2,43 @@
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 
+## [1.0.5] - 2026-11-12
+
+- Documentation simplifiée.
+- Style des noms de groupes et fichiers modifié : V2 (nouveau style par défaut) ou V1 (ancien style).
+  - Style V2:
+    - ![](../media/file-20261112231437724.gif)
+  - Style V1:
+    - ![](../media/file-20261112225119117.gif)
+
+## [1.0.4] - 2026-08-20
+
+- Un contour bleu indique l’onglet sélectionné au raccourci avant son activation.
+
+## [1.0.3] - 2026-08-20
+
+- Correction d’un problème empêchant parfois l’ouverture d’onglets spéciaux comme Paramètres.
+- Le raccourci déplace désormais seulement la sélection ; Espace ou Entrée active l’onglet. Cela évite la lenteur liée à l’activation des onglets intermédiaires.
+
+```text
+A.txt
+B.txt
+C.txt
+D.txt
+E.txt
+```
+
+## [1.0.2] - 2026-07-27
+
+- Les sous-menus ne s’ouvrent plus après une seconde de survol : il faut cliquer.
+
+## [1.0.1] - 2026-07-27
+
+- Navigation au clavier améliorée : `verticalTabs.focus` utilise `Ctrl+Shift+V` par défaut ; les flèches, Home et End déplacent la sélection et Espace ouvre l’onglet. Ce raccourci peut entrer en conflit avec YoudaoDict notamment.
+- L’icône de la barre d’état est placée à gauche et permet d’afficher ou masquer les onglets.
+- Ajout du déplacement de groupe au menu contextuel.
+- Correction de plusieurs problèmes mineurs connus.
+
 ## [1.0.0] - 2026-07-23
 
 <mark>Il s'agit d'une mise à jour majeure. En raison du grand nombre de changements, envisagez de revenir à la version 0.2.1 si vous rencontrez des bogues.</mark>

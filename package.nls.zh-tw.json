@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "編輯器區域內的垂直標籤",
-  "verticalTabs.description": "固定在編輯器區域內的垂直標籤導覽器。顯示 VS Code 所有編輯器群組中的標籤，並支援分組、固定、拖放、排序及多語言介面。",
+  "verticalTabs.description": "在編輯器區域顯示的垂直標籤頁，不使用兩個側邊欄",
   "verticalTabs.title": "垂直標籤",
   "verticalTabs.command.toggle": "垂直標籤: 切換顯示狀態",
   "verticalTabs.command.focus": "垂直標籤: 聚焦標籤列",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский",
   "verticalTabs.config.defaultToolbarControlsVisible": "分組方式與排序方式下拉控制項的預設可見性。啟用自動記憶時僅在沒有已儲存的可見性時使用；停用時一律使用此預設值。",
+  "verticalTabs.config.groupDisplayStyle": "控制分組標題與標籤縮排的顯示樣式。",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1：原有樣式",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2：分組靠左對齊，組內標籤縮排",
   "verticalTabs.config.toolbarPosition": "垂直標籤列中搜尋及群組動作圖示、分組與排序控制項和搜尋方塊的位置。變更會立即生效。",
   "verticalTabs.config.toolbarPosition.top": "將控制項固定在標籤清單上方。",
   "verticalTabs.config.toolbarPosition.bottom": "將控制項固定在標籤清單下方，並反轉各區段的垂直順序。"

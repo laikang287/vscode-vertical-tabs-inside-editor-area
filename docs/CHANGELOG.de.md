@@ -2,6 +2,43 @@
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 
+## [1.0.5] - 2026-11-12
+
+- Dokumentation gestrafft.
+- Darstellung der Gruppen- und Dateinamen geändert: V2 (neuer Standard) oder V1 (bisheriger Stil) ist auswählbar.
+  - V2-Stil:
+    - ![](../media/file-20261112231437724.gif)
+  - V1-Stil:
+    - ![](../media/file-20261112225119117.gif)
+
+## [1.0.4] - 2026-08-20
+
+- Beim Auswählen noch nicht aktivierter Tabs per Tastenkürzel zeigt ein blauer Rahmen die Position an.
+
+## [1.0.3] - 2026-08-20
+
+- Ein Problem behoben, durch das sich spezielle Tabs wie Einstellungen teilweise nicht anklicken ließen.
+- Das Tastenkürzel verschiebt nur noch die Auswahl; Leertaste oder Enter aktiviert den Tab. Das vermeidet Verzögerungen durch Aktivierung aller dazwischenliegenden Tabs.
+
+```text
+A.txt
+B.txt
+C.txt
+D.txt
+E.txt
+```
+
+## [1.0.2] - 2026-07-27
+
+- Untermenüs öffnen sich nicht mehr nach einer Sekunde beim Darüberfahren, sondern nur noch per Klick.
+
+## [1.0.1] - 2026-07-27
+
+- Tastaturnavigation verbessert: `verticalTabs.focus` verwendet standardmäßig `Ctrl+Shift+V`; Pfeiltasten, Home und End bewegen die Auswahl, die Leertaste öffnet den Tab. Das Kürzel kann mit Programmen wie YoudaoDict kollidieren.
+- Das Symbol in der Statusleiste wurde nach links verschoben und blendet die Tabs per Klick ein oder aus.
+- Gruppenverschiebung zum Kontextmenü hinzugefügt.
+- Einige bekannte kleinere Probleme behoben.
+
 ## [1.0.0] - 2026-07-23
 
 <mark>Dies ist eine umfangreiche Aktualisierung. Aufgrund der vielen Änderungen sollten Sie bei Fehlern eine Rückkehr zu Version 0.2.1 in Betracht ziehen.</mark>

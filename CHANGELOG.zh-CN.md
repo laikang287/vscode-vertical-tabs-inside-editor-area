@@ -1,7 +1,13 @@
 # 更新日志
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
-
+## [1.0.5] - 2026-11-12
+- 精简README文档
+- 修改标签页中组名、文件名的显示样式，可配置V2版本（新增的样式，为默认）、V1版本（旧版本）
+	- V2版本样式如下
+		- ![](media/file-20261112231437724.gif)
+	- V1版本样式如下
+		- ![](media/file-20261112225119117.gif)
 ## [1.0.4] - 2026-08-20
 - 按快捷键切换标签页时（此时未激活标签页），标签外围加上蓝色框框，有助于识别
 

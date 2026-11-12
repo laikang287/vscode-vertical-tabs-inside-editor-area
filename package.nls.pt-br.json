@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Abas verticais na área do editor",
-  "verticalTabs.description": "Um navegador de abas verticais fixado dentro da área do editor. Mostra todas as abas dos grupos de editores do VS Code com agrupamento, fixação, arrastar e soltar, ordenação e interface multilíngue.",
+  "verticalTabs.description": "Abas verticais exibidas na área do editor, sem usar nenhuma das duas barras laterais.",
   "verticalTabs.title": "Abas verticais",
   "verticalTabs.command.toggle": "Abas verticais: Alternar",
   "verticalTabs.command.focus": "Abas verticais: Focar",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (Russo)",
   "verticalTabs.config.defaultToolbarControlsVisible": "Visibilidade padrão dos controles suspensos de agrupamento e ordenação. Quando a memória automática está habilitada, este valor é usado somente se não houver visibilidade salva; quando está desabilitada, ele é sempre usado.",
+  "verticalTabs.config.groupDisplayStyle": "Controla a aparência dos cabeçalhos de grupo e o recuo das abas.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1: aparência original",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2: grupos alinhados à esquerda e abas recuadas",
   "verticalTabs.config.toolbarPosition": "Posição dos ícones de pesquisa e ações de grupo, dos controles de agrupamento e ordenação e da caixa de pesquisa na barra de abas verticais. As alterações são aplicadas imediatamente.",
   "verticalTabs.config.toolbarPosition.top": "Fixar os controles acima da lista de abas.",
   "verticalTabs.config.toolbarPosition.bottom": "Fixar os controles abaixo da lista de abas e inverter a ordem vertical das seções."

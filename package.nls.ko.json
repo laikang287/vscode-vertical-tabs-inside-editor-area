@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "편집기 영역 안의 세로 탭",
-  "verticalTabs.description": "편집기 영역 안에 고정되는 세로 탭 탐색기입니다. 그룹화, 고정, 끌어서 놓기, 정렬 및 다국어 지원과 함께 모든 VS Code 편집기 그룹의 탭을 표시합니다.",
+  "verticalTabs.description": "편집기 영역에 표시되는 세로 탭으로, 두 사이드바를 사용하지 않습니다.",
   "verticalTabs.title": "세로 탭",
   "verticalTabs.command.toggle": "세로 탭: 전환",
   "verticalTabs.command.focus": "세로 탭: 포커스",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (러시아어)",
   "verticalTabs.config.defaultToolbarControlsVisible": "그룹화 및 정렬 드롭다운 컨트롤의 기본 표시 여부입니다. 자동 기억을 사용하면 저장된 표시 여부가 없을 때만 사용하고, 사용하지 않으면 항상 이 기본값을 사용합니다.",
+  "verticalTabs.config.groupDisplayStyle": "그룹 제목과 탭 들여쓰기의 표시 스타일을 설정합니다.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1: 기존 스타일",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2: 그룹 왼쪽 정렬 및 탭 들여쓰기",
   "verticalTabs.config.toolbarPosition": "세로 탭 표시줄에서 검색 및 그룹 작업 아이콘, 그룹화 및 정렬 컨트롤, 검색 상자의 위치입니다. 변경 내용은 즉시 적용됩니다.",
   "verticalTabs.config.toolbarPosition.top": "컨트롤을 탭 목록 위에 고정합니다.",
   "verticalTabs.config.toolbarPosition.bottom": "컨트롤을 탭 목록 아래에 고정하고 각 섹션의 세로 순서를 반대로 바꿉니다."

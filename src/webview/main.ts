@@ -285,7 +285,10 @@ function render(message: Extract<ExtensionMessage, { type: 'renderTabs' }>): voi
   pruneSelectedTabs(message.snapshot.tabs);
   if (groupModeSelect) groupModeSelect.value = message.snapshot.groupMode;
   if (sortModeSelect) sortModeSelect.value = message.snapshot.sortMode;
-  if (verticalTabs) verticalTabs.dataset.toolbarPosition = message.snapshot.toolbarPosition;
+  if (verticalTabs) {
+    verticalTabs.dataset.toolbarPosition = message.snapshot.toolbarPosition;
+    verticalTabs.dataset.groupDisplayStyle = message.snapshot.groupDisplayStyle === 'v1' ? 'v1' : 'v2';
+  }
   setToolbarControlsVisible(message.snapshot.toolbarControlsVisible);
   setSearchContainerVisible(message.snapshot.searchVisible);
   currentSearchGroups = message.snapshot.searchGroups;

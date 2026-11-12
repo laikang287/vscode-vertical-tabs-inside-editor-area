@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Вертикальные вкладки в области редактора",
-  "verticalTabs.description": "Навигатор вертикальных вкладок, закреплённый в области редактора. Показывает все вкладки во всех группах редакторов VS Code и поддерживает группировку, закрепление, перетаскивание, сортировку и многоязычный интерфейс.",
+  "verticalTabs.description": "Вертикальные вкладки в области редактора без использования боковых панелей.",
   "verticalTabs.title": "Вертикальные вкладки",
   "verticalTabs.command.toggle": "Вертикальные вкладки: Переключить",
   "verticalTabs.command.focus": "Вертикальные вкладки: Перевести фокус",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский",
   "verticalTabs.config.defaultToolbarControlsVisible": "Видимость раскрывающихся элементов группировки и сортировки по умолчанию. При включённом автоматическом запоминании значение используется только при отсутствии сохранённой видимости; при отключённом — всегда.",
+  "verticalTabs.config.groupDisplayStyle": "Определяет вид заголовков групп и отступы вкладок.",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1: исходный вид",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2: группы по левому краю и вкладки с отступом",
   "verticalTabs.config.toolbarPosition": "Положение значков поиска и действий с группами, элементов группировки и сортировки, а также поля поиска на панели вертикальных вкладок. Изменения применяются немедленно.",
   "verticalTabs.config.toolbarPosition.top": "Закрепить элементы управления над списком вкладок.",
   "verticalTabs.config.toolbarPosition.bottom": "Закрепить элементы управления под списком вкладок и изменить вертикальный порядок разделов на обратный."

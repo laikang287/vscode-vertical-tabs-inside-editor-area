@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "エディター領域内の垂直タブ",
-  "verticalTabs.description": "エディター領域内に固定される垂直タブ ナビゲーターです。VS Code のすべてのエディター グループのタブを表示し、グループ化、ピン留め、ドラッグ アンド ドロップ、並べ替え、多言語表示をサポートします。",
+  "verticalTabs.description": "エディター領域に表示される垂直タブ。2つのサイドバーを使用しません。",
   "verticalTabs.title": "垂直タブ",
   "verticalTabs.command.toggle": "垂直タブ: 表示の切り替え",
   "verticalTabs.command.focus": "垂直タブ: フォーカス",
@@ -66,6 +66,9 @@
   "verticalTabs.config.language.pt-br": "Português (Brasil)",
   "verticalTabs.config.language.ru": "Русский (ロシア語)",
   "verticalTabs.config.defaultToolbarControlsVisible": "グループ化と並べ替えのドロップダウン コントロールの既定の表示状態です。自動記憶が有効な場合は保存済みの表示状態がないときだけ使用され、無効な場合は常に使用されます。",
+  "verticalTabs.config.groupDisplayStyle": "グループ見出しとタブのインデントの表示スタイルを設定します。",
+  "verticalTabs.config.groupDisplayStyle.v1": "V1：従来のスタイル",
+  "verticalTabs.config.groupDisplayStyle.v2": "V2：グループを左揃えにし、タブをインデント",
   "verticalTabs.config.toolbarPosition": "垂直タブ バー内の検索アイコン、グループ操作アイコン、グループ化と並べ替えのコントロール、検索ボックスの位置です。変更はすぐに適用されます。",
   "verticalTabs.config.toolbarPosition.top": "コントロールをタブ リストの上に固定します。",
   "verticalTabs.config.toolbarPosition.bottom": "コントロールをタブ リストの下に固定し、各セクションの縦方向の順序を逆にします。"

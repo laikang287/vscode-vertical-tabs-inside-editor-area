@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { format, type LocaleStrings } from '../i18n';
 import type {
   GroupMode,
+  GroupDisplayStyle,
   ManualTabGroup,
   RelativePathDisplay,
   SortMode,
@@ -47,6 +48,7 @@ export interface SnapshotBuildOptions {
   readonly groupMode?: GroupMode;
   readonly sortMode?: SortMode;
   readonly toolbarPosition?: ToolbarPosition;
+  readonly groupDisplayStyle?: GroupDisplayStyle;
   readonly rememberState?: boolean;
   readonly toolbarControlsVisible?: boolean;
   readonly searchVisible?: boolean;
@@ -107,6 +109,7 @@ export function buildSnapshot(
     groupMode,
     sortMode,
     toolbarPosition: options.toolbarPosition ?? 'top',
+    groupDisplayStyle: options.groupDisplayStyle ?? 'v2',
     rememberState: options.rememberState ?? true,
     toolbarControlsVisible: options.toolbarControlsVisible ?? true,
     searchVisible: options.searchVisible ?? true,

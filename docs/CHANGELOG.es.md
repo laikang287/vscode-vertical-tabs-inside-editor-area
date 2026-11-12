@@ -2,6 +2,43 @@
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
 
+## [1.0.5] - 2026-11-12
+
+- Se simplificó la documentación.
+- Se actualizó el estilo de los nombres de grupos y archivos: V2 (nuevo valor predeterminado) o V1 (estilo anterior).
+  - Estilo V2:
+    - ![](../media/file-20261112231437724.gif)
+  - Estilo V1:
+    - ![](../media/file-20261112225119117.gif)
+
+## [1.0.4] - 2026-08-20
+
+- Al seleccionar una pestaña aún no activada con el atajo, se muestra un borde azul para identificarla.
+
+## [1.0.3] - 2026-08-20
+
+- Se corrigió un fallo que impedía abrir pestañas especiales como Configuración en ciertos casos.
+- El atajo ahora solo desplaza la selección; Espacio o Enter activa la pestaña. Así se evita la lentitud de activar todas las pestañas intermedias.
+
+```text
+A.txt
+B.txt
+C.txt
+D.txt
+E.txt
+```
+
+## [1.0.2] - 2026-07-27
+
+- Los submenús ya no se abren al mantener el cursor un segundo: hay que hacer clic.
+
+## [1.0.1] - 2026-07-27
+
+- Se mejoró la navegación con teclado: `verticalTabs.focus` usa `Ctrl+Shift+V` por defecto; las flechas, Home y End desplazan la selección y Espacio abre la pestaña. El atajo puede entrar en conflicto con programas como YoudaoDict.
+- El icono de la barra de estado se trasladó a la izquierda y permite mostrar u ocultar las pestañas.
+- Se añadió la opción de mover grupos al menú contextual.
+- Se corrigieron varios problemas menores conocidos.
+
 ## [1.0.0] - 2026-07-23
 
 <mark>Esta es una actualización importante. Debido al gran número de cambios, considera volver a la versión 0.2.1 si encuentras errores.</mark>
