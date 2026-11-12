@@ -55,16 +55,6 @@ Set `verticalTabs.language` to change the extension language. The default is `au
 
 MIT License - see [LICENSE](LICENSE)
 
-## How to Install the Extension
-
-- Method 1: Install from the VS Code Marketplace
-  - Search for Vertical Tabs Inside Editor Area in the VS Code Marketplace and install it
-    - VS Code Marketplace link: [Vertical Tabs Inside Editor Area - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area)
-- Method 2: Manual Installation
-  - Go to the releases directory of the vscode-vertical-tabs-inside-editor-area GitHub repository and download the latest .vsix file
-    - GitHub repository link: [vscode-vertical-tabs-inside-editor-area](https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/tree/main/releases)
-  - Open VS Code → Go to Extensions in the Activity Bar → Click the three-dot menu in the upper-right corner of the sidebar → Select Install from VSIX...
-
 ## Known Issues
 
 - After installing or updating another extension, tabs in the vertical tab bar may sometimes stop responding to clicks. Restart VS Code to resolve this.
