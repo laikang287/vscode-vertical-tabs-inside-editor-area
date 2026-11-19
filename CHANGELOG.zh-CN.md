@@ -1,6 +1,8 @@
 # 更新日志
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+- 注
+	- 中文版本的更新日志是最新的，其余语言版本的更新日志可能是旧的
 ## [1.0.6] - 2026-11-19
 - 将vscode的版本号要求从 1.128.0 改为 1.77.0，确保一些旧版vscode、及基于旧版vscode衍生出来的IDE可安装（如Qoder IDE)
 	- 注：仅修改版本号要求，未测试低版本是否可用
