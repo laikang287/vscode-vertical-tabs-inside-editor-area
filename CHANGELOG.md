@@ -1,7 +1,11 @@
 # Changelog
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+## [1.0.6] - 2026-11-19
 
+- Lowered the minimum required VS Code version from `1.128.0` to `1.77.0` to allow installation on older versions of VS Code and IDEs based on older VS Code versions (such as Qoder IDE).
+    
+    - **Note:** Only the minimum version requirement has been changed. Compatibility with older versions has not been tested.
 ## [1.0.5] - 2026-11-12
 
 - Streamlined the documentation.

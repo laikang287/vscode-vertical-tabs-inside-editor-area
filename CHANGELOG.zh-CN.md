@@ -1,6 +1,9 @@
 # 更新日志
 
 [English](CHANGELOG.md) · [简体中文（规范源）](CHANGELOG.zh-CN.md) · [繁體中文](docs/CHANGELOG.zh-TW.md) · [日本語](docs/CHANGELOG.ja.md) · [한국어](docs/CHANGELOG.ko.md) · [Español](docs/CHANGELOG.es.md) · [Français](docs/CHANGELOG.fr.md) · [Deutsch](docs/CHANGELOG.de.md) · [Русский](docs/CHANGELOG.ru.md)
+## [1.0.6] - 2026-11-19
+- 将vscode的版本号要求从 1.128.0 改为 1.77.0，确保一些旧版vscode、及基于旧版vscode衍生出来的IDE可安装（如Qoder IDE)
+	- 注：仅修改版本号要求，未测试低版本是否可用
 ## [1.0.5] - 2026-11-12
 - 精简README文档
 - 修改标签页中组名、文件名的显示样式，可配置V2版本（新增的样式，为默认）、V1版本（旧版本）

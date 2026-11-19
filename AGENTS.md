@@ -137,7 +137,7 @@ source: null
 
 ## VS Code 与 Webview 边界
 
-- 扩展标识为 `local.vertical-tabs-inside-editor-area`，最低 VS Code 版本为 `^1.128.0`。
+- 扩展标识为 `local.vertical-tabs-inside-editor-area`，最低 VS Code 版本为 `^1.77.0`。
 - 编辑器交互与业务状态留在扩展宿主；Webview 只负责渲染和发送已定义的消息。
 - Webview 必须使用 nonce、严格 CSP、最小脚本权限，且仅加载由 `asWebviewUri` 生成的本地资源。
 - 对所有来自 Webview 的消息先进行运行时校验；未知或无效消息不得改变状态。

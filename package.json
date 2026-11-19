@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "%verticalTabs.displayName%",
   "description": "%verticalTabs.description%",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -10,7 +10,7 @@
     "url": "https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area"
   },
   "engines": {
-    "vscode": "^1.128.0"
+    "vscode": "^1.77.0"
   },
   "categories": [
     "Other",
@@ -343,7 +343,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.15.3",
-    "@types/vscode": "^1.125.0",
+    "@types/vscode": "1.77.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.0",
