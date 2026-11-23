@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-在 VS Code <mark>編輯器區域左側</mark>顯示始終可見的<mark>垂直分頁列</mark>，不使用主要或次要側邊欄。
+在 VS Code <mark>編輯器區域左側</mark>顯示<mark>垂直分頁列</mark>，不使用主要側邊欄和次要側邊欄，因此分頁列可以一直保持可見。
 
 ```text
 主要側邊欄 | 垂直分頁列 | 編輯器區域 | 次要側邊欄
@@ -16,9 +16,10 @@
 
 - 從 VS Code 擴充功能市集安裝：
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - 註：Cursor、VSCodium、Google Antigravity、Qoder 等基於 VS Code 的 IDE，可從以下 Open VSX 頁面下載： [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - 重新啟動 VS Code。
 - 點擊下圖任一按鈕即可顯示或隱藏垂直分頁：
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## 擴充功能特色
 

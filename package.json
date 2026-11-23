@@ -2,7 +2,7 @@
   "name": "vertical-tabs-inside-editor-area",
   "displayName": "%verticalTabs.displayName%",
   "description": "%verticalTabs.description%",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "publisher": "laikang287",
   "license": "MIT",
   "repository": {
@@ -359,7 +359,10 @@
   "keywords": [
     "vertical tabs",
     "editor tabs",
-    "tab manager"
+    "tab manager",
+    "vertical tab bar",
+    "vertical tab",
+    "tab groups"
   ],
   "bugs": {
     "url": "https://github.com/laikang287/vscode-vertical-tabs-inside-editor-area/issues"

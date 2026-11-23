@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "編輯器區域內的垂直標籤",
-  "verticalTabs.description": "在編輯器區域顯示的垂直標籤頁，不使用兩個側邊欄",
+  "verticalTabs.description": "在編輯區域顯示垂直標籤頁，不使用 VS Code 的任一側邊欄，因此標籤頁可以一直保持可見。",
   "verticalTabs.title": "垂直標籤",
   "verticalTabs.command.toggle": "垂直標籤: 切換顯示狀態",
   "verticalTabs.command.focus": "垂直標籤: 聚焦標籤列",

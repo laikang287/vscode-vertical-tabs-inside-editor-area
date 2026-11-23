@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Display an always-visible <mark>vertical tab bar</mark> on the <mark>left side of the editor area</mark>, without using the primary or secondary sidebar.
+Displays a <mark>vertical tab bar</mark> on the <mark>left side of the editor area</mark> without using VS Code’s primary or secondary sidebar, so the bar can stay visible at all times.
 
 ```text
 Primary sidebar | Vertical tab bar | Editor area | Secondary sidebar
@@ -16,9 +16,10 @@ Primary sidebar | Vertical tab bar | Editor area | Secondary sidebar
 
 - Install the extension from the VS Code Marketplace:
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - Note: For VS Code-based IDEs such as Cursor, VSCodium, Google Antigravity, and Qoder, download the extension from [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - Restart VS Code.
 - Click either button shown below to show or hide the vertical tabs:
-  - ![](media/file-20261112221754250.gif)
+  - ![](assets/README.zh-CN/demo2.png)
 
 ## Extension Highlights
 

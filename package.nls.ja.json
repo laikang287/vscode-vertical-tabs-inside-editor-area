@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "エディター領域内の垂直タブ",
-  "verticalTabs.description": "エディター領域に表示される垂直タブ。2つのサイドバーを使用しません。",
+  "verticalTabs.description": "VS Code のどちらのサイドバーも使わずに、エディター領域に垂直タブを表示します。これにより、タブを常に表示しておけます。",
   "verticalTabs.title": "垂直タブ",
   "verticalTabs.command.toggle": "垂直タブ: 表示の切り替え",
   "verticalTabs.command.focus": "垂直タブ: フォーカス",

@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-在 VS Code <mark>编辑器区域左侧</mark>显示一个始终可见的<mark>垂直标签栏</mark>，不使用主侧边栏和辅助侧边栏。
+在 VS Code <mark>编辑器区域左侧</mark>显示<mark>垂直标签栏</mark>，不使用主侧边栏和辅助侧边栏，因此标签栏可以始终保持可见。
 
 界面布局如下：
 
@@ -15,12 +15,12 @@
 
 ## 快速开始
 
-- 使用vscode 插件市场进行安装，插件地址
+- 使用 vscode 插件市场进行安装，插件地址
 	- https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+	- 注：Cursor、VSCodium、Google Antigravity、Qoder等vscode衍生版IDE，可到open-vsx下载，地址 [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - 重启vscode
 - 如图，点击这两个按钮，都可显示、隐藏垂直标签页
-	- ![](media/file-20261112221754250.gif)
-
+	- ![](assets/README.zh-CN/demo2.png)
 ## 插件特点
 
 - 垂直标签页，方便打开大量文件

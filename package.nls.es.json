@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Pestañas verticales en el área del editor",
-  "verticalTabs.description": "Pestañas verticales que se muestran en el área del editor, sin usar ninguna de las dos barras laterales.",
+  "verticalTabs.description": "Muestra pestañas verticales en el área del editor sin utilizar ninguna de las dos barras laterales de VS Code, de modo que las pestañas puedan permanecer visibles en todo momento.",
   "verticalTabs.title": "Pestañas verticales",
   "verticalTabs.command.toggle": "Pestañas verticales: Alternar",
   "verticalTabs.command.focus": "Pestañas verticales: Enfocar",

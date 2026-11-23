@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "편집기 영역 안의 세로 탭",
-  "verticalTabs.description": "편집기 영역에 표시되는 세로 탭으로, 두 사이드바를 사용하지 않습니다.",
+  "verticalTabs.description": "VS Code의 두 사이드바 중 어느 쪽도 사용하지 않고 편집기 영역에 세로 탭을 표시하므로, 탭을 항상 보이게 할 수 있습니다.",
   "verticalTabs.title": "세로 탭",
   "verticalTabs.command.toggle": "세로 탭: 전환",
   "verticalTabs.command.focus": "세로 탭: 포커스",

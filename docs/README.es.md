@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Muestra una <mark>barra de pestañas verticales</mark> siempre visible a la <mark>izquierda del área del editor</mark>, sin usar las barras laterales principal ni secundaria.
+Muestra una <mark>barra de pestañas verticales</mark> en el <mark>lado izquierdo del área del editor</mark> sin utilizar las barras laterales principal ni secundaria de VS Code, de modo que la barra pueda permanecer visible en todo momento.
 
 ```text
 Barra lateral principal | Pestañas verticales | Área del editor | Barra lateral secundaria
@@ -16,9 +16,10 @@ Barra lateral principal | Pestañas verticales | Área del editor | Barra latera
 
 - Instala la extensión desde el Marketplace de VS Code:
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - Nota: Para IDE derivados de VS Code, como Cursor, VSCodium, Google Antigravity y Qoder, descarga la extensión desde [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - Reinicia VS Code.
 - Haz clic en cualquiera de los dos botones para mostrar u ocultar las pestañas verticales:
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## Características destacadas
 

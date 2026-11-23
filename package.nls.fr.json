@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Onglets verticaux dans la zone d’édition",
-  "verticalTabs.description": "Onglets verticaux affichés dans la zone d’édition, sans utiliser les deux barres latérales.",
+  "verticalTabs.description": "Affiche des onglets verticaux dans la zone d’édition sans utiliser aucune des deux barres latérales de VS Code, ce qui permet aux onglets de rester visibles en permanence.",
   "verticalTabs.title": "Onglets verticaux",
   "verticalTabs.command.toggle": "Onglets verticaux : Basculer",
   "verticalTabs.command.focus": "Onglets verticaux : Donner le focus",

@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Zeigt eine stets sichtbare <mark>vertikale Tableiste</mark> <mark>links im Editorbereich</mark> an, ohne die primäre oder sekundäre Seitenleiste zu verwenden.
+Zeigt auf der <mark>linken Seite des Editorbereichs</mark> eine <mark>vertikale Tableiste</mark> an, ohne die primäre oder die sekundäre Seitenleiste von VS Code zu verwenden, sodass die Tableiste dauerhaft sichtbar bleiben kann.
 
 ```text
 Primäre Seitenleiste | Vertikale Tableiste | Editorbereich | Sekundäre Seitenleiste
@@ -16,9 +16,10 @@ Primäre Seitenleiste | Vertikale Tableiste | Editorbereich | Sekundäre Seitenl
 
 - Installiere die Erweiterung aus dem VS-Code-Marketplace:
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - Hinweis: Für VS-Code-basierte IDEs wie Cursor, VSCodium, Google Antigravity und Qoder kannst du die Erweiterung hier herunterladen: [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - Starte VS Code neu.
 - Klicke auf eine der beiden Schaltflächen, um die vertikalen Tabs ein- oder auszublenden:
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## Besonderheiten
 

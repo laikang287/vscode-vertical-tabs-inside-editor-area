@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Affiche une <mark>barre d’onglets verticale</mark> toujours visible à <mark>gauche de la zone d’édition</mark>, sans utiliser les barres latérales principale et secondaire.
+Affiche une <mark>barre d’onglets verticale</mark> sur le <mark>côté gauche de la zone d’édition</mark> sans utiliser la barre latérale principale ni la barre latérale secondaire de VS Code, ce qui lui permet de rester visible en permanence.
 
 ```text
 Barre latérale principale | Onglets verticaux | Zone d’édition | Barre latérale secondaire
@@ -16,9 +16,10 @@ Barre latérale principale | Onglets verticaux | Zone d’édition | Barre laté
 
 - Installez l’extension depuis la marketplace VS Code :
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - Remarque : pour les IDE dérivés de VS Code, comme Cursor, VSCodium, Google Antigravity et Qoder, téléchargez l’extension depuis [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - Redémarrez VS Code.
 - Cliquez sur l’un des deux boutons ci-dessous pour afficher ou masquer les onglets verticaux :
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## Points forts
 

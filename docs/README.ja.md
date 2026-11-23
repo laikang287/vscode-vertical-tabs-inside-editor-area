@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-VS Code の<mark>エディター領域の左側</mark>に常に表示される<mark>垂直タブバー</mark>を配置します。プライマリおよびセカンダリサイドバーは使用しません。
+VS Code の<mark>エディター領域の左側</mark>に<mark>垂直タブバー</mark>を表示します。プライマリサイドバーもセカンダリサイドバーも使わないため、タブバーを常に表示しておけます。
 
 ```text
 プライマリサイドバー | 垂直タブバー | エディター領域 | セカンダリサイドバー
@@ -16,9 +16,10 @@ VS Code の<mark>エディター領域の左側</mark>に常に表示される<m
 
 - VS Code 拡張機能マーケットプレイスからインストールします：
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - 注：Cursor、VSCodium、Google Antigravity、Qoder などの VS Code 派生 IDE では、Open VSX からダウンロードできます： [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - VS Code を再起動します。
 - 以下のいずれかのボタンをクリックすると、垂直タブを表示・非表示にできます：
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## 拡張機能の特徴
 

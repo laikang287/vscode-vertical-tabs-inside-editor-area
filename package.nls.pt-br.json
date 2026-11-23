@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Abas verticais na área do editor",
-  "verticalTabs.description": "Abas verticais exibidas na área do editor, sem usar nenhuma das duas barras laterais.",
+  "verticalTabs.description": "Exibe abas verticais na área do editor sem usar nenhuma das duas barras laterais do VS Code, para que as abas possam permanecer visíveis o tempo todo.",
   "verticalTabs.title": "Abas verticais",
   "verticalTabs.command.toggle": "Abas verticais: Alternar",
   "verticalTabs.command.focus": "Abas verticais: Focar",

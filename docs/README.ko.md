@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-VS Code <mark>편집기 영역의 왼쪽</mark>에 항상 표시되는 <mark>세로 탭 표시줄</mark>을 배치하며 기본 및 보조 사이드바를 사용하지 않습니다.
+VS Code의 <mark>편집기 영역 왼쪽</mark>에 <mark>세로 탭 표시줄</mark>을 표시합니다. 기본 및 보조 사이드바를 사용하지 않으므로 탭 표시줄을 항상 표시해 둘 수 있습니다.
 
 ```text
 기본 사이드바 | 세로 탭 표시줄 | 편집기 영역 | 보조 사이드바
@@ -16,9 +16,10 @@ VS Code <mark>편집기 영역의 왼쪽</mark>에 항상 표시되는 <mark>세
 
 - VS Code 확장 마켓플레이스에서 설치합니다:
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - 참고: Cursor, VSCodium, Google Antigravity, Qoder 등 VS Code 기반 IDE에서는 Open VSX에서 다운로드할 수 있습니다: [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - VS Code를 다시 시작합니다.
 - 아래 두 버튼 중 하나를 클릭하여 세로 탭을 표시하거나 숨깁니다:
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## 확장 기능의 특징
 

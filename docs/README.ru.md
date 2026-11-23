@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文（规范源）](README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [日本語](docs/README.ja.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md) · [Русский](docs/README.ru.md)
 
-Показывает всегда видимую <mark>вертикальную панель вкладок</mark> <mark>слева от области редактора</mark>, не занимая основную и дополнительную боковые панели.
+Отображает <mark>вертикальную панель вкладок</mark> в <mark>левой части области редактора</mark>, не задействуя основную или дополнительную боковую панель VS Code. Благодаря этому панель вкладок может оставаться видимой всё время.
 
 ```text
 Основная боковая панель | Вертикальные вкладки | Область редактора | Дополнительная боковая панель
@@ -16,9 +16,10 @@
 
 - Установите расширение из Marketplace VS Code:
   - https://marketplace.visualstudio.com/items?itemName=laikang287.vertical-tabs-inside-editor-area
+  - Примечание: для IDE на основе VS Code, таких как Cursor, VSCodium, Google Antigravity и Qoder, расширение можно скачать здесь: [Vertical Tabs Inside Editor Area – Open VSX Registry](https://open-vsx.org/extension/laikang287/vertical-tabs-inside-editor-area)
 - Перезапустите VS Code.
 - Нажмите любую из двух показанных кнопок, чтобы показать или скрыть вертикальные вкладки:
-  - ![](../media/file-20261112221754250.gif)
+  - ![](../assets/README.zh-CN/demo2.png)
 
 ## Особенности
 

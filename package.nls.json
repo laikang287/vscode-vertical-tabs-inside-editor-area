@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "Vertical Tabs Inside Editor Area",
-  "verticalTabs.description": "Vertical tabs displayed in the editor area, without using either sidebar.",
+  "verticalTabs.description": "Displays vertical tabs in the editor area without using either of VS Code’s two sidebars, so the tabs can stay visible at all times.",
   "verticalTabs.title": "Vertical Tabs",
   "verticalTabs.command.toggle": "Vertical Tabs: Toggle",
   "verticalTabs.command.focus": "Vertical Tabs: Focus",

@@ -1,6 +1,6 @@
 {
   "verticalTabs.displayName": "编辑器区域内的垂直标签页",
-  "verticalTabs.description": "在编辑器区域显示的垂直标签页，不使用两个侧边栏",
+  "verticalTabs.description": "在编辑区域显示的垂直标签页，不使用vscode的两个侧边栏，从而实现垂直标签页可以永久可见",
   "verticalTabs.title": "垂直标签页",
   "verticalTabs.command.toggle": "垂直标签页: 切换显示状态",
   "verticalTabs.command.focus": "垂直标签页: 聚焦标签栏",
